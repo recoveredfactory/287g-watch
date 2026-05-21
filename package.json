@@ -4,9 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "sst dev",
+    "dev:web": "pnpm -F web dev",
     "deploy": "sst deploy",
     "diff": "sst diff",
-    "remove": "sst remove"
+    "remove": "sst remove",
+    "pipeline": "cd packages/pipeline && .venv/bin/python ingest.py"
   },
   "devDependencies": {
     "sst": "^3.17.25"
