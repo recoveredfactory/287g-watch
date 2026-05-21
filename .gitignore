@@ -1,0 +1,10 @@
+.sst
+node_modules
+.env
+dist
+.svelte-kit
+packages/web/static/data
+packages/pipeline/__pycache__
+packages/pipeline/.venv
+*.pyc
+.DS_Store

@@ -1,0 +1,92 @@
+@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap");
+@import "maplibre-gl/dist/maplibre-gl.css";
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --site-header-height: 3.5rem;
+    --color-navy: #1e3a5f;
+    --color-navy-light: #2d5282;
+    --color-model-jail: #80ed99;
+    --color-model-taskforce: #38a3a5;
+    --color-model-wso: #22577a;
+  }
+
+  body {
+    @apply bg-stone-50 font-sans text-slate-900 antialiased;
+    font-family: "Inter", system-ui, sans-serif;
+  }
+
+  h1, h2, h3 {
+    font-family: "Playfair Display", Georgia, serif;
+  }
+
+  a {
+    @apply text-blue-800 underline decoration-blue-300 underline-offset-2;
+  }
+
+  a:hover {
+    @apply decoration-blue-800;
+  }
+
+  a:focus-visible {
+    @apply outline-none ring-2 ring-blue-600 ring-offset-2;
+  }
+}
+
+.page-fade {
+  opacity: 1;
+  animation: page-fade-in 150ms ease;
+}
+
+.page-fade--loading {
+  opacity: 0.7;
+  animation: page-fade-out 150ms ease forwards;
+}
+
+@keyframes page-fade-in {
+  from { opacity: 0.7; }
+  to { opacity: 1; }
+}
+
+@keyframes page-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0.7; }
+}
+
+@layer components {
+  .prose-editorial {
+    @apply text-lg leading-relaxed text-slate-700;
+  }
+
+  .prose-editorial p {
+    @apply mb-5;
+  }
+
+  .prose-editorial strong {
+    @apply font-semibold text-slate-900;
+  }
+
+  .prose-editorial a {
+    @apply decoration-1;
+  }
+
+  .model-badge {
+    @apply inline-block rounded px-2 py-0.5 text-xs font-semibold uppercase tracking-wide;
+  }
+
+  .model-badge--jail {
+    background: var(--color-model-jail);
+    color: #0f3020;
+  }
+
+  .model-badge--taskforce {
+    background: var(--color-model-taskforce);
+    color: #ffffff;
+  }
+
+  .model-badge--wso {
+    background: var(--color-model-wso);
+    color: #ffffff;
+  }
+}

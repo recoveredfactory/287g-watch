@@ -1,0 +1,14 @@
+{
+  "name": "287g-explorer",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "sst dev",
+    "deploy": "sst deploy",
+    "diff": "sst diff",
+    "remove": "sst remove"
+  },
+  "devDependencies": {
+    "sst": "^3.17.25"
+  }
+}
