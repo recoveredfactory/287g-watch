@@ -8,7 +8,7 @@
     "deploy": "sst deploy",
     "diff": "sst diff",
     "remove": "sst remove",
-    "pipeline": "cd packages/pipeline && .venv/bin/python ingest.py"
+    "pipeline": "pnpm -F pipeline ingest"
   },
   "devDependencies": {
     "sst": "^3.17.25"

@@ -1,7 +1,0 @@
-pandas>=2.0
-requests>=2.31
-openpyxl>=3.1
-pyarrow>=14.0
-python-slugify>=8.0
-thefuzz>=0.22
-pgeocode>=0.4

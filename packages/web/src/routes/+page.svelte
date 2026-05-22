@@ -1,14 +1,16 @@
 <script lang="ts">
   import type { PageData } from "./$types";
   import { MODEL_COLORS, MODEL_SHORT } from "$lib/colors";
+  import { STATE_NAMES } from "$lib/states";
   import NationalMap from "$lib/components/NationalMap.svelte";
 
   export let data: PageData;
 
   const siteUrl = import.meta.env.PUBLIC_SITE_URL ?? "https://tracking287g.com";
   const title = "Tracking 287(g) — ICE's Local Enforcement Partnerships";
-  const description =
-    "Over 1,800 local law enforcement agencies have signed 287(g) agreements authorizing them to enforce federal immigration law. We tracked all of them.";
+  $: description = data.agencyCount > 0
+    ? `${intFmt.format(data.agencyCount)} local law enforcement agencies have signed 287(g) agreements with ICE, authorizing officers to enforce federal immigration law. We tracked all of them.`
+    : "Tracking local law enforcement agencies with 287(g) agreements authorizing officers to enforce federal immigration law.";
 
   const intFmt = new Intl.NumberFormat();
   const popFmt = new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 });
@@ -65,15 +67,15 @@
   const MODEL_DESCRIPTIONS: Record<string, { short: string; detail: string }> = {
     "Jail Enforcement Model": {
       short: "Officers screen people booked into local jails for immigration status.",
-      detail: "Fill in: what officers are authorized to do, civil vs. criminal, detainer process, typical jurisdiction size, etc.",
+      detail: "Participating officers may issue civil detainers — requests for jails to hold people beyond their scheduled release so ICE can take custody. JEM operates inside detention facilities only, not in the community. It is the oldest and most common 287(g) model.",
     },
     "Task Force Model": {
       short: "Officers work alongside ICE agents in the community to make immigration arrests.",
-      detail: "Fill in: scope of authority, typical operations, relationship to ICE field offices, etc.",
+      detail: "TFM grants the broadest authority of the three models. Participating officers can stop, question, and arrest individuals in the community — not only those already in custody. They operate jointly with ICE field agents on targeted enforcement operations.",
     },
     "Warrant Service Officer": {
       short: "Officers are authorized to serve administrative warrants on people ICE has already identified.",
-      detail: "Fill in: distinction from JEM/TFM, limitations on authority, what a warrant service operation looks like, etc.",
+      detail: "Introduced around 2020, the WSO model is narrower than JEM or TFM. Officers may only serve administrative warrants on specific individuals ICE has already identified for removal. They cannot initiate independent enforcement or conduct community operations.",
     },
   };
 </script>
@@ -261,7 +263,7 @@
           >
             <option value="">All states</option>
             {#each allStates as state}
-              <option value={state}>{state.charAt(0) + state.slice(1).toLowerCase()}</option>
+              <option value={state}>{STATE_NAMES[state] ?? state}</option>
             {/each}
           </select>
 
@@ -320,7 +322,7 @@
                 {agency.name}
               </p>
               <p class="mt-0.5 text-sm text-slate-500">
-                {[agency.city, agency.state.charAt(0) + agency.state.slice(1).toLowerCase()]
+                {[agency.city, STATE_NAMES[agency.state] ?? agency.state]
                   .filter(Boolean)
                   .join(", ")}
               </p>

@@ -1,0 +1,20 @@
+{
+  "name": "pipeline",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "ingest": "tsx ingest.ts"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "slugify": "^1.6.6",
+    "xlsx": "0.18.5"
+  },
+  "devDependencies": {
+    "@types/adm-zip": "^0.5.8",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.0.0"
+  }
+}

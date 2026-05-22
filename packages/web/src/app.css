@@ -2,6 +2,10 @@
 @import "maplibre-gl/dist/maplibre-gl.css";
 @import "tailwindcss";
 
+@theme {
+  --font-serif: "Playfair Display", Georgia, serif;
+}
+
 @layer base {
   :root {
     --site-header-height: 3.5rem;
