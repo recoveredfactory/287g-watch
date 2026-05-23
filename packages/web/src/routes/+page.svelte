@@ -243,66 +243,71 @@
   <section class="px-4 py-10 sm:px-6 sm:py-12">
     <div class="mx-auto max-w-6xl">
 
-      <div class="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">Search agencies</h2>
-        {#if hasActiveFilters}
-          <button
-            type="button"
-            on:click={clearFilters}
-            class="text-sm text-blue-800 underline underline-offset-2 hover:text-blue-900"
-          >
-            Clear filters
-          </button>
-        {/if}
-      </div>
+      <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">Search agencies</h2>
 
-      <!-- Filter controls — stack on mobile, row on sm+ -->
-      <div class="mt-4 space-y-3">
+      <!-- Filter controls — sticky once scrolled into view -->
+      <div
+        class="sticky z-40 -mx-4 border-b border-slate-200 bg-stone-50/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6"
+        style="top: var(--site-header-height);"
+      >
+        <div class="space-y-3">
+          {#if hasActiveFilters}
+            <div class="flex justify-end">
+              <button
+                type="button"
+                on:click={clearFilters}
+                class="text-sm text-blue-800 underline underline-offset-2 hover:text-blue-900"
+              >
+                Clear filters
+              </button>
+            </div>
+          {/if}
 
-        <!-- Search input — full width on mobile -->
-        <div class="relative">
-          <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
-          </svg>
-          <input
-            type="search"
-            bind:value={searchQuery}
-            placeholder="Agency name, city, or county…"
-            class="w-full rounded-md border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
-        </div>
+          <!-- Search input — full width on mobile -->
+          <div class="relative">
+            <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+            </svg>
+            <input
+              type="search"
+              bind:value={searchQuery}
+              placeholder="Agency name, city, or county…"
+              class="w-full rounded-md border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
 
-        <!-- State + model row — wraps cleanly on mobile -->
-        <div class="flex flex-wrap items-center gap-2">
-          <select
-            bind:value={selectedState}
-            class="rounded-md border border-slate-300 bg-white py-2 pl-3 pr-7 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          >
-            <option value="">All states</option>
-            {#each allStates as state}
-              <option value={state}>{STATE_NAMES[state] ?? state}</option>
-            {/each}
-          </select>
-
-          {#each ALL_MODELS as model}
-            {@const active = activeModels.has(model)}
-            <button
-              type="button"
-              on:click={() => toggleModel(model)}
-              class="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors"
-              style={active
-                ? `background: ${MODEL_COLORS[model]}; border-color: ${MODEL_COLORS[model]}; color: ${model.includes("Jail") ? "#0f3020" : "#fff"};`
-                : "background: white; border-color: #cbd5e1; color: #475569;"}
+          <!-- State + model row — wraps cleanly on mobile -->
+          <div class="flex flex-wrap items-center gap-2">
+            <select
+              bind:value={selectedState}
+              class="rounded-md border border-slate-300 bg-white py-2 pl-3 pr-7 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
-              <span
-                class="inline-block h-2 w-2 rounded-full"
-                style="background: {active
-                  ? model.includes('Jail') ? '#0f3020' : 'rgba(255,255,255,0.5)'
-                  : MODEL_COLORS[model]};"
-              ></span>
-              {MODEL_SHORT[model]}
-            </button>
-          {/each}
+              <option value="">All states</option>
+              {#each allStates as state}
+                <option value={state}>{STATE_NAMES[state] ?? state}</option>
+              {/each}
+            </select>
+
+            {#each ALL_MODELS as model}
+              {@const active = activeModels.has(model)}
+              <button
+                type="button"
+                on:click={() => toggleModel(model)}
+                class="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors"
+                style={active
+                  ? `background: ${MODEL_COLORS[model]}; border-color: ${MODEL_COLORS[model]}; color: ${model.includes("Jail") ? "#0f3020" : "#fff"};`
+                  : "background: white; border-color: #cbd5e1; color: #475569;"}
+              >
+                <span
+                  class="inline-block h-2 w-2 rounded-full"
+                  style="background: {active
+                    ? model.includes('Jail') ? '#0f3020' : 'rgba(255,255,255,0.5)'
+                    : MODEL_COLORS[model]};"
+                ></span>
+                {MODEL_SHORT[model]}
+              </button>
+            {/each}
+          </div>
         </div>
       </div>
 
