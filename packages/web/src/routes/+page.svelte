@@ -1,8 +1,10 @@
 <script lang="ts">
   import type { PageData } from "./$types";
-  import { MODEL_COLORS, MODEL_SHORT } from "$lib/colors";
+  import { MODEL_COLORS, MODEL_SHORT, MODEL_SLUG } from "$lib/colors";
   import { STATE_NAMES } from "$lib/states";
   import NationalMap from "$lib/components/NationalMap.svelte";
+  import { browser } from "$app/environment";
+  import { onMount } from "svelte";
 
   export let data: PageData;
 
@@ -23,6 +25,48 @@
   const PAGE_SIZE = 25;
 
   const ALL_MODELS = Object.keys(MODEL_SHORT);
+
+  // ── URL state persistence ──────────────────────────────────────────────────
+  const SLUG_TO_MODEL = Object.fromEntries(
+    Object.entries(MODEL_SLUG).map(([full, slug]) => [slug, full])
+  );
+
+  let urlSyncTimer: ReturnType<typeof setTimeout>;
+
+  function scheduleUrlSync() {
+    if (!browser) return;
+    clearTimeout(urlSyncTimer);
+    urlSyncTimer = setTimeout(() => {
+      const params = new URLSearchParams();
+      if (searchQuery.trim()) params.set("q", searchQuery.trim());
+      if (selectedState) params.set("state", selectedState);
+      if (activeModels.size > 0)
+        params.set("models", [...activeModels].map((m) => MODEL_SLUG[m]).filter(Boolean).join(","));
+      if (currentPage > 1) params.set("page", String(currentPage));
+      const qs = params.toString();
+      history.replaceState(history.state, "", qs ? `?${qs}` : location.pathname);
+    }, 300);
+  }
+
+  $: { searchQuery; selectedState; activeModels; currentPage; scheduleUrlSync(); }
+
+  onMount(() => {
+    const params = new URLSearchParams(location.search);
+    const q = params.get("q");
+    const state = params.get("state");
+    const models = params.get("models");
+    const page = params.get("page");
+    if (q) searchQuery = q;
+    if (state) selectedState = state;
+    if (models)
+      activeModels = new Set(models.split(",").map((s) => SLUG_TO_MODEL[s]).filter(Boolean));
+    // Set page last — filter changes above will reset currentPage to 1 reactively,
+    // so this must come after all other assignments to stick.
+    if (page) {
+      const n = parseInt(page, 10);
+      if (!isNaN(n) && n > 1) currentPage = n;
+    }
+  });
 
   $: allStates = [...new Set(data.agencies.map((a) => a.state).filter(Boolean))].sort();
 
