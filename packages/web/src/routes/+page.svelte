@@ -251,18 +251,6 @@
         style="top: var(--site-header-height);"
       >
         <div class="space-y-3">
-          {#if hasActiveFilters}
-            <div class="flex justify-end">
-              <button
-                type="button"
-                on:click={clearFilters}
-                class="text-sm text-blue-800 underline underline-offset-2 hover:text-blue-900"
-              >
-                Clear filters
-              </button>
-            </div>
-          {/if}
-
           <!-- Search input — full width on mobile -->
           <div class="relative">
             <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -315,7 +303,12 @@
       <p class="mt-4 text-sm text-slate-500">
         {#if hasActiveFilters}
           <span class="font-medium text-slate-800">{intFmt.format(filteredAgencies.length)}</span>
-          of {intFmt.format(data.agencies.length)} agencies match
+          of {intFmt.format(data.agencies.length)} agencies match —
+          <button
+            type="button"
+            on:click={clearFilters}
+            class="text-blue-800 underline underline-offset-2 hover:text-blue-900"
+          >Clear filters</button>
         {:else}
           {intFmt.format(data.agencies.length)} agencies across {data.stateCount} states
         {/if}
