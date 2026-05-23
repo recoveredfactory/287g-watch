@@ -7,9 +7,6 @@
   $: fromPath = String($navigating?.from?.url?.pathname || "/");
   $: toPath = String($navigating?.to?.url?.pathname || "/");
   $: isNavigating = Boolean($navigating) && fromPath !== toPath;
-
-  let menuOpen = false;
-  const closeMenu = () => (menuOpen = false);
 </script>
 
 <svelte:head>
@@ -25,65 +22,22 @@
 
 <div class={`page-fade ${isNavigating ? "page-fade--loading" : ""}`}>
   <header class="sticky top-0 z-50 border-b border-slate-200 bg-stone-50/95 backdrop-blur">
-    <div class="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
-      <a
-        href="/"
-        class="font-serif text-base font-bold tracking-tight text-slate-900 no-underline hover:no-underline sm:text-lg"
-        on:click={closeMenu}
-      >
-        Tracking 287(g)
-      </a>
-
-      <!-- Desktop nav -->
-      <nav class="hidden items-center gap-5 text-sm text-slate-600 sm:flex">
-        <a href="/" class="no-underline hover:text-slate-900">Map</a>
-        <a href="/glossary" class="no-underline hover:text-slate-900">Glossary</a>
-        <a href="/about" class="no-underline hover:text-slate-900">About</a>
-        <a href="/methodology" class="no-underline hover:text-slate-900">Methodology</a>
-      </nav>
-
-      <!-- Mobile hamburger -->
-      <button
-        type="button"
-        class="flex items-center justify-center rounded p-2 text-slate-600 hover:bg-slate-100 sm:hidden"
-        aria-label={menuOpen ? "Close menu" : "Open menu"}
-        on:click={() => (menuOpen = !menuOpen)}
-      >
-        {#if menuOpen}
-          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        {:else}
-          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        {/if}
-      </button>
+    <div class="mx-auto max-w-6xl px-4 sm:px-6">
+      <div class="flex flex-col py-3 sm:h-14 sm:flex-row sm:items-center sm:justify-between sm:py-0">
+        <a
+          href="/"
+          class="font-serif text-base font-bold tracking-tight text-slate-900 no-underline hover:no-underline sm:text-lg"
+        >
+          Tracking 287(g)
+        </a>
+        <nav class="mt-2 flex items-center gap-5 text-sm text-slate-600 sm:mt-0">
+          <a href="/" class="no-underline hover:text-slate-900">Map</a>
+          <a href="/glossary" class="no-underline hover:text-slate-900">Glossary</a>
+          <a href="/about" class="no-underline hover:text-slate-900">About</a>
+          <a href="/methodology" class="no-underline hover:text-slate-900">Methodology</a>
+        </nav>
+      </div>
     </div>
-
-    <!-- Mobile nav drawer -->
-    {#if menuOpen}
-      <nav class="border-t border-slate-200 bg-stone-50 px-4 py-3 sm:hidden">
-        <ul class="space-y-1">
-          {#each [
-            { href: "/", label: "Map" },
-            { href: "/glossary", label: "Glossary" },
-            { href: "/about", label: "About" },
-            { href: "/methodology", label: "Methodology" },
-          ] as link}
-            <li>
-              <a
-                href={link.href}
-                class="block rounded px-3 py-2 text-base font-medium text-slate-700 no-underline hover:bg-slate-100"
-                on:click={closeMenu}
-              >
-                {link.label}
-              </a>
-            </li>
-          {/each}
-        </ul>
-      </nav>
-    {/if}
   </header>
 
   <slot />
