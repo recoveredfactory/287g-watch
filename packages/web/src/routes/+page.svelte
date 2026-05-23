@@ -188,6 +188,23 @@
     </div>
   </section>
 
+  <!-- ── Support callout ──────────────────────────────────────────────────── -->
+  <section class="border-b border-slate-200 bg-white px-4 py-5 sm:px-6">
+    <div class="mx-auto flex max-w-6xl items-center justify-between gap-4">
+      <p class="text-sm text-slate-500">
+        This project is made possible by <a href="https://vsr.recoveredfactory.net/en" target="_blank" rel="noreferrer" class="font-medium text-slate-700">Recovered Factory</a>, a data journalism studio.
+      </p>
+      <a
+        href="https://vsr.recoveredfactory.net/en"
+        target="_blank"
+        rel="noreferrer"
+        class="shrink-0 rounded border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 no-underline hover:border-slate-400 hover:text-slate-900 hover:no-underline"
+      >
+        Hire us
+      </a>
+    </div>
+  </section>
+
   <!-- ── What each model authorizes ───────────────────────────────────────── -->
   <section class="border-b border-slate-200 bg-white px-4 py-10 sm:px-6 sm:py-12">
     <div class="mx-auto max-w-6xl">
