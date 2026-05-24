@@ -5,6 +5,10 @@
 
   const siteName = "Tracking 287(g)";
 
+  const stage = (import.meta.env.PUBLIC_STAGE || "local").toString();
+  const isProdStage = stage === "prod" || stage === "production";
+  const faviconHref = isProdStage ? "/favicon.svg" : "/favicon-staging.svg";
+
   $: fromPath = String($navigating?.from?.url?.pathname || "/");
   $: toPath = String($navigating?.to?.url?.pathname || "/");
   $: isNavigating = Boolean($navigating) && fromPath !== toPath;
@@ -24,6 +28,7 @@
 
 <svelte:head>
   <meta name="application-name" content={siteName} />
+  <link rel="icon" type="image/svg+xml" href={faviconHref} />
 </svelte:head>
 
 <a
@@ -34,7 +39,20 @@
 </a>
 
 <div class={`page-fade ${isNavigating ? "page-fade--loading" : ""} ${bannerVisible ? "pb-20" : ""}`}>
-  <header class="sticky top-0 z-50 border-b border-slate-200 bg-stone-50/95 backdrop-blur">
+  {#if !isProdStage}
+    <div
+      class="sticky top-0 z-[60] flex items-center justify-center gap-2 bg-amber-400 px-4 py-1 text-center text-xs font-semibold uppercase tracking-wider text-amber-950"
+      role="alert"
+      aria-label="Non-production environment warning"
+    >
+      <span aria-hidden="true">⚠</span>
+      <span>Staging — not production · {stage}</span>
+    </div>
+  {/if}
+  <header
+    class="sticky z-50 border-b border-slate-200 bg-stone-50/95 backdrop-blur"
+    style:top={isProdStage ? "0" : "28px"}
+  >
     <div class="mx-auto max-w-6xl px-4 sm:px-6">
       <div class="flex flex-col py-3 sm:h-14 sm:flex-row sm:items-center sm:justify-between sm:py-0">
         <a

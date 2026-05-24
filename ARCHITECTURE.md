@@ -29,10 +29,7 @@ The pipeline is a full rebuild every run — no incremental updates, no caching,
 
 ### `packages/web`
 
-A SvelteKit 2 app. On each request, `+page.server.ts` fetches `agency_index.json` from:
-
-- A CDN prefix (`PUBLIC_DATA_BASE_URL` + `PUBLIC_DATA_RELEASE_PATH` in `.env`) in production
-- The local static file in development (if `PUBLIC_DATA_BASE_URL` is unset)
+A SvelteKit 2 app. On each request, `+page.server.ts` fetches `agency_index.json` from the static asset bundle — the pipeline writes the file into `packages/web/static/data/dist/`, so it ships with the SvelteKit deploy. Refreshing the data means re-running the pipeline and redeploying.
 
 Key routes:
 
@@ -48,7 +45,7 @@ The map uses MapLibre GL with a CartoDB Positron basemap. Agencies are clustered
 
 ### `sst.config.ts`
 
-SST v3 configuration for AWS deployment. The SvelteKit app runs as a Lambda-backed site. The JSON data file is hosted separately on S3/CloudFront at the URL configured in `.env`.
+SST v3 configuration for AWS deployment. The SvelteKit app runs as a Lambda-backed site behind CloudFront (`svelte-kit-sst` adapter); the JSON data file is served as a static asset from that same CloudFront distribution. Two stages — `prod` and `staging` — with custom domains configured via `.env`.
 
 ---
 
@@ -64,10 +61,7 @@ appelson/Tracking_287g (GitHub)
         ▼
   packages/web/static/data/dist/agency_index.json
         │
-        │  (in production: uploaded to S3)
-        ▼
-  CDN (S3 + CloudFront)
-        │
+        │  (bundled with the SvelteKit deploy)
         ▼
   SvelteKit +page.server.ts  (SSR fetch on each request)
         │
