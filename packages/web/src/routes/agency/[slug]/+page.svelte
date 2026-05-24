@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { PageData } from "./$types";
   import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_SHORT } from "$lib/colors";
+  import { localizeHref } from "$lib/paraglide/runtime";
 
   export let data: PageData;
 
@@ -60,7 +61,7 @@
 <main id="main-content" class="mx-auto max-w-4xl px-4 py-12 sm:px-6">
   <!-- Breadcrumb -->
   <nav class="text-sm text-slate-500" aria-label="Breadcrumb">
-    <a href="/" class="no-underline hover:underline">Home</a>
+    <a href={localizeHref("/")} class="no-underline hover:underline">Home</a>
     <span class="mx-1.5">›</span>
     <span>{agency.name}</span>
   </nav>
