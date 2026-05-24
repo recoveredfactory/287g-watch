@@ -6,14 +6,15 @@
   import { browser } from "$app/environment";
   import { onMount } from "svelte";
   import { localizeHref } from "$lib/paraglide/runtime";
+  import { m } from "$lib/paraglide/messages.js";
 
   export let data: PageData;
 
   const siteUrl = import.meta.env.PUBLIC_SITE_URL ?? "https://tracking287g.com";
-  const title = "Tracking 287(g) — ICE's Local Enforcement Partnerships";
+  const title = m.home_meta_title();
   $: description = data.agencyCount > 0
-    ? `${intFmt.format(data.agencyCount)} local law enforcement agencies have signed 287(g) agreements with ICE, authorizing officers to enforce federal immigration law. We tracked all of them.`
-    : "Tracking local law enforcement agencies with 287(g) agreements authorizing officers to enforce federal immigration law.";
+    ? m.home_meta_description_with_count({ count: intFmt.format(data.agencyCount) })
+    : m.home_meta_description_no_data();
 
   const intFmt = new Intl.NumberFormat();
   const popFmt = new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 });
@@ -108,21 +109,18 @@
 
   $: hasActiveFilters = searchQuery.trim() !== "" || activeModels.size > 0 || selectedState !== "";
 
-  // ── Model descriptions ─────────────────────────────────────────────────────
-  const MODEL_DESCRIPTIONS: Record<string, { short: string; detail: string }> = {
-    "Jail Enforcement Model": {
-      short: "Officers screen people booked into local jails for immigration status.",
-      detail: "Participating officers may issue civil detainers — requests for jails to hold people beyond their scheduled release so ICE can take custody. JEM operates inside detention facilities only, not in the community. It is the oldest and most common 287(g) model.",
-    },
-    "Task Force Model": {
-      short: "Officers work alongside ICE agents in the community to make immigration arrests.",
-      detail: "TFM grants the broadest authority of the three models. Participating officers can stop, question, and arrest individuals in the community — not only those already in custody. They operate jointly with ICE field agents on targeted enforcement operations.",
-    },
-    "Warrant Service Officer": {
-      short: "Officers are authorized to serve administrative warrants on people ICE has already identified.",
-      detail: "Introduced around 2020, the WSO model is narrower than JEM or TFM. Officers may only serve administrative warrants on specific individuals ICE has already identified for removal. They cannot initiate independent enforcement or conduct community operations.",
-    },
-  };
+  function modelDesc(model: string): { short: string; detail: string } {
+    switch (model) {
+      case "Jail Enforcement Model":
+        return { short: m.model_jem_short(), detail: m.model_jem_detail() };
+      case "Task Force Model":
+        return { short: m.model_tfm_short(), detail: m.model_tfm_detail() };
+      case "Warrant Service Officer":
+        return { short: m.model_wso_short(), detail: m.model_wso_detail() };
+      default:
+        return { short: "", detail: "" };
+    }
+  }
 </script>
 
 <svelte:head>
@@ -152,16 +150,13 @@
   <section class="border-b border-slate-200 bg-white px-4 py-10 sm:px-6 sm:py-20">
     <div class="mx-auto max-w-3xl">
       <p class="text-xs font-semibold uppercase tracking-widest text-slate-400 sm:text-sm">
-        Public Interest Investigation
+        {m.home_hero_eyebrow()}
       </p>
       <h1 class="mt-2 text-3xl font-black leading-tight text-slate-900 sm:mt-3 sm:text-5xl lg:text-6xl">
-        Your sheriff<br class="hidden sm:block" /> may work for ICE.
+        {m.home_hero_headline_line1()}<br class="hidden sm:block" /> {m.home_hero_headline_line2()}
       </h1>
       <p class="prose-editorial mt-4 text-base sm:mt-6 sm:text-lg">
-        Under Section 287(g) of the Immigration and Nationality Act, local law enforcement
-        agencies can sign agreements with ICE authorizing their officers to perform immigration
-        enforcement. The program has expanded dramatically since 2017. We're tracking every
-        agreement.
+        {m.home_hero_lead()}
       </p>
 
       {#if data.agencyCount > 0}
@@ -170,20 +165,20 @@
             <p class="font-mono text-2xl font-semibold tabular-nums text-slate-900 sm:text-3xl">
               {intFmt.format(data.agencyCount)}
             </p>
-            <p class="mt-0.5 text-xs text-slate-500 sm:text-sm">participating agencies</p>
+            <p class="mt-0.5 text-xs text-slate-500 sm:text-sm">{m.home_stat_agencies()}</p>
           </div>
           <div>
             <p class="font-mono text-2xl font-semibold tabular-nums text-slate-900 sm:text-3xl">
               {data.stateCount}
             </p>
-            <p class="mt-0.5 text-xs text-slate-500 sm:text-sm">states</p>
+            <p class="mt-0.5 text-xs text-slate-500 sm:text-sm">{m.home_stat_states()}</p>
           </div>
           {#if data.populationCovered > 0}
             <div>
               <p class="font-mono text-2xl font-semibold tabular-nums text-slate-900 sm:text-3xl">
                 {popFmt.format(data.populationCovered)}
               </p>
-              <p class="mt-0.5 text-xs text-slate-500 sm:text-sm">people in participating jurisdictions</p>
+              <p class="mt-0.5 text-xs text-slate-500 sm:text-sm">{m.home_stat_population()}</p>
             </div>
           {/if}
         </div>
@@ -197,10 +192,10 @@
       <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
         <div>
           <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">
-            287(g) agencies, by program model
+            {m.home_map_heading()}
           </h2>
           <p class="mt-1 text-xs text-slate-500 sm:text-sm">
-            Click any dot to view the agency's agreement and records.
+            {m.home_map_subhead()}
           </p>
         </div>
         <!-- Legend -->
@@ -222,8 +217,8 @@
         {#if data.agencies.length === 0}
           <div class="flex h-full items-center justify-center bg-slate-100 text-slate-500">
             <div class="px-6 text-center">
-              <p class="font-medium text-slate-700">No data loaded</p>
-              <p class="mt-1 text-sm">Run the pipeline to generate agency data.</p>
+              <p class="font-medium text-slate-700">{m.home_map_empty_title()}</p>
+              <p class="mt-1 text-sm">{m.home_map_empty_subtitle()}</p>
             </div>
           </div>
         {:else}
@@ -237,7 +232,7 @@
   <section class="border-b border-slate-200 bg-white px-4 py-5 sm:px-6">
     <div class="mx-auto flex max-w-6xl items-center justify-between gap-4">
       <p class="text-sm text-slate-500">
-        This project is made possible by <a href="https://vsr.recoveredfactory.net/en" target="_blank" rel="noreferrer" class="font-medium text-slate-700">Recovered Factory</a>, a data journalism studio.
+        {m.home_support_prefix()} <a href="https://vsr.recoveredfactory.net/en" target="_blank" rel="noreferrer" class="font-medium text-slate-700">Recovered Factory</a>{m.home_support_suffix()}
       </p>
       <a
         href="https://vsr.recoveredfactory.net/en"
@@ -245,7 +240,7 @@
         rel="noreferrer"
         class="shrink-0 rounded border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 no-underline hover:border-slate-400 hover:text-slate-900 hover:no-underline"
       >
-        Hire us
+        {m.home_support_hire_us()}
       </a>
     </div>
   </section>
@@ -254,16 +249,16 @@
   <section class="border-b border-slate-200 bg-white px-4 py-10 sm:px-6 sm:py-12">
     <div class="mx-auto max-w-6xl">
       <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">
-        What each model authorizes
+        {m.home_models_heading()}
       </h2>
       <p class="mt-1.5 text-sm text-slate-500">
-        The three 287(g) program models grant different scopes of authority to local officers.
-        <a href={localizeHref("/glossary")} class="underline">See the glossary</a> for key definitions.
+        {m.home_models_subhead()}
+        <a href={localizeHref("/glossary")} class="underline">{m.home_models_glossary_link()}</a> {m.home_models_glossary_suffix()}
       </p>
 
       <div class="mt-5 grid gap-4 sm:grid-cols-3">
         {#each ALL_MODELS as model}
-          {@const desc = MODEL_DESCRIPTIONS[model]}
+          {@const desc = modelDesc(model)}
           <div class="overflow-hidden rounded-lg border border-slate-200 bg-white">
             <div
               class="border-b-4 px-4 py-3"
@@ -288,7 +283,7 @@
   <section class="px-4 py-10 sm:px-6 sm:py-12">
     <div class="mx-auto max-w-6xl">
 
-      <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">Search agencies</h2>
+      <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">{m.home_search_heading()}</h2>
 
       <!-- Filter controls — sticky once scrolled into view -->
       <div
@@ -304,7 +299,7 @@
             <input
               type="search"
               bind:value={searchQuery}
-              placeholder="Agency name, city, or county…"
+              placeholder={m.home_search_placeholder()}
               class="w-full rounded-md border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
@@ -315,7 +310,7 @@
               bind:value={selectedState}
               class="rounded-md border border-slate-300 bg-white py-2 pl-3 pr-7 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
-              <option value="">All states</option>
+              <option value="">{m.home_search_all_states()}</option>
               {#each allStates as state}
                 <option value={state}>{STATE_NAMES[state] ?? state}</option>
               {/each}
@@ -347,28 +342,33 @@
       <!-- Result count -->
       <p class="mt-4 text-sm text-slate-500">
         {#if hasActiveFilters}
-          <span class="font-medium text-slate-800">{intFmt.format(filteredAgencies.length)}</span>
-          of {intFmt.format(data.agencies.length)} agencies match —
+          {m.home_search_match_count({
+            matched: intFmt.format(filteredAgencies.length),
+            total: intFmt.format(data.agencies.length),
+          })} —
           <button
             type="button"
             on:click={clearFilters}
             class="text-blue-800 underline underline-offset-2 hover:text-blue-900"
-          >Clear filters</button>
+          >{m.home_search_clear_filters()}</button>
         {:else}
-          {intFmt.format(data.agencies.length)} agencies across {data.stateCount} states
+          {m.home_search_baseline({
+            count: intFmt.format(data.agencies.length),
+            states: String(data.stateCount),
+          })}
         {/if}
       </p>
 
       <!-- Agency grid -->
       {#if filteredAgencies.length === 0}
         <div class="mt-5 rounded-lg border border-slate-200 bg-white px-6 py-12 text-center">
-          <p class="font-medium text-slate-700">No agencies match your search.</p>
+          <p class="font-medium text-slate-700">{m.home_search_no_match()}</p>
           <button
             type="button"
             on:click={clearFilters}
             class="mt-2 text-sm text-blue-800 underline underline-offset-2"
           >
-            Clear filters
+            {m.home_search_clear_filters()}
           </button>
         </div>
       {:else}
@@ -414,12 +414,15 @@
               <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
               </svg>
-              Previous
+              {m.home_pagination_previous()}
             </button>
 
             <p class="text-sm text-slate-500">
-              <span class="font-medium text-slate-800">{pageStart + 1}–{pageEnd}</span>
-              of {intFmt.format(filteredAgencies.length)}
+              {m.home_pagination_range({
+                start: String(pageStart + 1),
+                end: String(pageEnd),
+                total: intFmt.format(filteredAgencies.length),
+              })}
             </p>
 
             <button
@@ -428,7 +431,7 @@
               disabled={currentPage === totalPages}
               class="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              Next
+              {m.home_pagination_next()}
               <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
               </svg>
