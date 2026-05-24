@@ -19,5 +19,50 @@
   "lang_toggle_aria": "Idioma",
   "lang_en": "English",
   "lang_es": "Español",
-  "source_material_notice": "Los datos y documentos de origen (nombres de agencias, acuerdos MOA, registros oficiales) permanecen en inglés tal como se publicaron originalmente."
+  "source_material_notice": "Los datos y documentos de origen (nombres de agencias, acuerdos MOA, registros oficiales) permanecen en inglés tal como se publicaron originalmente.",
+
+  "home_meta_title": "Tracking 287(g) — Alianzas locales de cumplimiento de ICE",
+  "home_meta_description_with_count": "{count} agencias locales de seguridad pública han firmado acuerdos 287(g) con ICE que autorizan a sus oficiales a hacer cumplir la ley federal de inmigración. Las rastreamos todas.",
+  "home_meta_description_no_data": "Rastreo de agencias locales de seguridad pública con acuerdos 287(g) que autorizan a sus oficiales a hacer cumplir la ley federal de inmigración.",
+
+  "home_hero_eyebrow": "Investigación de interés público",
+  "home_hero_headline_line1": "Tu sheriff",
+  "home_hero_headline_line2": "puede trabajar para ICE.",
+  "home_hero_lead": "Bajo la Sección 287(g) de la Ley de Inmigración y Nacionalidad, las agencias locales de seguridad pública pueden firmar acuerdos con ICE que autorizan a sus oficiales a realizar funciones de inmigración. El programa se ha expandido drásticamente desde 2017. Rastreamos cada acuerdo.",
+  "home_stat_agencies": "agencias participantes",
+  "home_stat_states": "estados",
+  "home_stat_population": "personas en jurisdicciones participantes",
+
+  "home_map_heading": "Agencias 287(g), por modelo del programa",
+  "home_map_subhead": "Haz clic en cualquier punto para ver el acuerdo y los registros de la agencia.",
+  "home_map_empty_title": "No hay datos cargados",
+  "home_map_empty_subtitle": "Ejecuta el pipeline para generar los datos de agencias.",
+
+  "home_support_prefix": "Este proyecto es posible gracias a",
+  "home_support_suffix": ", un estudio de periodismo de datos.",
+  "home_support_hire_us": "Contrátanos",
+
+  "home_models_heading": "Qué autoriza cada modelo",
+  "home_models_subhead": "Los tres modelos del programa 287(g) otorgan distintos niveles de autoridad a los oficiales locales.",
+  "home_models_glossary_link": "Consulta el glosario",
+  "home_models_glossary_suffix": "para ver las definiciones clave.",
+
+  "model_jem_short": "Los oficiales evalúan el estatus migratorio de las personas registradas en las cárceles locales.",
+  "model_jem_detail": "Los oficiales participantes pueden emitir detenciones civiles — solicitudes para que las cárceles retengan a personas más allá de su fecha de liberación programada para que ICE las tome bajo custodia. JEM opera únicamente dentro de centros de detención, no en la comunidad. Es el modelo 287(g) más antiguo y común.",
+  "model_tfm_short": "Los oficiales trabajan junto a agentes de ICE en la comunidad para realizar arrestos migratorios.",
+  "model_tfm_detail": "TFM otorga la autoridad más amplia de los tres modelos. Los oficiales participantes pueden detener, interrogar y arrestar a personas en la comunidad — no solo a quienes ya están bajo custodia. Operan conjuntamente con agentes de campo de ICE en operativos de cumplimiento dirigidos.",
+  "model_wso_short": "Los oficiales están autorizados para entregar órdenes administrativas a personas que ICE ya ha identificado.",
+  "model_wso_detail": "Introducido alrededor de 2020, el modelo WSO es más limitado que JEM o TFM. Los oficiales solo pueden entregar órdenes administrativas a personas específicas que ICE ya identificó para deportación. No pueden iniciar acciones independientes de cumplimiento ni realizar operativos comunitarios.",
+
+  "home_search_heading": "Buscar agencias",
+  "home_search_placeholder": "Nombre de agencia, ciudad o condado…",
+  "home_search_all_states": "Todos los estados",
+  "home_search_match_count": "{matched} de {total} agencias coinciden",
+  "home_search_clear_filters": "Limpiar filtros",
+  "home_search_baseline": "{count} agencias en {states} estados",
+  "home_search_no_match": "Ninguna agencia coincide con tu búsqueda.",
+
+  "home_pagination_previous": "Anterior",
+  "home_pagination_next": "Siguiente",
+  "home_pagination_range": "{start}–{end} de {total}"
 }
