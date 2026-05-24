@@ -1,5 +1,3 @@
-import { withDataBase } from "$lib/dataBase";
-
 export type Agency = {
   slug: string;
   name: string;
@@ -26,7 +24,7 @@ export type PageData = {
 
 export const load = async ({ fetch }): Promise<PageData> => {
   try {
-    const url = withDataBase("/data/dist/agency_index.json");
+    const url = "/data/dist/agency_index.json";
     const res = await fetch(url);
     if (!res.ok) throw new Error(`${res.status} ${url}`);
     const agencies: Agency[] = await res.json();

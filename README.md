@@ -39,12 +39,20 @@ python ingest.py
 
 ## Deployment
 
-Uses [SST v3](https://sst.dev) on AWS. Copy `.env.example` to `.env` and fill in your bucket and domain config before deploying.
+Uses [SST v3](https://sst.dev) on AWS, with two stages:
+
+- `prod` — `287g.recoveredfactory.net`
+- `staging` — `staging.287g.recoveredfactory.net`
+
+The agency JSON ships as a static asset bundled with the SvelteKit build, so refreshing the data means re-running the pipeline and redeploying. Copy `.env.example` to `.env` and fill in the two domains.
 
 ```bash
 cp .env.example .env
-pnpm deploy
+pnpm pipeline          # rebuild static/data/dist/agency_index.json
+pnpm deploy:staging    # or: pnpm deploy:prod
 ```
+
+Non-prod stages (including local dev) render an orange staging favicon and a persistent banner above the header, so it's hard to mistake for the real site.
 
 ## License
 
