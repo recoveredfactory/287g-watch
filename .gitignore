@@ -1,4 +1,5 @@
 .sst
+sst-env.d.ts
 node_modules
 .env
 dist

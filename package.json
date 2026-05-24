@@ -5,9 +5,11 @@
   "scripts": {
     "dev": "sst dev",
     "dev:web": "pnpm -F web dev",
-    "deploy": "sst deploy",
-    "diff": "sst diff",
-    "remove": "sst remove",
+    "deploy:staging": "sst deploy --stage staging",
+    "deploy:prod": "sst deploy --stage prod",
+    "diff:staging": "sst diff --stage staging",
+    "diff:prod": "sst diff --stage prod",
+    "remove:staging": "sst remove --stage staging",
     "pipeline": "pnpm -F pipeline ingest"
   },
   "devDependencies": {

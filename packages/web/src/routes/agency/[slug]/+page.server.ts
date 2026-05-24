@@ -1,4 +1,3 @@
-import { withDataBase } from "$lib/dataBase";
 import { error } from "@sveltejs/kit";
 import type { Agency } from "../../+page.server";
 
@@ -7,8 +6,7 @@ export type AgencyPageData = {
 };
 
 export const load = async ({ fetch, params }): Promise<AgencyPageData> => {
-  const indexUrl = withDataBase("/data/dist/agency_index.json");
-  const res = await fetch(indexUrl);
+  const res = await fetch("/data/dist/agency_index.json");
   if (!res.ok) throw error(503, "Data unavailable");
 
   const agencies: Agency[] = await res.json();

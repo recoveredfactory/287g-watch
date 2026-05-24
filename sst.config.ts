@@ -4,7 +4,7 @@ export default $config({
   app(input) {
     const isProdStage = ["prod", "production"].includes(input?.stage);
     return {
-      name: "287g-explorer",
+      name: "tracking-287g",
       removal: isProdStage ? "retain" : "remove",
       protect: isProdStage,
       home: "aws",
@@ -51,71 +51,13 @@ export default $config({
         ? env.WEB_STAGING_DOMAIN
         : undefined;
 
-    let dataRouter;
-    if (isProdStage) {
-      const dataBucketName = env.DATA_BUCKET_NAME;
-      const dataBucketRegion = env.DATA_BUCKET_REGION || "us-east-2";
-      const dataCdnDomain = env.DATA_CDN_DOMAIN;
-      if (!dataBucketName) throw new Error("Missing DATA_BUCKET_NAME for data CDN setup.");
-      if (!dataCdnDomain) throw new Error("Missing DATA_CDN_DOMAIN for data CDN setup.");
-
-      const dataBucketProvider = new aws.Provider("DataBucketProvider", {
-        region: dataBucketRegion,
-      });
-      const dataBucket = sst.aws.Bucket.get("DataBucket", dataBucketName, {
-        provider: dataBucketProvider,
-      });
-
-      dataRouter = new sst.aws.Router("DataRouter", {
-        domain: dataCdnDomain,
-        routes: {
-          "/*": {
-            bucket: dataBucket,
-            cachePolicy: "658327ea-f89d-4fab-a63d-7e88639e58f6",
-            edge: {
-              viewerResponse: {
-                injection: [
-                  "const allowedOrigins = [",
-                  `  "https://${env.WEB_DOMAIN}",`,
-                  `  "https://${env.WEB_STAGING_DOMAIN}",`,
-                  "];",
-                  "const originHeader = event.request.headers.origin;",
-                  "const origin = originHeader && originHeader.value;",
-                  "const isLocalhost = origin && (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:'));",
-                  "if (origin && (allowedOrigins.includes(origin) || isLocalhost)) {",
-                  '  event.response.headers["access-control-allow-origin"] = { value: origin };',
-                  '  event.response.headers["vary"] = { value: "Origin" };',
-                  '  event.response.headers["access-control-allow-methods"] = { value: "GET,HEAD,OPTIONS" };',
-                  '  event.response.headers["access-control-allow-headers"] = { value: "*" };',
-                  "}",
-                ].join("\n"),
-              },
-            },
-          },
-        },
-      });
-    }
-
-    const dataBaseUrl =
-      env.PUBLIC_DATA_BASE_URL && env.PUBLIC_DATA_BASE_URL !== "/data"
-        ? env.PUBLIC_DATA_BASE_URL
-        : env.DATA_CDN_DOMAIN
-          ? `https://${env.DATA_CDN_DOMAIN}`
-          : env.PUBLIC_DATA_BASE_URL ?? "";
-
     new sst.aws.SvelteKit("Web", {
       path: "packages/web",
       domain: webDomain,
       warm: isProdStage ? 1 : 0,
       environment: {
-        PUBLIC_DATA_BASE_URL: dataBaseUrl,
-        PUBLIC_DATA_RELEASE_PATH: env.PUBLIC_DATA_RELEASE_PATH ?? "",
+        PUBLIC_STAGE: $app.stage,
       },
     });
-
-    return {
-      dataCdnDistributionId: dataRouter?.distributionID,
-      dataCdnDomain: dataRouter?.url,
-    };
   },
 });
