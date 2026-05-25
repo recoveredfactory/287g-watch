@@ -8,8 +8,20 @@
     locales,
     localizeHref,
     deLocalizeHref,
+    cookieName as localeCookieName,
+    cookieMaxAge as localeCookieMaxAge,
     type Locale,
   } from "$lib/paraglide/runtime";
+
+  function rememberLocale(target: Locale) {
+    if (typeof document === "undefined") return;
+    document.cookie = `${localeCookieName}=${target}; path=/; max-age=${localeCookieMaxAge}; samesite=lax`;
+  }
+
+  function hasLocaleCookie(): boolean {
+    if (typeof document === "undefined") return false;
+    return document.cookie.split(";").some((c) => c.trim().startsWith(`${localeCookieName}=`));
+  }
 
   const siteName = "Tracking 287(g)";
 
@@ -44,6 +56,7 @@
     bannerVisible = !localStorage.getItem(BANNER_KEY);
 
     if (localStorage.getItem(MISMATCH_KEY)) return;
+    if (hasLocaleCookie()) return; // user has already expressed a preference
     const browserLang = (navigator.language || "en").split("-")[0].toLowerCase();
     if (browserLang === locale) return;
     if (!(locales as readonly string[]).includes(browserLang)) return;
@@ -100,6 +113,7 @@
         <span>¿Prefieres esta página en español?</span>
         <a
           href={hrefFor("es")}
+          on:click={() => rememberLocale("es")}
           data-sveltekit-reload
           class="font-semibold text-blue-900 underline underline-offset-2 hover:text-blue-700"
         >Sí, cambiar</a>
@@ -112,6 +126,7 @@
         <span>Prefer this page in English?</span>
         <a
           href={hrefFor("en")}
+          on:click={() => rememberLocale("en")}
           data-sveltekit-reload
           class="font-semibold text-blue-900 underline underline-offset-2 hover:text-blue-700"
         >Yes, switch</a>
@@ -145,6 +160,7 @@
               {#if i > 0}<span aria-hidden="true" class="text-slate-300">·</span>{/if}
               <a
                 href={hrefFor(l)}
+                on:click={() => rememberLocale(l)}
                 class={l === locale
                   ? "font-semibold text-slate-900 no-underline"
                   : "text-slate-500 no-underline hover:text-slate-900"}
