@@ -19,5 +19,50 @@
   "lang_toggle_aria": "Language",
   "lang_en": "English",
   "lang_es": "Español",
-  "source_material_notice": "Source data and documents (agency names, MOAs, official records) remain in English as originally published."
+  "source_material_notice": "Source data and documents (agency names, MOAs, official records) remain in English as originally published.",
+
+  "home_meta_title": "Tracking 287(g) — ICE's Local Enforcement Partnerships",
+  "home_meta_description_with_count": "{count} local law enforcement agencies have signed 287(g) agreements with ICE, authorizing officers to enforce federal immigration law. We tracked all of them.",
+  "home_meta_description_no_data": "Tracking local law enforcement agencies with 287(g) agreements authorizing officers to enforce federal immigration law.",
+
+  "home_hero_eyebrow": "Public Interest Investigation",
+  "home_hero_headline_line1": "Your sheriff",
+  "home_hero_headline_line2": "may work for ICE.",
+  "home_hero_lead": "Under Section 287(g) of the Immigration and Nationality Act, local law enforcement agencies can sign agreements with ICE authorizing their officers to perform immigration enforcement. The program has expanded dramatically since 2017. We're tracking every agreement.",
+  "home_stat_agencies": "participating agencies",
+  "home_stat_states": "states",
+  "home_stat_population": "people in participating jurisdictions",
+
+  "home_map_heading": "287(g) agencies, by program model",
+  "home_map_subhead": "Click any dot to view the agency's agreement and records.",
+  "home_map_empty_title": "No data loaded",
+  "home_map_empty_subtitle": "Run the pipeline to generate agency data.",
+
+  "home_support_prefix": "This project is made possible by",
+  "home_support_suffix": ", a data journalism studio.",
+  "home_support_hire_us": "Hire us",
+
+  "home_models_heading": "What each model authorizes",
+  "home_models_subhead": "The three 287(g) program models grant different scopes of authority to local officers.",
+  "home_models_glossary_link": "See the glossary",
+  "home_models_glossary_suffix": "for key definitions.",
+
+  "model_jem_short": "Officers screen people booked into local jails for immigration status.",
+  "model_jem_detail": "Participating officers may issue civil detainers — requests for jails to hold people beyond their scheduled release so ICE can take custody. JEM operates inside detention facilities only, not in the community. It is the oldest and most common 287(g) model.",
+  "model_tfm_short": "Officers work alongside ICE agents in the community to make immigration arrests.",
+  "model_tfm_detail": "TFM grants the broadest authority of the three models. Participating officers can stop, question, and arrest individuals in the community — not only those already in custody. They operate jointly with ICE field agents on targeted enforcement operations.",
+  "model_wso_short": "Officers are authorized to serve administrative warrants on people ICE has already identified.",
+  "model_wso_detail": "Introduced around 2020, the WSO model is narrower than JEM or TFM. Officers may only serve administrative warrants on specific individuals ICE has already identified for removal. They cannot initiate independent enforcement or conduct community operations.",
+
+  "home_search_heading": "Search agencies",
+  "home_search_placeholder": "Agency name, city, or county…",
+  "home_search_all_states": "All states",
+  "home_search_match_count": "{matched} of {total} agencies match",
+  "home_search_clear_filters": "Clear filters",
+  "home_search_baseline": "{count} agencies across {states} states",
+  "home_search_no_match": "No agencies match your search.",
+
+  "home_pagination_previous": "Previous",
+  "home_pagination_next": "Next",
+  "home_pagination_range": "{start}–{end} of {total}"
 }
