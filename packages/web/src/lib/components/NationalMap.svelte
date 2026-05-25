@@ -96,8 +96,10 @@
     map.addControl(new ml.NavigationControl({ showCompass: false }), "top-right");
 
     map.on("load", () => {
-      // Lock the floor zoom to whatever fitBounds chose for this container —
-      // prevents zooming out past the full-country view on any screen size
+      // Resize first so MapLibre knows the true container dimensions on mobile,
+      // then re-fit so the full map fills the container, then lock the floor zoom.
+      map.resize();
+      map.fitBounds(FIT_BOUNDS, FIT_OPTIONS);
       map.setMinZoom(map.getZoom());
 
       map.addSource("states", {

@@ -24,6 +24,7 @@
   let searchQuery = "";
   let activeModels: Set<string> = new Set();
   let selectedState = "";
+  let selectedYear = "";
   let currentPage = 1;
   const PAGE_SIZE = 25;
 
@@ -43,6 +44,7 @@
       const params = new URLSearchParams();
       if (searchQuery.trim()) params.set("q", searchQuery.trim());
       if (selectedState) params.set("state", selectedState);
+      if (selectedYear) params.set("year", selectedYear);
       if (activeModels.size > 0)
         params.set("models", [...activeModels].map((m) => MODEL_SLUG[m]).filter(Boolean).join(","));
       if (currentPage > 1) params.set("page", String(currentPage));
@@ -51,7 +53,7 @@
     }, 300);
   }
 
-  $: { searchQuery; selectedState; activeModels; currentPage; scheduleUrlSync(); }
+  $: { searchQuery; selectedState; selectedYear; activeModels; currentPage; scheduleUrlSync(); }
 
   onMount(() => {
     const params = new URLSearchParams(location.search);
@@ -61,6 +63,8 @@
     const page = params.get("page");
     if (q) searchQuery = q;
     if (state) selectedState = state;
+    const year = params.get("year");
+    if (year) selectedYear = year;
     if (models)
       activeModels = new Set(models.split(",").map((s) => SLUG_TO_MODEL[s]).filter(Boolean));
     // Set page last — filter changes above will reset currentPage to 1 reactively,
@@ -72,6 +76,7 @@
   });
 
   $: allStates = [...new Set(data.agencies.map((a) => a.state).filter(Boolean))].sort();
+  $: allYears = [...new Set(data.agencies.map((a) => a.signed_date?.slice(0, 4)).filter(Boolean))].sort();
 
   $: filteredAgencies = data.agencies.filter((a) => {
     const q = searchQuery.trim().toLowerCase();
@@ -84,7 +89,8 @@
     const matchesModel =
       activeModels.size === 0 || a.models.some((m) => activeModels.has(m));
     const matchesState = !selectedState || a.state === selectedState;
-    return matchesSearch && matchesModel && matchesState;
+    const matchesYear = !selectedYear || a.signed_date?.startsWith(selectedYear);
+    return matchesSearch && matchesModel && matchesState && matchesYear;
   });
 
   // Reset to page 1 whenever filters change
@@ -106,9 +112,10 @@
     searchQuery = "";
     activeModels = new Set();
     selectedState = "";
+    selectedYear = "";
   };
 
-  $: hasActiveFilters = searchQuery.trim() !== "" || activeModels.size > 0 || selectedState !== "";
+  $: hasActiveFilters = searchQuery.trim() !== "" || activeModels.size > 0 || selectedState !== "" || selectedYear !== "";
 
   function modelDesc(model: string): { short: string; detail: string } {
     switch (model) {
@@ -314,6 +321,16 @@
               <option value="">{m.home_search_all_states()}</option>
               {#each allStates as state}
                 <option value={state}>{STATE_NAMES[state] ?? state}</option>
+              {/each}
+            </select>
+
+            <select
+              bind:value={selectedYear}
+              class="rounded-md border border-slate-300 bg-white py-2 pl-3 pr-7 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="">All years</option>
+              {#each allYears as year}
+                <option value={year}>{year}</option>
               {/each}
             </select>
 
