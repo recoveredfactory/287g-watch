@@ -5,6 +5,7 @@
   import NationalMap from "$lib/components/NationalMap.svelte";
   import { browser } from "$app/environment";
   import { onMount } from "svelte";
+  import { localizeHref } from "$lib/paraglide/runtime";
 
   export let data: PageData;
 
@@ -257,7 +258,7 @@
       </h2>
       <p class="mt-1.5 text-sm text-slate-500">
         The three 287(g) program models grant different scopes of authority to local officers.
-        <a href="/glossary" class="underline">See the glossary</a> for key definitions.
+        <a href={localizeHref("/glossary")} class="underline">See the glossary</a> for key definitions.
       </p>
 
       <div class="mt-5 grid gap-4 sm:grid-cols-3">
@@ -374,7 +375,7 @@
         <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {#each pageAgencies as agency (agency.slug)}
             <a
-              href="/agency/{agency.slug}"
+              href={localizeHref(`/agency/${agency.slug}`)}
               class="group block rounded-lg border border-slate-200 bg-white p-4 no-underline hover:border-slate-300 hover:shadow-sm active:bg-slate-50"
             >
               <p class="font-semibold leading-snug text-slate-900 group-hover:text-blue-900">

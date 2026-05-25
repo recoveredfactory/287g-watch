@@ -1,0 +1,23 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "skip_to_main": "Skip to main content",
+  "nav_map": "Map",
+  "nav_glossary": "Glossary",
+  "nav_about": "About",
+  "nav_methodology": "Methodology",
+  "footer_tagline_after_name": "— a public-interest journalism project. Records, corrections, and tips welcome.",
+  "footer_methodology": "Methodology",
+  "footer_about": "About",
+  "footer_credit_prefix": "A project of",
+  "footer_credit_org_name": "Recovered Factory",
+  "footer_credit_suffix": "Developed by David Eads and Tory Lysik. Code, design, and text copyright © 2026 Recovered Factory.",
+  "rf_banner_question": "Love our work?",
+  "rf_banner_pitch": "Recovered Factory builds data journalism tools for public-interest newsrooms.",
+  "rf_banner_cta": "Get in touch",
+  "rf_banner_dismiss": "Dismiss",
+  "staging_banner": "Staging — not production · {stage}",
+  "lang_toggle_aria": "Language",
+  "lang_en": "English",
+  "lang_es": "Español",
+  "source_material_notice": "Source data and documents (agency names, MOAs, official records) remain in English as originally published."
+}

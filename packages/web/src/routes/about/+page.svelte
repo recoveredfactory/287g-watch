@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { localizeHref } from "$lib/paraglide/runtime";
   const title = "About — Tracking 287(g)";
   const description = "About this project and how to get involved.";
 </script>
@@ -54,7 +55,7 @@
         File public records requests to surface local data
       </li>
       <li>
-        See <a href="/methodology">our methodology</a> for data sources and limitations
+        See <a href={localizeHref("/methodology")}>our methodology</a> for data sources and limitations
       </li>
     </ul>
   </div>
