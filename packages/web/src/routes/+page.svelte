@@ -7,6 +7,7 @@
   import { onMount } from "svelte";
   import { localizeHref } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
+  import Gloss from "$lib/components/Gloss.svelte";
 
   export let data: PageData;
 
@@ -156,7 +157,7 @@
         {m.home_hero_headline_line1()}<br class="hidden sm:block" /> {m.home_hero_headline_line2()}
       </h1>
       <p class="prose-editorial mt-4 text-base sm:mt-6 sm:text-lg">
-        {m.home_hero_lead()}
+        <Gloss text={m.home_hero_lead()} />
       </p>
 
       {#if data.agencyCount > 0}
