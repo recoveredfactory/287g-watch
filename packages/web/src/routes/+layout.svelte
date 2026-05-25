@@ -229,7 +229,7 @@
         target="_blank"
         rel="noreferrer"
         class="rounded px-3 py-1.5 text-sm font-semibold no-underline hover:no-underline"
-        style="background-color: #80ed99; color: #0f3020;"
+        style="background-color: #BE6079; color: #ffffff;"
       >
         {m.rf_banner_cta()}
       </a>
