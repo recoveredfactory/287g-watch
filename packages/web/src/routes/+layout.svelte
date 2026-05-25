@@ -100,6 +100,7 @@
                 aria-current={l === locale ? "true" : undefined}
                 hreflang={l}
                 rel="alternate"
+                data-sveltekit-reload
               >
                 {l === "en" ? m.lang_en() : m.lang_es()}
               </a>
