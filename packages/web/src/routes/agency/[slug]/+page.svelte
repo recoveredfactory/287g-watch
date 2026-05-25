@@ -3,10 +3,11 @@
   import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_SHORT } from "$lib/colors";
   import { localizeHref, getLocale } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
+  import AgencySearch from "$lib/components/AgencySearch.svelte";
 
   export let data: PageData;
 
-  const { agency } = data;
+  const { agency, agencies } = data;
 
   const siteUrl = import.meta.env.PUBLIC_SITE_URL ?? "https://tracking287g.com";
   $: title = m.agency_meta_title({ agency_name: agency.name });
@@ -63,6 +64,16 @@
   <meta property="twitter:description" content={description} />
   {@html `<script type="application/ld+json">${jsonLd}</script>`}
 </svelte:head>
+
+<!-- Sticky agency search bar -->
+<div
+  class="sticky z-40 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur sm:px-6"
+  style="top: var(--site-header-height);"
+>
+  <div class="mx-auto max-w-4xl">
+    <AgencySearch {agencies} currentSlug={agency.slug} />
+  </div>
+</div>
 
 <main id="main-content" class="mx-auto max-w-4xl px-4 py-12 sm:px-6">
   <!-- Breadcrumb -->

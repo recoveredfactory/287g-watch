@@ -187,6 +187,40 @@
     </div>
   </section>
 
+  <!-- ── What each model authorizes ───────────────────────────────────────── -->
+  <section class="border-b border-slate-200 bg-white px-4 py-10 sm:px-6 sm:py-12">
+    <div class="mx-auto max-w-6xl">
+      <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">
+        {m.home_models_heading()}
+      </h2>
+      <p class="mt-1.5 text-sm text-slate-500">
+        {m.home_models_subhead()}
+        <a href={localizeHref("/glossary")} class="underline">{m.home_models_glossary_link()}</a> {m.home_models_glossary_suffix()}
+      </p>
+
+      <div class="mt-5 grid gap-4 sm:grid-cols-3">
+        {#each ALL_MODELS as model}
+          {@const desc = modelDesc(model)}
+          <div class="overflow-hidden rounded-lg border border-slate-200 bg-white">
+            <div
+              class="border-b-4 px-4 py-3"
+              style="background: {MODEL_COLORS[model]}18; border-bottom-color: {MODEL_COLORS[model]};"
+            >
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {MODEL_SHORT[model]}
+              </p>
+              <h3 class="mt-0.5 text-sm font-semibold text-slate-900">{model}</h3>
+            </div>
+            <div class="px-4 py-4">
+              <p class="text-sm font-medium leading-relaxed text-slate-800">{desc.short}</p>
+              <p class="mt-2 text-xs italic leading-relaxed text-slate-400">{desc.detail}</p>
+            </div>
+          </div>
+        {/each}
+      </div>
+    </div>
+  </section>
+
   <!-- ── Map ──────────────────────────────────────────────────────────────── -->
   <section class="border-b border-slate-200 bg-stone-50 px-4 py-8 sm:px-6 sm:py-10">
     <div class="mx-auto max-w-6xl">
@@ -243,40 +277,6 @@
       >
         {m.home_support_hire_us()}
       </a>
-    </div>
-  </section>
-
-  <!-- ── What each model authorizes ───────────────────────────────────────── -->
-  <section class="border-b border-slate-200 bg-white px-4 py-10 sm:px-6 sm:py-12">
-    <div class="mx-auto max-w-6xl">
-      <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">
-        {m.home_models_heading()}
-      </h2>
-      <p class="mt-1.5 text-sm text-slate-500">
-        {m.home_models_subhead()}
-        <a href={localizeHref("/glossary")} class="underline">{m.home_models_glossary_link()}</a> {m.home_models_glossary_suffix()}
-      </p>
-
-      <div class="mt-5 grid gap-4 sm:grid-cols-3">
-        {#each ALL_MODELS as model}
-          {@const desc = modelDesc(model)}
-          <div class="overflow-hidden rounded-lg border border-slate-200 bg-white">
-            <div
-              class="border-b-4 px-4 py-3"
-              style="background: {MODEL_COLORS[model]}18; border-bottom-color: {MODEL_COLORS[model]};"
-            >
-              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                {MODEL_SHORT[model]}
-              </p>
-              <h3 class="mt-0.5 text-sm font-semibold text-slate-900">{model}</h3>
-            </div>
-            <div class="px-4 py-4">
-              <p class="text-sm font-medium leading-relaxed text-slate-800">{desc.short}</p>
-              <p class="mt-2 text-xs italic leading-relaxed text-slate-400">{desc.detail}</p>
-            </div>
-          </div>
-        {/each}
-      </div>
     </div>
   </section>
 

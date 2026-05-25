@@ -3,6 +3,7 @@ import type { Agency } from "../../+page.server";
 
 export type AgencyPageData = {
   agency: Agency;
+  agencies: Agency[];
 };
 
 export const load = async ({ fetch, params }): Promise<AgencyPageData> => {
@@ -13,5 +14,5 @@ export const load = async ({ fetch, params }): Promise<AgencyPageData> => {
   const agency = agencies.find((a) => a.slug === params.slug);
   if (!agency) throw error(404, `Agency not found: ${params.slug}`);
 
-  return { agency };
+  return { agency, agencies };
 };
