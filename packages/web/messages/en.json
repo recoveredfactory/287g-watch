@@ -116,5 +116,11 @@
   "agency_program_models": "Program model(s)",
   "agency_moa_heading": "Memorandum of Agreement",
   "agency_moa_body": "The full agreement between {agency_name} and ICE is available below.",
-  "agency_moa_view_pdf": "View agreement PDF →"
+  "agency_moa_view_pdf": "View agreement PDF →",
+  "agency_contact_heading": "Contact",
+  "agency_contact_none": "Contact information for this agency is not yet available.",
+  "agency_contact_address": "Address",
+  "agency_contact_phone": "Phone",
+  "agency_contact_email": "Email",
+  "agency_contact_website": "Website"
 }

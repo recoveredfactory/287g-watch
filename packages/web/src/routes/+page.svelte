@@ -375,31 +375,42 @@
       {:else}
         <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {#each pageAgencies as agency (agency.slug)}
-            <a
-              href={localizeHref(`/agency/${agency.slug}`)}
-              class="group block rounded-lg border border-slate-200 bg-white p-4 no-underline hover:border-slate-300 hover:shadow-sm active:bg-slate-50"
-            >
-              <p class="font-semibold leading-snug text-slate-900 group-hover:text-blue-900">
-                {agency.name}
-              </p>
-              <p class="mt-0.5 text-sm text-slate-500">
-                {[agency.city, STATE_NAMES[agency.state] ?? agency.state]
-                  .filter(Boolean)
-                  .join(", ")}
-              </p>
-              <div class="mt-2 flex flex-wrap gap-1.5">
-                {#each agency.models as model}
-                  <span
-                    class="model-badge"
-                    class:model-badge--jail={model.includes("Jail")}
-                    class:model-badge--taskforce={model.includes("Task")}
-                    class:model-badge--wso={model.includes("Warrant")}
-                  >
-                    {MODEL_SHORT[model] ?? model}
-                  </span>
-                {/each}
-              </div>
-            </a>
+            <div class="group relative rounded-lg border border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm">
+              <a
+                href={localizeHref(`/agency/${agency.slug}`)}
+                class="block p-4 no-underline active:bg-slate-50"
+              >
+                <p class="font-semibold leading-snug text-slate-900 group-hover:text-slate-700">
+                  {agency.name}
+                </p>
+                <p class="mt-0.5 text-sm text-slate-500">
+                  {[agency.city, STATE_NAMES[agency.state] ?? agency.state]
+                    .filter(Boolean)
+                    .join(", ")}
+                </p>
+                <div class="mt-2 flex flex-wrap gap-1.5" class:pr-12={!!agency.moa_url}>
+                  {#each agency.models as model}
+                    <span
+                      class="model-badge"
+                      class:model-badge--jail={model.includes("Jail")}
+                      class:model-badge--taskforce={model.includes("Task")}
+                      class:model-badge--wso={model.includes("Warrant")}
+                    >
+                      {MODEL_SHORT[model] ?? model}
+                    </span>
+                  {/each}
+                </div>
+              </a>
+              {#if agency.moa_url}
+                <a
+                  href={agency.moa_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  class="absolute bottom-4 right-3 text-xs text-slate-400 no-underline hover:text-slate-700"
+                  aria-label="View agreement PDF for {agency.name}"
+                >PDF ↗</a>
+              {/if}
+            </div>
           {/each}
         </div>
 
