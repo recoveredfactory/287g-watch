@@ -35,13 +35,31 @@
   const BANNER_KEY = "rf-banner-dismissed";
   let bannerVisible = false;
 
+  // Language-mismatch banner: offers to switch when the browser's preferred
+  // language differs from the URL locale. Dismissed once, never returns.
+  const MISMATCH_KEY = "rf-lang-mismatch-dismissed-v1";
+  let mismatchTarget: Locale | null = null;
+
   onMount(() => {
     bannerVisible = !localStorage.getItem(BANNER_KEY);
+
+    if (localStorage.getItem(MISMATCH_KEY)) return;
+    const browserLang = (navigator.language || "en").split("-")[0].toLowerCase();
+    if (browserLang === locale) return;
+    if (!(locales as readonly string[]).includes(browserLang)) return;
+    mismatchTarget = browserLang as Locale;
   });
 
   function dismissBanner() {
     bannerVisible = false;
     localStorage.setItem(BANNER_KEY, "1");
+  }
+
+  function dismissMismatch() {
+    mismatchTarget = null;
+    try {
+      localStorage.setItem(MISMATCH_KEY, "1");
+    } catch {}
   }
 </script>
 
@@ -70,6 +88,39 @@
     >
       <span aria-hidden="true">⚠</span>
       <span>{m.staging_banner({ stage })}</span>
+    </div>
+  {/if}
+  {#if mismatchTarget}
+    <div
+      class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-blue-200 bg-blue-50 px-4 py-2 text-center text-sm text-blue-950"
+      role="region"
+      aria-label={mismatchTarget === "es" ? "Sugerencia de idioma" : "Language suggestion"}
+    >
+      {#if mismatchTarget === "es"}
+        <span>¿Prefieres esta página en español?</span>
+        <a
+          href={hrefFor("es")}
+          data-sveltekit-reload
+          class="font-semibold text-blue-900 underline underline-offset-2 hover:text-blue-700"
+        >Sí, cambiar</a>
+        <button
+          type="button"
+          on:click={dismissMismatch}
+          class="text-xs text-blue-700/70 underline underline-offset-2 hover:text-blue-700"
+        >No, gracias</button>
+      {:else}
+        <span>Prefer this page in English?</span>
+        <a
+          href={hrefFor("en")}
+          data-sveltekit-reload
+          class="font-semibold text-blue-900 underline underline-offset-2 hover:text-blue-700"
+        >Yes, switch</a>
+        <button
+          type="button"
+          on:click={dismissMismatch}
+          class="text-xs text-blue-700/70 underline underline-offset-2 hover:text-blue-700"
+        >No thanks</button>
+      {/if}
     </div>
   {/if}
   <header
