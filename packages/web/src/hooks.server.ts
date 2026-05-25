@@ -9,7 +9,7 @@ import {
   type Locale,
 } from "$lib/paraglide/runtime";
 
-const STATIC_PREFIXES = ["/_app/", "/data/"];
+const STATIC_PREFIXES = ["/_app/", "/data/", "/api/"];
 const STATIC_FILES = ["/favicon.svg", "/favicon-staging.svg", "/robots.txt", "/sitemap.xml"];
 
 function pickLocaleFromAcceptLanguage(header: string | null): Locale {

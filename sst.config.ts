@@ -58,6 +58,15 @@ export default $config({
       environment: {
         PUBLIC_STAGE: $app.stage,
       },
+      // TODO(#19): need to forward CloudFront-Viewer-Country and
+      // CloudFront-Viewer-Country-Region to the Lambda origin so /api/geo can
+      // read them. A naive swap to Managed-AllViewerAndCloudFrontHeaders-2022-06
+      // broke staging on 2026-05-25 because Lambda Function URLs reject requests
+      // whose Host header doesn't match their lambdaurl.region.aws domain — see
+      // memory: aws-cloudfront-geo-headers and feedback-sst-origin-policy-host-trap.
+      // Fix: custom origin request policy that mirrors AllExcept Host AND adds
+      // the CloudFront-Viewer-* whitelist (or a CloudFront Function that copies
+      // event.viewer.* into X-Geo-* headers passed through the default policy).
     });
   },
 });
