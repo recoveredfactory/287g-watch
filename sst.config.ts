@@ -51,6 +51,49 @@ export default $config({
         ? env.WEB_STAGING_DOMAIN
         : undefined;
 
+    // Custom origin request policy: forwards selected viewer headers (NOT Host,
+    // because Lambda Function URLs reject mismatched Host) plus the CloudFront-
+    // Viewer-Country/Region headers that /api/geo reads. `whitelist` is the only
+    // mode that can both omit Host and add CloudFront-* headers — `allExcept`
+    // can't add them, `allViewerAndWhitelistCloudFront` always forwards Host,
+    // and CloudFront Functions can't strip Host (it's read-only in viewer-
+    // request). Cookies and query strings forwarded separately below.
+    const webOriginRequest = new aws.cloudfront.OriginRequestPolicy(
+      "WebOriginRequest",
+      {
+        name: `${$app.name}-${$app.stage}-web`,
+        comment:
+          "All cookies/query, viewer headers except Host, plus CloudFront geo",
+        cookiesConfig: { cookieBehavior: "all" },
+        queryStringsConfig: { queryStringBehavior: "all" },
+        headersConfig: {
+          headerBehavior: "whitelist",
+          headers: {
+            // `accept-encoding` is intentionally omitted — CloudFront rejects it
+            // in custom origin request policies ("not allowed") because it manages
+            // compression negotiation itself via the cache policy's gzip/brotli
+            // toggles. Trying to add it returns InvalidArgument at deploy time.
+            items: [
+              "accept",
+              "accept-language",
+              "content-type",
+              "origin",
+              "referer",
+              "user-agent",
+              // SST's auto-deployed viewer-request CloudFront Function copies
+              // the viewer Host into x-forwarded-host so the svelte-kit-sst
+              // Lambda handler can promote it back to `host` on the SSR side.
+              // Without forwarding this, event.url.host becomes the Lambda
+              // Function URL, and SSR fetches to /data/* miss S3.
+              "x-forwarded-host",
+              "cloudfront-viewer-country",
+              "cloudfront-viewer-country-region",
+            ],
+          },
+        },
+      },
+    );
+
     new sst.aws.SvelteKit("Web", {
       path: "packages/web",
       domain: webDomain,
@@ -58,15 +101,16 @@ export default $config({
       environment: {
         PUBLIC_STAGE: $app.stage,
       },
-      // TODO(#19): need to forward CloudFront-Viewer-Country and
-      // CloudFront-Viewer-Country-Region to the Lambda origin so /api/geo can
-      // read them. A naive swap to Managed-AllViewerAndCloudFrontHeaders-2022-06
-      // broke staging on 2026-05-25 because Lambda Function URLs reject requests
-      // whose Host header doesn't match their lambdaurl.region.aws domain — see
-      // memory: aws-cloudfront-geo-headers and feedback-sst-origin-policy-host-trap.
-      // Fix: custom origin request policy that mirrors AllExcept Host AND adds
-      // the CloudFront-Viewer-* whitelist (or a CloudFront Function that copies
-      // event.viewer.* into X-Geo-* headers passed through the default policy).
+      transform: {
+        cdn: {
+          transform: {
+            distribution: (args) => {
+              (args.defaultCacheBehavior as any).originRequestPolicyId =
+                webOriginRequest.id;
+            },
+          },
+        },
+      },
     });
   },
 });

@@ -325,7 +325,7 @@
             </div>
           </div>
         {:else}
-          <NationalMap agencies={filteredAgencies} />
+          <NationalMap agencies={data.agencies} />
         {/if}
       </div>
     </div>
