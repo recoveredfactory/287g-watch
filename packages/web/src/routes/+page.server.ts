@@ -42,13 +42,18 @@ export const load = async ({ fetch }): Promise<PageData> => {
 
     const states = new Set(agencies.map((a) => a.state));
     const populationCovered = agencies.reduce((sum, a) => sum + (a.population ?? 0), 0);
+    const snapshotDate = agencies
+      .map((a) => (a as any).snapshot_date as string | undefined)
+      .filter(Boolean)
+      .sort()
+      .at(-1) ?? null;
 
     return {
       agencies,
       agencyCount: agencies.length,
       stateCount: states.size,
       populationCovered,
-      snapshotDate: null,
+      snapshotDate,
     };
   } catch {
     return {

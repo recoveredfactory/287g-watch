@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { PageData } from "./$types";
-  import { MODEL_COLORS, MODEL_SHORT, MODEL_SLUG } from "$lib/colors";
+  import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_SHORT, MODEL_SLUG } from "$lib/colors";
   import { STATE_NAMES } from "$lib/states";
   import NationalMap from "$lib/components/NationalMap.svelte";
   import { browser } from "$app/environment";
@@ -190,6 +190,12 @@
             </div>
           {/if}
         </div>
+
+        {#if data.snapshotDate}
+          <p class="mt-4 text-xs italic text-slate-400">
+            As of {new Intl.DateTimeFormat("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" }).format(new Date(data.snapshotDate))}
+          </p>
+        {/if}
       {/if}
     </div>
   </section>
@@ -200,27 +206,19 @@
       <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">
         {m.home_models_heading()}
       </h2>
-      <p class="mt-1.5 text-sm text-slate-500">
-        {m.home_models_subhead()}
-        <a href={localizeHref("/glossary")} class="underline">{m.home_models_glossary_link()}</a> {m.home_models_glossary_suffix()}
-      </p>
-
       <div class="mt-5 grid gap-4 sm:grid-cols-3">
         {#each ALL_MODELS as model}
           {@const desc = modelDesc(model)}
-          <div class="overflow-hidden rounded-lg border border-slate-200 bg-white">
-            <div
-              class="border-b-4 px-4 py-3"
-              style="background: {MODEL_COLORS[model]}18; border-bottom-color: {MODEL_COLORS[model]};"
-            >
-              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                {MODEL_SHORT[model]}
-              </p>
-              <h3 class="mt-0.5 text-sm font-semibold text-slate-900">{model}</h3>
+          <div class="overflow-hidden rounded-lg border border-slate-200 shadow-sm">
+            <div class="px-4 py-4" style="background: {MODEL_COLORS[model]};">
+              <h3
+                class="font-sans text-sm font-bold uppercase tracking-widest"
+                style="color: {MODEL_TEXT_COLORS[model] ?? '#ffffff'};"
+              >{model.replace(/ Model$/, '')}</h3>
             </div>
-            <div class="px-4 py-4">
+            <div class="bg-white px-4 py-4">
               <p class="text-sm font-medium leading-relaxed text-slate-800">{desc.short}</p>
-              <p class="mt-2 text-xs italic leading-relaxed text-slate-400">{desc.detail}</p>
+              <p class="mt-2 text-xs italic leading-relaxed text-slate-500">{desc.detail}</p>
             </div>
           </div>
         {/each}
