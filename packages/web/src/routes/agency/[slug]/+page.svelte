@@ -4,6 +4,7 @@
   import { localizeHref, getLocale } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
   import AgencySearch from "$lib/components/AgencySearch.svelte";
+  import AgencyMap from "$lib/components/AgencyMap.svelte";
 
   export let data: PageData;
 
@@ -107,6 +108,16 @@
         {/each}
       </div>
     </div>
+  </div>
+
+  <!-- Location map -->
+  <div class="mt-6 h-[260px] overflow-hidden rounded-lg border border-slate-200 shadow-sm sm:h-[320px]">
+    <AgencyMap
+      lat={agency.lat}
+      lng={agency.lng}
+      state={agency.state}
+      primaryModel={agency.primary_model}
+    />
   </div>
 
   <!-- Key facts -->
