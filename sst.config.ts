@@ -58,6 +58,19 @@ export default $config({
       environment: {
         PUBLIC_STAGE: $app.stage,
       },
+      transform: {
+        cdn: {
+          transform: {
+            distribution: (args) => {
+              // Forward CloudFront-Viewer-* geo headers (Country, Country-Region, City,
+              // Lat/Long, Postal-Code, Time-Zone, etc.) to the Lambda origin so the
+              // /api/geo endpoint can read them. Default SST policy strips them.
+              (args.defaultCacheBehavior as any).originRequestPolicyId =
+                "33f36d7e-f396-46d9-90e0-52428a34d9dc"; // Managed-AllViewerAndCloudFrontHeaders-2022-06
+            },
+          },
+        },
+      },
     });
   },
 });

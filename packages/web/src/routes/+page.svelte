@@ -34,6 +34,38 @@
   );
 
   let urlSyncTimer: ReturnType<typeof setTimeout>;
+  let mounted = false;
+  let detectedState: string | null = null;
+
+  // localStorage-cached geo detection — avoids hitting /api/geo on every page load
+  const GEO_KEY = "rf-geo-v1";
+  const GEO_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+  async function getCachedGeo(): Promise<{ country: string | null; state: string | null }> {
+    try {
+      const raw = localStorage.getItem(GEO_KEY);
+      if (raw) {
+        const cached = JSON.parse(raw);
+        if (typeof cached.t === "number" && Date.now() - cached.t < GEO_TTL_MS) {
+          return { country: cached.c ?? null, state: cached.s ?? null };
+        }
+      }
+    } catch {}
+    try {
+      const res = await fetch("/api/geo", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        try {
+          localStorage.setItem(
+            GEO_KEY,
+            JSON.stringify({ c: data.country, s: data.state, t: Date.now() })
+          );
+        } catch {}
+        return data;
+      }
+    } catch {}
+    return { country: null, state: null };
+  }
 
   function scheduleUrlSync() {
     if (!browser) return;
@@ -50,24 +82,40 @@
     }, 300);
   }
 
-  $: { searchQuery; selectedState; activeModels; currentPage; scheduleUrlSync(); }
+  // Only sync URL for user-initiated changes after mount. Initial-state setup
+  // (URL params, geo default) runs inside onMount and intentionally skips sync.
+  $: { searchQuery; selectedState; activeModels; currentPage;
+    if (mounted) scheduleUrlSync();
+  }
 
-  onMount(() => {
+  onMount(async () => {
     const params = new URLSearchParams(location.search);
     const q = params.get("q");
-    const state = params.get("state");
+    const stateParam = params.get("state");
     const models = params.get("models");
     const page = params.get("page");
     if (q) searchQuery = q;
-    if (state) selectedState = state;
+    if (stateParam) selectedState = stateParam;
     if (models)
       activeModels = new Set(models.split(",").map((s) => SLUG_TO_MODEL[s]).filter(Boolean));
+
+    // Geo: silently default the state filter if the URL didn't specify one.
+    // Always record the detected state so the "use my state" link can surface
+    // when URL specified a different one.
+    const geo = await getCachedGeo();
+    if (geo.state && allStates.includes(geo.state)) {
+      detectedState = geo.state;
+      if (!stateParam) selectedState = detectedState;
+    }
+
     // Set page last — filter changes above will reset currentPage to 1 reactively,
     // so this must come after all other assignments to stick.
     if (page) {
       const n = parseInt(page, 10);
       if (!isNaN(n) && n > 1) currentPage = n;
     }
+
+    mounted = true;
   });
 
   $: allStates = [...new Set(data.agencies.map((a) => a.state).filter(Boolean))].sort();
@@ -315,6 +363,16 @@
                 <option value={state}>{STATE_NAMES[state] ?? state}</option>
               {/each}
             </select>
+
+            {#if detectedState && selectedState !== detectedState}
+              <button
+                type="button"
+                on:click={() => (selectedState = detectedState ?? "")}
+                class="text-xs text-blue-800 underline underline-offset-2 hover:text-blue-900"
+              >
+                {m.home_search_use_detected_state({ state: STATE_NAMES[detectedState] ?? detectedState })}
+              </button>
+            {/if}
 
             {#each ALL_MODELS as model}
               {@const active = activeModels.has(model)}
