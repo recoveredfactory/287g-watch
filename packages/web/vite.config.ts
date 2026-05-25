@@ -1,5 +1,6 @@
 import { sveltekit } from "@sveltejs/kit/vite";
 import { defineConfig } from "vite";
+import { paraglideVitePlugin } from "@inlang/paraglide-js";
 import tailwindcss from "@tailwindcss/postcss";
 import autoprefixer from "autoprefixer";
 import { fileURLToPath } from "node:url";
@@ -14,7 +15,23 @@ export default defineConfig({
   server: {
     cors: true,
   },
-  plugins: [sveltekit()],
+  plugins: [
+    paraglideVitePlugin({
+      project: "./project.inlang",
+      outdir: "./src/lib/paraglide",
+      strategy: ["url", "preferredLanguage", "baseLocale"],
+      urlPatterns: [
+        {
+          pattern: "/:path(.*)?",
+          localized: [
+            ["en", "/en/:path(.*)?"],
+            ["es", "/es/:path(.*)?"],
+          ],
+        },
+      ],
+    }),
+    sveltekit(),
+  ],
   css: {
     postcss: {
       plugins: [tailwindcss(), autoprefixer()],

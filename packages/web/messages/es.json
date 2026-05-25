@@ -1,0 +1,23 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "skip_to_main": "Saltar al contenido principal",
+  "nav_map": "Mapa",
+  "nav_glossary": "Glosario",
+  "nav_about": "Acerca de",
+  "nav_methodology": "Metodología",
+  "footer_tagline_after_name": "— un proyecto periodístico de interés público. Recibimos registros, correcciones y pistas.",
+  "footer_methodology": "Metodología",
+  "footer_about": "Acerca de",
+  "footer_credit_prefix": "Un proyecto de",
+  "footer_credit_org_name": "Recovered Factory",
+  "footer_credit_suffix": "Desarrollado por David Eads y Tory Lysik. Código, diseño y texto © 2026 Recovered Factory.",
+  "rf_banner_question": "¿Te gusta nuestro trabajo?",
+  "rf_banner_pitch": "Recovered Factory desarrolla herramientas de periodismo de datos para redacciones de interés público.",
+  "rf_banner_cta": "Contáctanos",
+  "rf_banner_dismiss": "Cerrar",
+  "staging_banner": "Staging — no es producción · {stage}",
+  "lang_toggle_aria": "Idioma",
+  "lang_en": "English",
+  "lang_es": "Español",
+  "source_material_notice": "Los datos y documentos de origen (nombres de agencias, acuerdos MOA, registros oficiales) permanecen en inglés tal como se publicaron originalmente."
+}
