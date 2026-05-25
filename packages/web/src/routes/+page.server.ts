@@ -1,3 +1,9 @@
+export type HistoryEvent = {
+  date: string;
+  added: string[];
+  removed: string[];
+};
+
 export type Agency = {
   slug: string;
   name: string;
@@ -16,6 +22,7 @@ export type Agency = {
   contact_phone?: string;
   contact_email?: string;
   contact_website?: string;
+  history?: HistoryEvent[];
 };
 
 export type PageData = {

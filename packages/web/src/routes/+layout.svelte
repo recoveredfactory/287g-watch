@@ -139,31 +139,31 @@
     </div>
   {/if}
   <header
-    class="sticky z-50 border-b border-slate-200 bg-stone-50/95 backdrop-blur"
+    class="sticky z-50 border-b border-black/20 backdrop-blur"
     style:top={isProdStage ? "0" : "28px"}
+    style="background-color: #191919;"
   >
     <div class="mx-auto max-w-6xl px-4 sm:px-6">
       <div class="flex flex-col py-3 sm:h-14 sm:flex-row sm:items-center sm:justify-between sm:py-0">
         <a
           href={localizeHref("/")}
-          class="font-serif text-base font-bold tracking-tight text-slate-900 no-underline hover:no-underline sm:text-lg"
+          class="font-serif text-base font-bold tracking-tight text-white no-underline hover:no-underline sm:text-lg"
         >
           {siteName}
         </a>
-        <nav class="mt-2 flex items-center gap-5 text-sm text-slate-600 sm:mt-0">
-          <a href={localizeHref("/")} class="no-underline hover:text-slate-900">{m.nav_map()}</a>
-          <a href={localizeHref("/glossary")} class="no-underline hover:text-slate-900">{m.nav_glossary()}</a>
-          <a href={localizeHref("/about")} class="no-underline hover:text-slate-900">{m.nav_about()}</a>
-          <a href={localizeHref("/methodology")} class="no-underline hover:text-slate-900">{m.nav_methodology()}</a>
-          <div class="flex items-center gap-2 border-l border-slate-200 pl-5 text-xs uppercase tracking-wider" aria-label={m.lang_toggle_aria()}>
+        <nav class="mt-2 flex items-center gap-5 text-sm font-semibold text-white sm:mt-0">
+          <a href={localizeHref("/")} class="no-underline hover:text-white/70">{m.nav_map()}</a>
+          <a href={localizeHref("/about")} class="no-underline hover:text-white/70">{m.nav_about()}</a>
+          <a href={localizeHref("/methodology")} class="no-underline hover:text-white/70">{m.nav_methodology()}</a>
+          <div class="flex items-center gap-2 border-l border-white/20 pl-5 text-xs uppercase tracking-wider" aria-label={m.lang_toggle_aria()}>
             {#each locales as l, i}
-              {#if i > 0}<span aria-hidden="true" class="text-slate-300">·</span>{/if}
+              {#if i > 0}<span aria-hidden="true" class="text-white/30">·</span>{/if}
               <a
                 href={hrefFor(l)}
                 on:click={() => rememberLocale(l)}
                 class={l === locale
-                  ? "font-semibold text-slate-900 no-underline"
-                  : "text-slate-500 no-underline hover:text-slate-900"}
+                  ? "font-semibold text-white no-underline"
+                  : "text-white/50 no-underline hover:text-white"}
                 aria-current={l === locale ? "true" : undefined}
                 hreflang={l}
                 rel="alternate"
@@ -190,20 +190,20 @@
 
   <slot />
 
-  <footer class="mt-16 border-t border-slate-200 bg-white px-4 py-8 text-sm text-slate-500">
+  <footer class="mt-16 border-t border-black/20 px-4 py-8 text-sm" style="background-color: #191919; color: rgba(255,255,255,0.6);">
     <div class="mx-auto max-w-6xl space-y-3 text-center">
       <p>
-        <span class="font-semibold text-slate-700">{siteName}</span>
+        <span class="font-semibold text-white">{siteName}</span>
         {m.footer_tagline_after_name()}
       </p>
       <p>
-        <a href={localizeHref("/methodology")}>{m.footer_methodology()}</a>
-        ·
-        <a href={localizeHref("/about")}>{m.footer_about()}</a>
+        <a href={localizeHref("/methodology")} class="text-white/60 hover:text-white">{m.footer_methodology()}</a>
+        <span class="mx-1.5 text-white/30">·</span>
+        <a href={localizeHref("/about")} class="text-white/60 hover:text-white">{m.footer_about()}</a>
       </p>
-      <p class="text-xs text-slate-400">
+      <p class="text-xs" style="color: rgba(255,255,255,0.35);">
         {m.footer_credit_prefix()}
-        <a href="https://vsr.recoveredfactory.net/en" target="_blank" rel="noreferrer" class="text-slate-500">{m.footer_credit_org_name()}</a>.
+        <a href="https://vsr.recoveredfactory.net/en" target="_blank" rel="noreferrer" class="hover:text-white/60" style="color: rgba(255,255,255,0.45);">{m.footer_credit_org_name()}</a>.
         {m.footer_credit_suffix()}
       </p>
     </div>

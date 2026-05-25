@@ -123,10 +123,6 @@
         <dd class="mt-1 font-semibold text-slate-900">{intFmt.format(agency.population)}</dd>
       </div>
     {/if}
-    <div>
-      <dt class="text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_program_models()}</dt>
-      <dd class="mt-1 font-semibold text-slate-900">{agency.models.join(", ") || "—"}</dd>
-    </div>
     {#if agency.moa_url}
       <div>
         <dt class="text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_moa_heading()}</dt>
@@ -194,5 +190,41 @@
       <p class="mt-3 text-sm italic text-slate-400">{m.agency_contact_none()}</p>
     {/if}
   </section>
+
+  <!-- Agreement history -->
+  {#if agency.history && agency.history.length > 0}
+    <section class="mt-10">
+      <h2 class="font-serif text-xl font-bold text-slate-900">Agreement History</h2>
+      <p class="mt-1 text-sm text-slate-500">Changes recorded since tracking began. Gaps between entries mean no changes were detected that week.</p>
+      <ol class="mt-5 space-y-0 border-l-2 border-slate-200 pl-5">
+        {#each agency.history as event, i}
+          <li class="relative pb-5 last:pb-0">
+            <!-- Timeline dot -->
+            <span
+              class="absolute -left-[1.4375rem] top-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-white ring-2"
+              style="background: {event.removed.length && !event.added.length ? '#f87171' : event.added.length ? '#4ade80' : '#94a3b8'}; ring-color: {event.removed.length && !event.added.length ? '#fca5a5' : event.added.length ? '#86efac' : '#cbd5e1'};"
+            ></span>
+            <time class="block text-xs font-semibold uppercase tracking-wider text-slate-400">
+              {new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' }).format(new Date(event.date))}
+            </time>
+            <ul class="mt-1 space-y-0.5">
+              {#each event.added as model}
+                <li class="flex items-center gap-1.5 text-sm text-slate-700">
+                  <span class="text-green-500 font-bold">+</span>
+                  <span>{model}</span>
+                </li>
+              {/each}
+              {#each event.removed as model}
+                <li class="flex items-center gap-1.5 text-sm text-slate-500 line-through">
+                  <span class="text-red-400 font-bold no-underline" style="text-decoration: none;">−</span>
+                  <span>{model}</span>
+                </li>
+              {/each}
+            </ul>
+          </li>
+        {/each}
+      </ol>
+    </section>
+  {/if}
 
 </main>
