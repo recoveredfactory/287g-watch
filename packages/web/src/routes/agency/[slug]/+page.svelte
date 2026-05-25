@@ -116,6 +116,19 @@
       <dt class="text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_program_models()}</dt>
       <dd class="mt-1 font-semibold text-slate-900">{agency.models.join(", ") || "—"}</dd>
     </div>
+    {#if agency.moa_url}
+      <div>
+        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_moa_heading()}</dt>
+        <dd class="mt-1">
+          <a
+            href={agency.moa_url}
+            target="_blank"
+            rel="noreferrer"
+            class="text-sm font-semibold no-underline hover:underline"
+          >{m.agency_moa_view_pdf()}</a>
+        </dd>
+      </div>
+    {/if}
   </dl>
 
   <!-- Agreement -->
@@ -135,5 +148,40 @@
       </a>
     </section>
   {/if}
+
+  <!-- Contact -->
+  <section class="mt-10">
+    <h2 class="font-serif text-xl font-bold text-slate-900">{m.agency_contact_heading()}</h2>
+    {#if agency.contact_address || agency.contact_phone || agency.contact_email || agency.contact_website}
+      <dl class="mt-4 space-y-3">
+        {#if agency.contact_address}
+          <div class="flex gap-4">
+            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_contact_address()}</dt>
+            <dd class="text-slate-700">{agency.contact_address}</dd>
+          </div>
+        {/if}
+        {#if agency.contact_phone}
+          <div class="flex gap-4">
+            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_contact_phone()}</dt>
+            <dd><a href="tel:{agency.contact_phone}">{agency.contact_phone}</a></dd>
+          </div>
+        {/if}
+        {#if agency.contact_email}
+          <div class="flex gap-4">
+            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_contact_email()}</dt>
+            <dd><a href="mailto:{agency.contact_email}">{agency.contact_email}</a></dd>
+          </div>
+        {/if}
+        {#if agency.contact_website}
+          <div class="flex gap-4">
+            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_contact_website()}</dt>
+            <dd><a href={agency.contact_website} target="_blank" rel="noreferrer">{agency.contact_website}</a></dd>
+          </div>
+        {/if}
+      </dl>
+    {:else}
+      <p class="mt-3 text-sm italic text-slate-400">{m.agency_contact_none()}</p>
+    {/if}
+  </section>
 
 </main>

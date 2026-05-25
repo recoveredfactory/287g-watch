@@ -12,6 +12,10 @@ export type Agency = {
   lat?: number;
   lng?: number;
   moa_url?: string;
+  contact_address?: string;
+  contact_phone?: string;
+  contact_email?: string;
+  contact_website?: string;
 };
 
 export type PageData = {
