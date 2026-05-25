@@ -1,12 +1,13 @@
 <script lang="ts">
   import type { PageData } from "./$types";
-  import { MODEL_COLORS, MODEL_SHORT, MODEL_SLUG } from "$lib/colors";
+  import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_DARK_COLORS, MODEL_SHORT, MODEL_SLUG } from "$lib/colors";
   import { STATE_NAMES } from "$lib/states";
   import NationalMap from "$lib/components/NationalMap.svelte";
   import { browser } from "$app/environment";
   import { onMount } from "svelte";
   import { localizeHref } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
+  import Gloss from "$lib/components/Gloss.svelte";
 
   export let data: PageData;
 
@@ -23,6 +24,7 @@
   let searchQuery = "";
   let activeModels: Set<string> = new Set();
   let selectedState = "";
+  let selectedYear = "";
   let currentPage = 1;
   const PAGE_SIZE = 25;
 
@@ -74,6 +76,7 @@
       const params = new URLSearchParams();
       if (searchQuery.trim()) params.set("q", searchQuery.trim());
       if (selectedState) params.set("state", selectedState);
+      if (selectedYear) params.set("year", selectedYear);
       if (activeModels.size > 0)
         params.set("models", [...activeModels].map((m) => MODEL_SLUG[m]).filter(Boolean).join(","));
       if (currentPage > 1) params.set("page", String(currentPage));
@@ -84,7 +87,7 @@
 
   // Only sync URL for user-initiated changes after mount. Initial-state setup
   // (URL params, geo default) runs inside onMount and intentionally skips sync.
-  $: { searchQuery; selectedState; activeModels; currentPage;
+  $: { searchQuery; selectedState; selectedYear; activeModels; currentPage;
     if (mounted) scheduleUrlSync();
   }
 
@@ -96,6 +99,8 @@
     const page = params.get("page");
     if (q) searchQuery = q;
     if (stateParam) selectedState = stateParam;
+    const year = params.get("year");
+    if (year) selectedYear = year;
     if (models)
       activeModels = new Set(models.split(",").map((s) => SLUG_TO_MODEL[s]).filter(Boolean));
 
@@ -119,6 +124,7 @@
   });
 
   $: allStates = [...new Set(data.agencies.map((a) => a.state).filter(Boolean))].sort();
+  $: allYears = [...new Set(data.agencies.map((a) => a.signed_date?.slice(0, 4)).filter(Boolean))].sort();
 
   $: filteredAgencies = data.agencies.filter((a) => {
     const q = searchQuery.trim().toLowerCase();
@@ -131,7 +137,8 @@
     const matchesModel =
       activeModels.size === 0 || a.models.some((m) => activeModels.has(m));
     const matchesState = !selectedState || a.state === selectedState;
-    return matchesSearch && matchesModel && matchesState;
+    const matchesYear = !selectedYear || a.signed_date?.startsWith(selectedYear);
+    return matchesSearch && matchesModel && matchesState && matchesYear;
   });
 
   // Reset to page 1 whenever filters change
@@ -153,9 +160,10 @@
     searchQuery = "";
     activeModels = new Set();
     selectedState = "";
+    selectedYear = "";
   };
 
-  $: hasActiveFilters = searchQuery.trim() !== "" || activeModels.size > 0 || selectedState !== "";
+  $: hasActiveFilters = searchQuery.trim() !== "" || activeModels.size > 0 || selectedState !== "" || selectedYear !== "";
 
   function modelDesc(model: string): { short: string; detail: string } {
     switch (model) {
@@ -204,7 +212,7 @@
         {m.home_hero_headline_line1()}<br class="hidden sm:block" /> {m.home_hero_headline_line2()}
       </h1>
       <p class="prose-editorial mt-4 text-base sm:mt-6 sm:text-lg">
-        {m.home_hero_lead()}
+        <Gloss text={m.home_hero_lead()} />
       </p>
 
       {#if data.agencyCount > 0}
@@ -230,7 +238,54 @@
             </div>
           {/if}
         </div>
+
+        {#if data.snapshotDate}
+          <p class="mt-4 text-xs italic text-slate-400">
+            As of {new Intl.DateTimeFormat("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" }).format(new Date(data.snapshotDate))}
+          </p>
+        {/if}
       {/if}
+    </div>
+  </section>
+
+  <!-- ── What each model authorizes ───────────────────────────────────────── -->
+  <section class="border-b border-slate-200 bg-white px-4 py-10 sm:px-6 sm:py-12">
+    <div class="mx-auto max-w-6xl">
+      <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">
+        {m.home_models_heading()}
+      </h2>
+      <div class="mt-5 grid items-stretch gap-4 sm:grid-cols-3">
+        {#each ALL_MODELS as model}
+          {@const desc = modelDesc(model)}
+          <div
+            class="flex flex-col overflow-hidden rounded-lg border shadow-sm"
+            style="border-color: {MODEL_COLORS[model]};"
+          >
+            <div class="px-3 py-2.5" style="background: {MODEL_COLORS[model]};">
+              <h3
+                class="font-sans text-xs font-bold uppercase tracking-widest"
+                style="color: {MODEL_TEXT_COLORS[model] ?? '#ffffff'};"
+              >{model.replace(/ Model$/, '')}</h3>
+            </div>
+            <div class="flex flex-1 flex-col gap-2 px-3 py-3" style="background: {MODEL_COLORS[model]}28;">
+              <p class="text-xs leading-relaxed text-slate-700">{desc.short}</p>
+              <div class="flex items-end justify-between gap-2">
+                <a
+                  href={localizeHref(`/model/${MODEL_SLUG[model]}`)}
+                  class="text-xs font-semibold no-underline hover:underline"
+                  style="color: {MODEL_DARK_COLORS[model] ?? '#334155'};"
+                >Learn more →</a>
+                {#if data.modelCounts[model]}
+                  <p
+                    class="text-right text-xs italic text-slate-500"
+                    title={data.snapshotDate ? `As of ${data.snapshotDate}` : undefined}
+                  >{intFmt.format(data.modelCounts[model])} agencies</p>
+                {/if}
+              </div>
+            </div>
+          </div>
+        {/each}
+      </div>
     </div>
   </section>
 
@@ -293,40 +348,6 @@
     </div>
   </section>
 
-  <!-- ── What each model authorizes ───────────────────────────────────────── -->
-  <section class="border-b border-slate-200 bg-white px-4 py-10 sm:px-6 sm:py-12">
-    <div class="mx-auto max-w-6xl">
-      <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">
-        {m.home_models_heading()}
-      </h2>
-      <p class="mt-1.5 text-sm text-slate-500">
-        {m.home_models_subhead()}
-        <a href={localizeHref("/glossary")} class="underline">{m.home_models_glossary_link()}</a> {m.home_models_glossary_suffix()}
-      </p>
-
-      <div class="mt-5 grid gap-4 sm:grid-cols-3">
-        {#each ALL_MODELS as model}
-          {@const desc = modelDesc(model)}
-          <div class="overflow-hidden rounded-lg border border-slate-200 bg-white">
-            <div
-              class="border-b-4 px-4 py-3"
-              style="background: {MODEL_COLORS[model]}18; border-bottom-color: {MODEL_COLORS[model]};"
-            >
-              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                {MODEL_SHORT[model]}
-              </p>
-              <h3 class="mt-0.5 text-sm font-semibold text-slate-900">{model}</h3>
-            </div>
-            <div class="px-4 py-4">
-              <p class="text-sm font-medium leading-relaxed text-slate-800">{desc.short}</p>
-              <p class="mt-2 text-xs italic leading-relaxed text-slate-400">{desc.detail}</p>
-            </div>
-          </div>
-        {/each}
-      </div>
-    </div>
-  </section>
-
   <!-- ── Search + filter + browse ──────────────────────────────────────────── -->
   <section class="px-4 py-10 sm:px-6 sm:py-12">
     <div class="mx-auto max-w-6xl">
@@ -374,6 +395,16 @@
               </button>
             {/if}
 
+            <select
+              bind:value={selectedYear}
+              class="rounded-md border border-slate-300 bg-white py-2 pl-3 pr-7 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="">All years</option>
+              {#each allYears as year}
+                <option value={year}>{year}</option>
+              {/each}
+            </select>
+
             {#each ALL_MODELS as model}
               {@const active = activeModels.has(model)}
               <button
@@ -381,14 +412,12 @@
                 on:click={() => toggleModel(model)}
                 class="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors"
                 style={active
-                  ? `background: ${MODEL_COLORS[model]}; border-color: ${MODEL_COLORS[model]}; color: ${model.includes("Jail") ? "#0f3020" : "#fff"};`
+                  ? `background: ${MODEL_COLORS[model]}; border-color: ${MODEL_COLORS[model]}; color: ${MODEL_TEXT_COLORS[model] ?? '#fff'};`
                   : "background: white; border-color: #cbd5e1; color: #475569;"}
               >
                 <span
                   class="inline-block h-2 w-2 rounded-full"
-                  style="background: {active
-                    ? model.includes('Jail') ? '#0f3020' : 'rgba(255,255,255,0.5)'
-                    : MODEL_COLORS[model]};"
+                  style="background: {active ? 'rgba(255,255,255,0.45)' : MODEL_COLORS[model]};"
                 ></span>
                 {MODEL_SHORT[model]}
               </button>
@@ -432,31 +461,42 @@
       {:else}
         <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {#each pageAgencies as agency (agency.slug)}
-            <a
-              href={localizeHref(`/agency/${agency.slug}`)}
-              class="group block rounded-lg border border-slate-200 bg-white p-4 no-underline hover:border-slate-300 hover:shadow-sm active:bg-slate-50"
-            >
-              <p class="font-semibold leading-snug text-slate-900 group-hover:text-blue-900">
-                {agency.name}
-              </p>
-              <p class="mt-0.5 text-sm text-slate-500">
-                {[agency.city, STATE_NAMES[agency.state] ?? agency.state]
-                  .filter(Boolean)
-                  .join(", ")}
-              </p>
-              <div class="mt-2 flex flex-wrap gap-1.5">
-                {#each agency.models as model}
-                  <span
-                    class="model-badge"
-                    class:model-badge--jail={model.includes("Jail")}
-                    class:model-badge--taskforce={model.includes("Task")}
-                    class:model-badge--wso={model.includes("Warrant")}
-                  >
-                    {MODEL_SHORT[model] ?? model}
-                  </span>
-                {/each}
-              </div>
-            </a>
+            <div class="group relative rounded-lg border border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm">
+              <a
+                href={localizeHref(`/agency/${agency.slug}`)}
+                class="block p-4 no-underline active:bg-slate-50"
+              >
+                <p class="font-semibold leading-snug text-slate-900 group-hover:text-slate-700">
+                  {agency.name}
+                </p>
+                <p class="mt-0.5 text-sm text-slate-500">
+                  {[agency.city, STATE_NAMES[agency.state] ?? agency.state]
+                    .filter(Boolean)
+                    .join(", ")}
+                </p>
+                <div class="mt-2 flex flex-wrap gap-1.5" class:pr-12={!!agency.moa_url}>
+                  {#each agency.models as model}
+                    <span
+                      class="model-badge"
+                      class:model-badge--jail={model.includes("Jail")}
+                      class:model-badge--taskforce={model.includes("Task")}
+                      class:model-badge--wso={model.includes("Warrant")}
+                    >
+                      {MODEL_SHORT[model] ?? model}
+                    </span>
+                  {/each}
+                </div>
+              </a>
+              {#if agency.moa_url}
+                <a
+                  href={agency.moa_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  class="absolute bottom-4 right-3 text-xs text-slate-400 no-underline hover:text-slate-700"
+                  aria-label="View agreement PDF for {agency.name}"
+                >PDF ↗</a>
+              {/if}
+            </div>
           {/each}
         </div>
 

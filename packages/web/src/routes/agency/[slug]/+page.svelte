@@ -3,10 +3,12 @@
   import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_SHORT } from "$lib/colors";
   import { localizeHref, getLocale } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
+  import AgencySearch from "$lib/components/AgencySearch.svelte";
+  import AgencyMap from "$lib/components/AgencyMap.svelte";
 
   export let data: PageData;
 
-  const { agency } = data;
+  const { agency, agencies } = data;
 
   const siteUrl = import.meta.env.PUBLIC_SITE_URL ?? "https://tracking287g.com";
   $: title = m.agency_meta_title({ agency_name: agency.name });
@@ -64,6 +66,16 @@
   {@html `<script type="application/ld+json">${jsonLd}</script>`}
 </svelte:head>
 
+<!-- Sticky agency search bar -->
+<div
+  class="sticky z-40 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur sm:px-6"
+  style="top: var(--site-header-height);"
+>
+  <div class="mx-auto max-w-4xl">
+    <AgencySearch {agencies} currentSlug={agency.slug} />
+  </div>
+</div>
+
 <main id="main-content" class="mx-auto max-w-4xl px-4 py-12 sm:px-6">
   <!-- Breadcrumb -->
   <nav class="text-sm text-slate-500" aria-label="Breadcrumb">
@@ -98,6 +110,16 @@
     </div>
   </div>
 
+  <!-- Location map -->
+  <div class="mt-6 h-[260px] overflow-hidden rounded-lg border border-slate-200 shadow-sm sm:h-[320px]">
+    <AgencyMap
+      lat={agency.lat}
+      lng={agency.lng}
+      state={agency.state}
+      primaryModel={agency.primary_model}
+    />
+  </div>
+
   <!-- Key facts -->
   <dl class="mt-8 grid gap-4 border-y border-slate-200 py-8 sm:grid-cols-3">
     {#if agency.signed_date}
@@ -112,10 +134,19 @@
         <dd class="mt-1 font-semibold text-slate-900">{intFmt.format(agency.population)}</dd>
       </div>
     {/if}
-    <div>
-      <dt class="text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_program_models()}</dt>
-      <dd class="mt-1 font-semibold text-slate-900">{agency.models.join(", ") || "—"}</dd>
-    </div>
+    {#if agency.moa_url}
+      <div>
+        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_moa_heading()}</dt>
+        <dd class="mt-1">
+          <a
+            href={agency.moa_url}
+            target="_blank"
+            rel="noreferrer"
+            class="text-sm font-semibold no-underline hover:underline"
+          >{m.agency_moa_view_pdf()}</a>
+        </dd>
+      </div>
+    {/if}
   </dl>
 
   <!-- Agreement -->
@@ -133,6 +164,77 @@
       >
         {m.agency_moa_view_pdf()}
       </a>
+    </section>
+  {/if}
+
+  <!-- Contact -->
+  <section class="mt-10">
+    <h2 class="font-serif text-xl font-bold text-slate-900">{m.agency_contact_heading()}</h2>
+    {#if agency.contact_address || agency.contact_phone || agency.contact_email || agency.contact_website}
+      <dl class="mt-4 space-y-3">
+        {#if agency.contact_address}
+          <div class="flex gap-4">
+            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_contact_address()}</dt>
+            <dd class="text-slate-700">{agency.contact_address}</dd>
+          </div>
+        {/if}
+        {#if agency.contact_phone}
+          <div class="flex gap-4">
+            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_contact_phone()}</dt>
+            <dd><a href="tel:{agency.contact_phone}">{agency.contact_phone}</a></dd>
+          </div>
+        {/if}
+        {#if agency.contact_email}
+          <div class="flex gap-4">
+            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_contact_email()}</dt>
+            <dd><a href="mailto:{agency.contact_email}">{agency.contact_email}</a></dd>
+          </div>
+        {/if}
+        {#if agency.contact_website}
+          <div class="flex gap-4">
+            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_contact_website()}</dt>
+            <dd><a href={agency.contact_website} target="_blank" rel="noreferrer">{agency.contact_website}</a></dd>
+          </div>
+        {/if}
+      </dl>
+    {:else}
+      <p class="mt-3 text-sm italic text-slate-400">{m.agency_contact_none()}</p>
+    {/if}
+  </section>
+
+  <!-- Agreement history -->
+  {#if agency.history && agency.history.length > 0}
+    <section class="mt-10">
+      <h2 class="font-serif text-xl font-bold text-slate-900">Agreement History</h2>
+      <p class="mt-1 text-sm text-slate-500">Changes recorded since tracking began. Gaps between entries mean no changes were detected that week.</p>
+      <ol class="mt-5 space-y-0 border-l-2 border-slate-200 pl-5">
+        {#each agency.history as event, i}
+          <li class="relative pb-5 last:pb-0">
+            <!-- Timeline dot -->
+            <span
+              class="absolute -left-[1.4375rem] top-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-white ring-2"
+              style="background: {event.removed.length && !event.added.length ? '#f87171' : event.added.length ? '#4ade80' : '#94a3b8'}; ring-color: {event.removed.length && !event.added.length ? '#fca5a5' : event.added.length ? '#86efac' : '#cbd5e1'};"
+            ></span>
+            <time class="block text-xs font-semibold uppercase tracking-wider text-slate-400">
+              {new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' }).format(new Date(event.date))}
+            </time>
+            <ul class="mt-1 space-y-0.5">
+              {#each event.added as model}
+                <li class="flex items-center gap-1.5 text-sm text-slate-700">
+                  <span class="text-green-500 font-bold">+</span>
+                  <span>{model}</span>
+                </li>
+              {/each}
+              {#each event.removed as model}
+                <li class="flex items-center gap-1.5 text-sm text-slate-500 line-through">
+                  <span class="text-red-400 font-bold no-underline" style="text-decoration: none;">−</span>
+                  <span>{model}</span>
+                </li>
+              {/each}
+            </ul>
+          </li>
+        {/each}
+      </ol>
     </section>
   {/if}
 

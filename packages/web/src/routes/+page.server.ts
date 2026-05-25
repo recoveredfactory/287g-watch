@@ -1,3 +1,9 @@
+export type HistoryEvent = {
+  date: string;
+  added: string[];
+  removed: string[];
+};
+
 export type Agency = {
   slug: string;
   name: string;
@@ -12,6 +18,11 @@ export type Agency = {
   lat?: number;
   lng?: number;
   moa_url?: string;
+  contact_address?: string;
+  contact_phone?: string;
+  contact_email?: string;
+  contact_website?: string;
+  history?: HistoryEvent[];
 };
 
 export type PageData = {
@@ -20,6 +31,7 @@ export type PageData = {
   stateCount: number;
   populationCovered: number;
   snapshotDate: string | null;
+  modelCounts: Record<string, number>;
 };
 
 export const load = async ({ fetch }): Promise<PageData> => {
@@ -31,13 +43,26 @@ export const load = async ({ fetch }): Promise<PageData> => {
 
     const states = new Set(agencies.map((a) => a.state));
     const populationCovered = agencies.reduce((sum, a) => sum + (a.population ?? 0), 0);
+    const snapshotDate = agencies
+      .map((a) => (a as any).snapshot_date as string | undefined)
+      .filter(Boolean)
+      .sort()
+      .at(-1) ?? null;
+
+    const modelCounts: Record<string, number> = {};
+    for (const a of agencies) {
+      for (const m of a.models) {
+        modelCounts[m] = (modelCounts[m] ?? 0) + 1;
+      }
+    }
 
     return {
       agencies,
       agencyCount: agencies.length,
       stateCount: states.size,
       populationCovered,
-      snapshotDate: null,
+      snapshotDate,
+      modelCounts,
     };
   } catch {
     return {
@@ -46,6 +71,7 @@ export const load = async ({ fetch }): Promise<PageData> => {
       stateCount: 0,
       populationCovered: 0,
       snapshotDate: null,
+      modelCounts: {},
     };
   }
 };

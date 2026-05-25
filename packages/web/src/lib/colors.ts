@@ -1,13 +1,20 @@
 export const MODEL_COLORS: Record<string, string> = {
-  "Jail Enforcement Model": "#80ed99",
-  "Task Force Model": "#38a3a5",
-  "Warrant Service Officer": "#22577a",
+  "Jail Enforcement Model": "#BE6079",
+  "Task Force Model": "#3C97E2",
+  "Warrant Service Officer": "#83AD71",
 };
 
 export const MODEL_TEXT_COLORS: Record<string, string> = {
-  "Jail Enforcement Model": "#0f3020",
+  "Jail Enforcement Model": "#ffffff",
   "Task Force Model": "#ffffff",
   "Warrant Service Officer": "#ffffff",
+};
+
+// Dark tints of each model color — for text on light/tinted backgrounds
+export const MODEL_DARK_COLORS: Record<string, string> = {
+  "Jail Enforcement Model": "#6B1F33",
+  "Task Force Model": "#1A4A7A",
+  "Warrant Service Officer": "#2F4A22",
 };
 
 export const MODEL_SLUG: Record<string, string> = {

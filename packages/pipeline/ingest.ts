@@ -6,6 +6,7 @@
  *   - Discovers the latest snapshot directory via GitHub API
  *   - Downloads and parses the xlsx file
  *   - Geocodes via Census Bureau county centroid Gazetteer
+ *   - Samples one snapshot per week to build per-agency agreement history
  *
  * Output: packages/web/static/data/dist/agency_index.json
  */
@@ -74,6 +75,12 @@ interface NormalizedRow {
   moa_url: string | null
 }
 
+export interface HistoryEvent {
+  date: string      // YYYY-MM-DD
+  added: string[]   // models that appeared since prior sample
+  removed: string[] // models that disappeared since prior sample
+}
+
 interface Agency {
   slug: string
   name: string
@@ -90,6 +97,7 @@ interface Agency {
   moa_url: string | null
   ori: null
   snapshot_date: string | null
+  history: HistoryEvent[]
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -115,7 +123,6 @@ function parseSignedDate(val: unknown): string | null {
   if (val == null || val === '') return null
   if (val instanceof Date) return val.toISOString().split('T')[0]
   if (typeof val === 'number') {
-    // Excel date serial → JS Date (days since 1899-12-30)
     const d = new Date(Date.UTC(1899, 11, 30) + val * 86_400_000)
     return d.toISOString().split('T')[0]
   }
@@ -130,6 +137,56 @@ function str(val: unknown): string {
   return String(val ?? '').trim()
 }
 
+// Stable cross-snapshot key: lowercase, alphanumeric only
+function historyKey(name: string, state: string): string {
+  const normalized = name.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim()
+  return `${state.toUpperCase()}\x00${normalized}`
+}
+
+function getISOWeek(date: Date): string {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7))
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
+  const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
+  return `${d.getUTCFullYear()}-${String(weekNo).padStart(2, '0')}`
+}
+
+type GHEntry = { name: string; type: string; url: string }
+
+// Pick the most recent snapshot directory for each calendar week
+function sampleWeekly(dirs: GHEntry[]): GHEntry[] {
+  const byWeek = new Map<string, GHEntry>()
+  for (const dir of dirs) { // dirs are sorted newest-first
+    const m = dir.name.match(/^sheets_(\d{4})(\d{2})(\d{2})/)
+    if (!m) continue
+    const date = new Date(`${m[1]}-${m[2]}-${m[3]}T12:00:00Z`)
+    const weekKey = getISOWeek(date)
+    if (!byWeek.has(weekKey)) byWeek.set(weekKey, dir)
+  }
+  return [...byWeek.values()].sort((a, b) => a.name.localeCompare(b.name))
+}
+
+// Parse an xlsx buffer into a map of historyKey → Set<model>
+function parseSnapshot(buf: Buffer): Map<string, Set<string>> {
+  const wb = xlsxRead(buf, { type: 'buffer', cellDates: true })
+  const ws = wb.Sheets[wb.SheetNames[0]]
+  const rows = xlsxUtils.sheet_to_json<RawRow>(ws, { defval: null })
+  const result = new Map<string, Set<string>>()
+  for (const row of rows) {
+    const stateFull = str(row.STATE).toUpperCase()
+    const state = STATE_ABBREVS[stateFull]
+    if (!state) continue
+    const name = str(row['LAW ENFORCEMENT AGENCY'])
+    if (!name) continue
+    const model = str(row['SUPPORT TYPE'])
+    if (!model) continue
+    const key = historyKey(name, state)
+    if (!result.has(key)) result.set(key, new Set())
+    result.get(key)!.add(model)
+  }
+  return result
+}
+
 // ── 1. Fetch latest snapshot ───────────────────────────────────────────────────
 
 console.log('Loading latest sheets snapshot...')
@@ -138,13 +195,12 @@ console.log('  Listing snapshot directories via GitHub API...')
 const sheetsResp = await fetch(GITHUB_SHEETS_API)
 if (!sheetsResp.ok) throw new Error(`GitHub API: ${sheetsResp.status}`)
 
-type GHEntry = { name: string; type: string; url: string }
 const allEntries = (await sheetsResp.json()) as GHEntry[]
 const snapshotDirs = allEntries
   .filter((e) => e.type === 'dir')
   .sort((a, b) => b.name.localeCompare(a.name))
 
-let rawRows: RawRow[] = []
+let latestBuf: Buffer | null = null
 let snapshotName = ''
 
 for (const dir of snapshotDirs.slice(0, 5)) {
@@ -159,16 +215,16 @@ for (const dir of snapshotDirs.slice(0, 5)) {
   const dataResp = await fetch(xlsxFile.download_url)
   if (!dataResp.ok) throw new Error(`xlsx fetch: ${dataResp.status}`)
 
-  const buf = Buffer.from(await dataResp.arrayBuffer())
-  const wb = xlsxRead(buf, { type: 'buffer', cellDates: true })
-  const ws = wb.Sheets[wb.SheetNames[0]]
-  rawRows = xlsxUtils.sheet_to_json<RawRow>(ws, { defval: null })
+  latestBuf = Buffer.from(await dataResp.arrayBuffer())
   snapshotName = dir.name
+  const wb = xlsxRead(latestBuf, { type: 'buffer', cellDates: true })
+  const ws = wb.Sheets[wb.SheetNames[0]]
+  const rawRows = xlsxUtils.sheet_to_json<RawRow>(ws, { defval: null })
   console.log(`  ${rawRows.length} rows, columns: ${Object.keys(rawRows[0] ?? {})}`)
   break
 }
 
-if (!rawRows.length) {
+if (!latestBuf) {
   console.error('Fatal: no xlsx found in latest sheets snapshots')
   process.exit(1)
 }
@@ -178,7 +234,75 @@ const snapshotDate = dateMatch
   ? `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`
   : null
 
+// ── 1b. Build agreement history from weekly-sampled snapshots ─────────────────
+
+console.log('\nBuilding agreement history from weekly snapshots...')
+
+const sampledDirs = sampleWeekly(snapshotDirs)
+console.log(`  Sampling ${sampledDirs.length} weekly snapshots`)
+
+interface SnapshotRecord {
+  date: string
+  agencies: Map<string, Set<string>>
+}
+
+// Fetch snapshots in small batches to respect GitHub API rate limits
+const BATCH = 5
+const snapshots: SnapshotRecord[] = []
+
+for (let i = 0; i < sampledDirs.length; i += BATCH) {
+  const batch = sampledDirs.slice(i, i + BATCH)
+  const results = await Promise.all(
+    batch.map(async (dir): Promise<SnapshotRecord | null> => {
+      const m = dir.name.match(/^sheets_(\d{4})(\d{2})(\d{2})/)
+      if (!m) return null
+      const date = `${m[1]}-${m[2]}-${m[3]}`
+
+      // Reuse already-downloaded latest snapshot buffer
+      if (dir.name === snapshotName && latestBuf) {
+        return { date, agencies: parseSnapshot(latestBuf) }
+      }
+
+      const filesResp = await fetch(dir.url)
+      if (!filesResp.ok) return null
+      type GHFile = { name: string; download_url: string }
+      const files = (await filesResp.json()) as GHFile[]
+      const xlsxFile = files.find((f) => f.name.endsWith('.xlsx'))
+      if (!xlsxFile) return null
+
+      const dataResp = await fetch(xlsxFile.download_url)
+      if (!dataResp.ok) return null
+
+      const buf = Buffer.from(await dataResp.arrayBuffer())
+      return { date, agencies: parseSnapshot(buf) }
+    })
+  )
+  for (const r of results) if (r) snapshots.push(r)
+  process.stdout.write(`  ${Math.min(i + BATCH, sampledDirs.length)}/${sampledDirs.length} fetched\r`)
+}
+console.log()
+
+// Derive per-agency history: only record dates where models changed
+function buildHistory(key: string): HistoryEvent[] {
+  const events: HistoryEvent[] = []
+  let prev = new Set<string>()
+  for (const snap of snapshots) {
+    const curr = snap.agencies.get(key) ?? new Set()
+    const added = [...curr].filter((m) => !prev.has(m))
+    const removed = [...prev].filter((m) => !curr.has(m))
+    if (added.length || removed.length) {
+      events.push({ date: snap.date, added, removed })
+    }
+    prev = curr
+  }
+  return events
+}
+
 // ── 2. Normalize columns ───────────────────────────────────────────────────────
+
+const wb = xlsxRead(latestBuf, { type: 'buffer', cellDates: true })
+const ws = wb.Sheets[wb.SheetNames[0]]
+const rawRows = xlsxUtils.sheet_to_json<RawRow>(ws, { defval: null })
 
 const normalizedRows: NormalizedRow[] = []
 let dropped = 0
@@ -212,7 +336,6 @@ console.log(
 
 console.log('\nGrouping models per agency...')
 
-// Key: state + NUL + name (NUL can't appear in either)
 const byAgency = new Map<string, NormalizedRow[]>()
 for (const row of normalizedRows) {
   const key = `${row.state}\x00${row.name}`
@@ -312,6 +435,7 @@ for (const row of grouped) {
   seenSlugs.set(base, count + 1)
 
   const [lat, lng] = getLatLng(row.county, state)
+  const hKey = historyKey(row.name, state)
 
   agencies.push({
     slug,
@@ -329,6 +453,7 @@ for (const row of grouped) {
     moa_url: row.moa_url,
     ori: null,
     snapshot_date: snapshotDate,
+    history: buildHistory(hKey),
   })
 }
 
@@ -338,10 +463,12 @@ mkdirSync(OUT_DIR, { recursive: true })
 writeFileSync(resolve(OUT_DIR, 'agency_index.json'), JSON.stringify(agencies, null, 2))
 
 const geocoded = agencies.filter((a) => a.lat !== null).length
+const withHistory = agencies.filter((a) => a.history.length > 0).length
 console.log(`\nWrote ${agencies.length} agencies → ${resolve(OUT_DIR, 'agency_index.json')}`)
 console.log(`Snapshot: ${snapshotName}  (${snapshotDate})`)
 console.log(`States: ${new Set(agencies.map((a) => a.state)).size}`)
 console.log(`Geocoded: ${geocoded}/${agencies.length} (${Math.round((geocoded / agencies.length) * 100)}%)`)
+console.log(`Agencies with history events: ${withHistory}`)
 
 const modelCounts = new Map<string, number>()
 for (const a of agencies)
