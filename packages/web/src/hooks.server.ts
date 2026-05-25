@@ -1,7 +1,13 @@
 import type { Handle } from "@sveltejs/kit";
 import { sequence } from "@sveltejs/kit/hooks";
 import { paraglideMiddleware } from "$lib/paraglide/server";
-import { getTextDirection, locales, baseLocale, type Locale } from "$lib/paraglide/runtime";
+import {
+  getTextDirection,
+  locales,
+  baseLocale,
+  cookieName,
+  type Locale,
+} from "$lib/paraglide/runtime";
 
 const STATIC_PREFIXES = ["/_app/", "/data/"];
 const STATIC_FILES = ["/favicon.svg", "/favicon-staging.svg", "/robots.txt", "/sitemap.xml"];
@@ -18,6 +24,18 @@ function pickLocaleFromAcceptLanguage(header: string | null): Locale {
   return baseLocale;
 }
 
+function pickLocaleFromCookie(header: string | null): Locale | null {
+  if (!header) return null;
+  for (const part of header.split(";")) {
+    const [k, v] = part.trim().split("=");
+    if (k === cookieName && v) {
+      const value = decodeURIComponent(v);
+      if ((locales as readonly string[]).includes(value)) return value as Locale;
+    }
+  }
+  return null;
+}
+
 const redirectBarePathToLocale: Handle = async ({ event, resolve }) => {
   const path = event.url.pathname;
 
@@ -29,13 +47,15 @@ const redirectBarePathToLocale: Handle = async ({ event, resolve }) => {
   );
   if (hasLocalePrefix) return resolve(event);
 
-  const target = pickLocaleFromAcceptLanguage(event.request.headers.get("accept-language"));
+  const target =
+    pickLocaleFromCookie(event.request.headers.get("cookie")) ??
+    pickLocaleFromAcceptLanguage(event.request.headers.get("accept-language"));
   const location = `/${target}${path === "/" ? "" : path}${event.url.search}`;
   return new Response(null, {
     status: 302,
     headers: {
       location,
-      vary: "Accept-Language",
+      "cache-control": "no-store",
     },
   });
 };
