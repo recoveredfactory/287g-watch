@@ -11,9 +11,9 @@
     --site-header-height: 4.5rem; /* mobile: logo + nav stacked = ~72px */
     --color-navy: #1e3a5f;
     --color-navy-light: #2d5282;
-    --color-model-jail: #80ed99;
-    --color-model-taskforce: #38a3a5;
-    --color-model-wso: #22577a;
+    --color-model-jail: #BE6079;
+    --color-model-taskforce: #3C97E2;
+    --color-model-wso: #83AD71;
   }
 
   @media (min-width: 640px) {
@@ -97,7 +97,7 @@
 
   .model-badge--jail {
     background: var(--color-model-jail);
-    color: #0f3020;
+    color: #ffffff;
   }
 
   .model-badge--taskforce {

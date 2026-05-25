@@ -31,6 +31,7 @@ export type PageData = {
   stateCount: number;
   populationCovered: number;
   snapshotDate: string | null;
+  modelCounts: Record<string, number>;
 };
 
 export const load = async ({ fetch }): Promise<PageData> => {
@@ -48,12 +49,20 @@ export const load = async ({ fetch }): Promise<PageData> => {
       .sort()
       .at(-1) ?? null;
 
+    const modelCounts: Record<string, number> = {};
+    for (const a of agencies) {
+      for (const m of a.models) {
+        modelCounts[m] = (modelCounts[m] ?? 0) + 1;
+      }
+    }
+
     return {
       agencies,
       agencyCount: agencies.length,
       stateCount: states.size,
       populationCovered,
       snapshotDate,
+      modelCounts,
     };
   } catch {
     return {
@@ -62,6 +71,7 @@ export const load = async ({ fetch }): Promise<PageData> => {
       stateCount: 0,
       populationCovered: 0,
       snapshotDate: null,
+      modelCounts: {},
     };
   }
 };

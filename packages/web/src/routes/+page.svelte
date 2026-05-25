@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { PageData } from "./$types";
-  import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_SHORT, MODEL_SLUG } from "$lib/colors";
+  import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_DARK_COLORS, MODEL_SHORT, MODEL_SLUG } from "$lib/colors";
   import { STATE_NAMES } from "$lib/states";
   import NationalMap from "$lib/components/NationalMap.svelte";
   import { browser } from "$app/environment";
@@ -206,19 +206,34 @@
       <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">
         {m.home_models_heading()}
       </h2>
-      <div class="mt-5 grid gap-4 sm:grid-cols-3">
+      <div class="mt-5 grid items-stretch gap-4 sm:grid-cols-3">
         {#each ALL_MODELS as model}
           {@const desc = modelDesc(model)}
-          <div class="overflow-hidden rounded-lg border border-slate-200 shadow-sm">
-            <div class="px-4 py-4" style="background: {MODEL_COLORS[model]};">
+          <div
+            class="flex flex-col overflow-hidden rounded-lg border shadow-sm"
+            style="border-color: {MODEL_COLORS[model]};"
+          >
+            <div class="px-3 py-2.5" style="background: {MODEL_COLORS[model]};">
               <h3
-                class="font-sans text-sm font-bold uppercase tracking-widest"
+                class="font-sans text-xs font-bold uppercase tracking-widest"
                 style="color: {MODEL_TEXT_COLORS[model] ?? '#ffffff'};"
               >{model.replace(/ Model$/, '')}</h3>
             </div>
-            <div class="bg-white px-4 py-4">
-              <p class="text-sm font-medium leading-relaxed text-slate-800">{desc.short}</p>
-              <p class="mt-2 text-xs italic leading-relaxed text-slate-500">{desc.detail}</p>
+            <div class="flex flex-1 flex-col gap-2 px-3 py-3" style="background: {MODEL_COLORS[model]}28;">
+              <p class="text-xs leading-relaxed text-slate-700">{desc.short}</p>
+              <div class="flex items-end justify-between gap-2">
+                <a
+                  href={localizeHref(`/model/${MODEL_SLUG[model]}`)}
+                  class="text-xs font-semibold no-underline hover:underline"
+                  style="color: {MODEL_DARK_COLORS[model] ?? '#334155'};"
+                >Learn more →</a>
+                {#if data.modelCounts[model]}
+                  <p
+                    class="text-right text-xs italic text-slate-500"
+                    title={data.snapshotDate ? `As of ${data.snapshotDate}` : undefined}
+                  >{intFmt.format(data.modelCounts[model])} agencies</p>
+                {/if}
+              </div>
             </div>
           </div>
         {/each}
@@ -339,14 +354,12 @@
                 on:click={() => toggleModel(model)}
                 class="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors"
                 style={active
-                  ? `background: ${MODEL_COLORS[model]}; border-color: ${MODEL_COLORS[model]}; color: ${model.includes("Jail") ? "#0f3020" : "#fff"};`
+                  ? `background: ${MODEL_COLORS[model]}; border-color: ${MODEL_COLORS[model]}; color: ${MODEL_TEXT_COLORS[model] ?? '#fff'};`
                   : "background: white; border-color: #cbd5e1; color: #475569;"}
               >
                 <span
                   class="inline-block h-2 w-2 rounded-full"
-                  style="background: {active
-                    ? model.includes('Jail') ? '#0f3020' : 'rgba(255,255,255,0.5)'
-                    : MODEL_COLORS[model]};"
+                  style="background: {active ? 'rgba(255,255,255,0.45)' : MODEL_COLORS[model]};"
                 ></span>
                 {MODEL_SHORT[model]}
               </button>
