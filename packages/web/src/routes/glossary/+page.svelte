@@ -1,7 +1,7 @@
 <script lang="ts">
-  const title = "Glossary — Tracking 287(g)";
-  const description =
-    "Definitions of key terms used in 287(g) immigration enforcement reporting.";
+  import { m } from "$lib/paraglide/messages.js";
+  $: title = m.glossary_meta_title();
+  $: description = m.glossary_meta_description();
 
   type Term = {
     term: string;
@@ -93,13 +93,13 @@
 
 <main id="main-content" class="mx-auto max-w-3xl px-4 py-12 sm:px-6">
 
-  <h1 class="text-3xl font-black text-slate-900 sm:text-4xl">Glossary</h1>
+  <h1 class="text-3xl font-black text-slate-900 sm:text-4xl">{m.glossary_heading()}</h1>
   <p class="prose-editorial mt-3 max-w-xl">
-    Key terms used in reporting on the 287(g) program and immigration enforcement.
+    {m.glossary_subtitle()}
   </p>
 
   <!-- Letter jump nav -->
-  <nav class="mt-6 flex flex-wrap gap-2" aria-label="Jump to letter">
+  <nav class="mt-6 flex flex-wrap gap-2" aria-label={m.glossary_jump_to_letter()}>
     {#each letters as letter}
       <a
         href="#{letter}"
@@ -123,7 +123,7 @@
                 {t.definition}
                 {#if t.seeAlso?.length}
                   <span class="mt-1 block text-sm text-slate-400">
-                    See also:
+                    {m.glossary_see_also()}
                     {#each t.seeAlso as related, i}
                       <a
                         href="#term-{related.toLowerCase().replace(/[^a-z0-9]+/g, '-')}"

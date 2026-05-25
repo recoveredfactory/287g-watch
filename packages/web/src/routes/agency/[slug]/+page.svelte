@@ -1,15 +1,20 @@
 <script lang="ts">
   import type { PageData } from "./$types";
   import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_SHORT } from "$lib/colors";
-  import { localizeHref } from "$lib/paraglide/runtime";
+  import { localizeHref, getLocale } from "$lib/paraglide/runtime";
+  import { m } from "$lib/paraglide/messages.js";
 
   export let data: PageData;
 
   const { agency } = data;
 
   const siteUrl = import.meta.env.PUBLIC_SITE_URL ?? "https://tracking287g.com";
-  $: title = `${agency.name} — 287(g) Agreement`;
-  $: description = `${agency.name} in ${agency.state} has a 287(g) agreement with ICE${agency.primary_model ? ` under the ${agency.primary_model}` : ""}.${agency.population ? ` Serves a population of approximately ${new Intl.NumberFormat().format(agency.population)}.` : ""}`;
+  $: title = m.agency_meta_title({ agency_name: agency.name });
+  $: description = [
+    m.agency_meta_description_base({ agency_name: agency.name, state: agency.state }),
+    agency.primary_model ? m.agency_meta_description_model({ model: agency.primary_model }) : "",
+    agency.population ? m.agency_meta_description_pop({ pop: intFmt.format(agency.population) }) : "",
+  ].filter(Boolean).join(" ");
   $: canonicalUrl = `${siteUrl}/agency/${agency.slug}`;
 
   $: jsonLd = JSON.stringify({
@@ -32,7 +37,8 @@
   const dateFmt = (d?: string) => {
     if (!d) return null;
     try {
-      return new Intl.DateTimeFormat("en-US", {
+      const localeTag = getLocale() === "es" ? "es-MX" : "en-US";
+      return new Intl.DateTimeFormat(localeTag, {
         year: "numeric",
         month: "long",
         day: "numeric",
@@ -61,7 +67,7 @@
 <main id="main-content" class="mx-auto max-w-4xl px-4 py-12 sm:px-6">
   <!-- Breadcrumb -->
   <nav class="text-sm text-slate-500" aria-label="Breadcrumb">
-    <a href={localizeHref("/")} class="no-underline hover:underline">Home</a>
+    <a href={localizeHref("/")} class="no-underline hover:underline">{m.agency_breadcrumb_home()}</a>
     <span class="mx-1.5">›</span>
     <span>{agency.name}</span>
   </nav>
@@ -96,18 +102,18 @@
   <dl class="mt-8 grid gap-4 border-y border-slate-200 py-8 sm:grid-cols-3">
     {#if agency.signed_date}
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-400">Agreement signed</dt>
+        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_signed_date()}</dt>
         <dd class="mt-1 font-semibold text-slate-900">{dateFmt(agency.signed_date)}</dd>
       </div>
     {/if}
     {#if agency.population}
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-400">Population served</dt>
+        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_population()}</dt>
         <dd class="mt-1 font-semibold text-slate-900">{intFmt.format(agency.population)}</dd>
       </div>
     {/if}
     <div>
-      <dt class="text-xs font-semibold uppercase tracking-wider text-slate-400">Program model(s)</dt>
+      <dt class="text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_program_models()}</dt>
       <dd class="mt-1 font-semibold text-slate-900">{agency.models.join(", ") || "—"}</dd>
     </div>
   </dl>
@@ -115,9 +121,9 @@
   <!-- Agreement -->
   {#if agency.moa_url}
     <section class="mt-10">
-      <h2 class="font-serif text-xl font-bold text-slate-900">Memorandum of Agreement</h2>
+      <h2 class="font-serif text-xl font-bold text-slate-900">{m.agency_moa_heading()}</h2>
       <p class="mt-2 text-slate-600">
-        The full agreement between {agency.name} and ICE is available below.
+        {m.agency_moa_body({ agency_name: agency.name })}
       </p>
       <a
         href={agency.moa_url}
@@ -125,7 +131,7 @@
         rel="noreferrer"
         class="mt-3 inline-block rounded border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 no-underline hover:bg-slate-50"
       >
-        View agreement PDF →
+        {m.agency_moa_view_pdf()}
       </a>
     </section>
   {/if}
