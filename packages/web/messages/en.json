@@ -128,5 +128,20 @@
   "agency_contact_address": "Address",
   "agency_contact_phone": "Phone",
   "agency_contact_email": "Email",
-  "agency_contact_website": "Website"
+  "agency_contact_website": "Website",
+
+  "agency_records_heading": "Records & FOIA",
+  "agency_records_matched_intro": "MuckRock has a public records request on file with this agency about its ICE detainer and 287(g) policies:",
+  "agency_records_status_done": "Completed",
+  "agency_records_status_ack": "Awaiting acknowledgement",
+  "agency_records_status_lawsuit": "In litigation",
+  "agency_records_status_processed": "Being processed",
+  "agency_records_status_unknown": "Status unknown",
+  "agency_records_completed_on": "Completed {date}",
+  "agency_records_view_on_muckrock": "View request on MuckRock →",
+  "agency_records_dive_deeper_heading": "Dive deeper",
+  "agency_records_guide_label": "How to follow the paper trail of ICE's local immigration enforcement (MuckRock)",
+  "agency_records_diy_prompt": "Want to file your own records request?",
+  "agency_records_diy_cta": "Sign up with MuckRock →",
+  "agency_records_unmatched_intro": "We don't have a public records request on file for this agency yet. The fastest way to surface a sheriff's ICE cooperation policy is to ask for it."
 }

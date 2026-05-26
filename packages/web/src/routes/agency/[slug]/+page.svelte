@@ -8,7 +8,19 @@
 
   export let data: PageData;
 
-  const { agency, agencies } = data;
+  const { agency, agencies, muckrock } = data;
+
+  const MUCKROCK_SIGNUP_URL = "https://accounts.muckrock.com/accounts/signup/";
+
+  const statusLabel = (status: string): string => {
+    switch (status) {
+      case "done": return m.agency_records_status_done();
+      case "ack": return m.agency_records_status_ack();
+      case "lawsuit": return m.agency_records_status_lawsuit();
+      case "processed": return m.agency_records_status_processed();
+      default: return m.agency_records_status_unknown();
+    }
+  };
 
   const siteUrl = import.meta.env.PUBLIC_SITE_URL ?? "https://tracking287g.com";
   $: title = m.agency_meta_title({ agency_name: agency.name });
@@ -193,6 +205,61 @@
       </a>
     </section>
   {/if}
+
+  <!-- Records & FOIA -->
+  <section class="mt-10">
+    <h2 class="font-serif text-xl font-bold text-slate-900">{m.agency_records_heading()}</h2>
+
+    {#if muckrock.requests.length > 0}
+      <p class="mt-2 text-slate-600">{m.agency_records_matched_intro()}</p>
+      <ul class="mt-4 space-y-3">
+        {#each muckrock.requests as req}
+          <li class="rounded border border-slate-200 bg-slate-50 p-4">
+            <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+              <p class="font-semibold text-slate-900">
+                {req.status === "done" && req.datetime_done
+                  ? m.agency_records_completed_on({ date: dateFmt(req.datetime_done) ?? "" })
+                  : statusLabel(req.status)}
+              </p>
+              <p class="text-xs text-slate-500">MuckRock #{req.foia_id}</p>
+            </div>
+            <p class="mt-1 text-sm italic text-slate-600">“{req.title}”</p>
+            <a
+              href={req.absolute_url}
+              target="_blank"
+              rel="noreferrer"
+              class="mt-2 inline-block text-sm font-semibold no-underline hover:underline"
+            >{m.agency_records_view_on_muckrock()}</a>
+          </li>
+        {/each}
+      </ul>
+    {:else}
+      <p class="mt-2 text-slate-600">{m.agency_records_unmatched_intro()}</p>
+    {/if}
+
+    <div class="mt-6 border-t border-slate-200 pt-5">
+      <h3 class="text-sm font-semibold uppercase tracking-wider text-slate-500">{m.agency_records_dive_deeper_heading()}</h3>
+      <ul class="mt-3 space-y-2 text-sm">
+        <li>
+          <a
+            href={muckrock.reporter_guide.absolute_url}
+            target="_blank"
+            rel="noreferrer"
+            class="no-underline hover:underline"
+          >{m.agency_records_guide_label()} →</a>
+        </li>
+        <li class="text-slate-600">
+          {m.agency_records_diy_prompt()}
+          <a
+            href={MUCKROCK_SIGNUP_URL}
+            target="_blank"
+            rel="noreferrer"
+            class="ml-1 font-semibold no-underline hover:underline"
+          >{m.agency_records_diy_cta()}</a>
+        </li>
+      </ul>
+    </div>
+  </section>
 
   <!-- Contact -->
   <section class="mt-10">
