@@ -8,7 +8,9 @@
 
   export let data: PageData;
 
-  const { agency, agencies, muckrock } = data;
+  // Reactive destructure so navigating between agencies via the sticky search
+  // (same dynamic route, same component instance) actually refreshes content.
+  $: ({ agency, agencies, muckrock } = data);
 
   const MUCKROCK_SIGNUP_URL = "https://accounts.muckrock.com/accounts/signup/";
 
@@ -214,24 +216,26 @@
     {#if muckrock.requests.length > 0}
       <div class="mt-5">
         <p class="text-sm font-semibold text-slate-700">{m.agency_records_matched_intro()}</p>
-        <ul class="mt-2 space-y-3">
+        <ul class="mt-3 space-y-3">
           {#each muckrock.requests as req}
-            <li class="rounded border border-slate-200 bg-slate-50 p-4">
-              <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                <p class="font-semibold text-slate-900">
+            <li class="overflow-hidden rounded-lg border border-slate-200 shadow-sm">
+              <div class="flex items-baseline justify-between gap-4 bg-slate-100 px-4 py-2">
+                <p class="font-sans text-xs font-bold uppercase tracking-widest text-slate-700">
                   {req.status === "done" && req.datetime_done
                     ? m.agency_records_completed_on({ date: dateFmt(req.datetime_done) ?? "" })
                     : statusLabel(req.status)}
                 </p>
-                <p class="text-xs text-slate-500">MuckRock #{req.foia_id}</p>
+                <p class="text-xs text-slate-400">MuckRock #{req.foia_id}</p>
               </div>
-              <p class="mt-1 text-sm italic text-slate-600">“{req.title}”</p>
-              <a
-                href={req.absolute_url}
-                target="_blank"
-                rel="noreferrer"
-                class="mt-2 inline-block text-sm font-semibold no-underline hover:underline"
-              >{m.agency_records_view_on_muckrock()}</a>
+              <div class="bg-white px-4 py-3">
+                <p class="text-sm italic leading-relaxed text-slate-700">“{req.title}”</p>
+                <a
+                  href={req.absolute_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  class="mt-2 inline-block text-xs font-semibold no-underline hover:underline"
+                >{m.agency_records_view_on_muckrock()}</a>
+              </div>
             </li>
           {/each}
         </ul>
