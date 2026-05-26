@@ -8,7 +8,7 @@
 
 @layer base {
   :root {
-    --site-header-height: 4.5rem; /* mobile: logo + nav stacked = ~72px */
+    --site-header-height: 5rem; /* mobile: logo+lang row + nav row (~80px) */
     --staging-banner-height: 0px; /* overridden inline on non-prod stages */
     --color-navy: #1e3a5f;
     --color-navy-light: #2d5282;
@@ -26,6 +26,7 @@
   body {
     @apply bg-stone-50 font-sans text-slate-900 antialiased;
     font-family: "Inter", system-ui, sans-serif;
+    overflow-x: hidden;
   }
 
   h1, h2, h3 {
@@ -77,11 +78,11 @@
 
 @layer components {
   .prose-editorial {
-    @apply text-lg leading-relaxed text-slate-700;
+    @apply text-base leading-relaxed text-slate-700 sm:text-lg;
   }
 
   .prose-editorial p {
-    @apply mb-5;
+    @apply mb-4 sm:mb-5;
   }
 
   .prose-editorial strong {
@@ -90,6 +91,20 @@
 
   .prose-editorial a {
     @apply decoration-1;
+  }
+
+  .prose-editorial ul,
+  .prose-editorial ol {
+    @apply mb-4 space-y-2 pl-5 sm:mb-5;
+    list-style: disc outside;
+  }
+
+  .prose-editorial ol {
+    list-style-type: decimal;
+  }
+
+  .prose-editorial li {
+    @apply leading-relaxed;
   }
 
   .model-badge {
