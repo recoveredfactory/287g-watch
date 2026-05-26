@@ -59,6 +59,7 @@ export type StateMeta = {
   pct: number;
   population_served: number;
   state_local_population: number;
+  has_state_patrol: boolean;
 };
 
 export type PageData = {
