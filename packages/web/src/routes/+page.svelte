@@ -208,7 +208,7 @@
       <p class="text-xs font-semibold uppercase tracking-widest text-slate-400 sm:text-sm">
         {m.home_hero_eyebrow()}
       </p>
-      <h1 class="mt-2 text-3xl font-black leading-tight text-slate-900 sm:mt-3 sm:text-4xl lg:text-5xl">
+      <h1 class="mt-2 text-3xl font-black leading-tight text-slate-900 sm:mt-3 sm:text-5xl lg:text-6xl">
         {m.home_hero_headline_line1()}<br class="hidden sm:block" /> {m.home_hero_headline_line2()}
       </h1>
       <p class="prose-editorial mt-4 text-base sm:mt-6 sm:text-lg">
