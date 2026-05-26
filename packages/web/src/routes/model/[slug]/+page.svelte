@@ -1,13 +1,18 @@
 <script lang="ts">
   import type { ModelPageData } from "./+page.server";
-  import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_SHORT } from "$lib/colors";
+  import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_DARK_COLORS, MODEL_SLUG } from "$lib/colors";
   import { localizeHref } from "$lib/paraglide/runtime";
-  import { STATE_NAMES } from "$lib/states";
-  import AgencySearch from "$lib/components/AgencySearch.svelte";
+  import {
+    PROGRAM_FINDINGS,
+    DETAINER_NOTE,
+    COMPARISON_ROWS,
+    MODEL_RICH_CONTENT,
+    PRIMARY_SOURCES,
+  } from "$lib/model-content";
 
   export let data: ModelPageData;
 
-  const { modelName, slug, definition, seeAlso, agencies, snapshotDate } = data;
+  const { modelName, slug, definition, seeAlso, agencies, snapshotDate, stateCount, allModelCounts } = data;
 
   const siteUrl = import.meta.env.PUBLIC_SITE_URL ?? "https://tracking287g.com";
   const title = `${modelName} — 287(g) Explorer`;
@@ -20,13 +25,10 @@
 
   const bgColor = MODEL_COLORS[modelName] ?? "#e2e8f0";
   const textColor = MODEL_TEXT_COLORS[modelName] ?? "#0f172a";
+  const darkColor = MODEL_DARK_COLORS[modelName] ?? "#1e293b";
 
-  const PAGE_SIZE = 25;
-  let currentPage = 1;
-  $: totalPages = Math.max(1, Math.ceil(agencies.length / PAGE_SIZE));
-  $: pageStart = (currentPage - 1) * PAGE_SIZE;
-  $: pageEnd = Math.min(pageStart + PAGE_SIZE, agencies.length);
-  $: pageAgencies = agencies.slice(pageStart, pageEnd);
+  const content = MODEL_RICH_CONTENT[modelName];
+
 </script>
 
 <svelte:head>
@@ -48,96 +50,177 @@
   </nav>
 
   <!-- Header -->
-  <div
-    class="mt-6 overflow-hidden rounded-xl"
-    style="background: {bgColor};"
-  >
-    <div class="px-6 py-8 sm:px-10 sm:py-10">
-      <p class="font-sans text-xs font-bold uppercase tracking-widest" style="color: {textColor}; opacity: 0.75;">
-        287(g) Agreement Type
-      </p>
-      <h1 class="mt-2 font-sans text-2xl font-black leading-tight sm:text-3xl" style="color: {textColor};">
-        {modelName}
-      </h1>
-    </div>
+  <div class="mt-6">
+    <p class="text-xs font-semibold uppercase tracking-widest text-slate-400">287(g) Agreement Type</p>
+    <h1 class="mt-1 text-3xl font-black leading-tight sm:text-4xl" style="color: {darkColor};">
+      {modelName}
+    </h1>
+    <p class="mt-1.5 text-sm text-slate-400">
+      {intFmt.format(agencies.length)} participating agencies
+      {#if dateFmt}<span class="italic">· as of {dateFmt}</span>{/if}
+    </p>
   </div>
 
-  <!-- Definition -->
-  <section class="mt-8">
-    <h2 class="font-serif text-xl font-bold text-slate-900">What this agreement authorizes</h2>
-    <p class="mt-3 max-w-2xl leading-relaxed text-slate-700">{definition}</p>
+  {#if content}
+    <!-- Overview -->
+    <section class="mt-8">
+      <h2 class="font-serif text-xl font-bold text-slate-900">Overview</h2>
+      <div class="mt-3 max-w-2xl space-y-3">
+        {#each content.overviewParas as para}
+          <p class="leading-relaxed text-slate-700">{para}</p>
+        {/each}
+      </div>
+
+      {#if content.keyDistinction}
+        <p class="mt-4 max-w-2xl rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-relaxed text-slate-600">
+          <strong class="font-semibold text-slate-800">Key distinction:</strong> {content.keyDistinction}
+        </p>
+      {/if}
+
+      <div class="mt-5">
+        <p class="text-sm font-semibold uppercase tracking-wider text-slate-400">Officers can</p>
+        <ul class="mt-2 space-y-1">
+          {#each content.officerCan as item}
+            <li class="flex items-start gap-2 text-sm text-slate-700">
+              <span class="mt-0.5 shrink-0 font-bold" style="color: {bgColor};">→</span>
+              {item}
+            </li>
+          {/each}
+        </ul>
+      </div>
+    </section>
+
+    <!-- Training -->
+    <section class="mt-8 border-t border-slate-200 pt-8">
+      <h2 class="font-serif text-xl font-bold text-slate-900">Training requirements</h2>
+      <p class="mt-2 max-w-2xl leading-relaxed text-slate-700">{content.trainingText}</p>
+    </section>
+
+    <!-- Background (JEM only — includes dynamic "as of" line) -->
+    {#if content.backgroundParas}
+      <section class="mt-8 border-t border-slate-200 pt-8">
+        <h2 class="font-serif text-xl font-bold text-slate-900">Background</h2>
+        <div class="mt-3 max-w-2xl space-y-3">
+          {#each content.backgroundParas as para}
+            <p class="leading-relaxed text-slate-700">{para}</p>
+          {/each}
+          {#if dateFmt}
+            <p class="leading-relaxed text-slate-700">
+              As of {dateFmt}, {intFmt.format(agencies.length)} agencies in {stateCount} states have signed this type of agreement.
+            </p>
+          {/if}
+        </div>
+      </section>
+    {/if}
+
+    <!-- Major points -->
+    {#if content.majorPoints.length > 0}
+      <section class="mt-8 border-t border-slate-200 pt-8">
+        <h2 class="font-serif text-xl font-bold text-slate-900">Key findings &amp; history</h2>
+        <dl class="mt-4 space-y-5">
+          {#each content.majorPoints as point}
+            <div>
+              <dt class="font-semibold text-slate-900">{point.heading}</dt>
+              <dd class="mt-1 max-w-2xl text-sm leading-relaxed text-slate-600">{@html point.body}</dd>
+            </div>
+          {/each}
+        </dl>
+      </section>
+    {/if}
+  {/if}
+
+  <!-- Program-wide oversight findings -->
+  <section class="mt-8 border-t border-slate-200 pt-8">
+    <h2 class="font-serif text-xl font-bold text-slate-900">Program-wide oversight findings</h2>
+    <ul class="mt-4 space-y-4">
+      {#each PROGRAM_FINDINGS as finding}
+        <li class="flex gap-3">
+          <span class="mt-0.5 shrink-0 font-bold" style="color: {bgColor};">▪</span>
+          <p class="text-sm leading-relaxed text-slate-600">
+            <strong class="font-semibold" style="color: {darkColor};">{finding.source}:</strong>
+            {finding.text}
+          </p>
+        </li>
+      {/each}
+      <li class="flex gap-3">
+        <span class="mt-0.5 shrink-0 font-bold" style="color: {bgColor};">▪</span>
+        <p class="text-sm leading-relaxed text-slate-600">
+          <strong class="font-semibold" style="color: {darkColor};">Detainer authority (legally contested):</strong>
+          {@html DETAINER_NOTE}
+        </p>
+      </li>
+    </ul>
+  </section>
+
+  <!-- Comparison table -->
+  <section class="mt-8 border-t border-slate-200 pt-8">
+    <h2 class="font-serif text-xl font-bold text-slate-900">How the three models compare</h2>
+    <div class="mt-4 overflow-x-auto rounded-lg border border-slate-200">
+      <table class="w-full min-w-[480px] text-sm">
+        <thead>
+          <tr class="border-b border-slate-200">
+            <th class="px-4 py-3 text-left font-semibold text-slate-500"></th>
+            <th class="px-4 py-3 text-left font-semibold"
+              style="background: {MODEL_COLORS['Warrant Service Officer']}; color: {MODEL_TEXT_COLORS['Warrant Service Officer']};">WSO</th>
+            <th class="px-4 py-3 text-left font-semibold"
+              style="background: {MODEL_COLORS['Jail Enforcement Model']}; color: {MODEL_TEXT_COLORS['Jail Enforcement Model']};">JEM</th>
+            <th class="px-4 py-3 text-left font-semibold"
+              style="background: {MODEL_COLORS['Task Force Model']}; color: {MODEL_TEXT_COLORS['Task Force Model']};">TFM</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each COMPARISON_ROWS as row}
+            <tr class="border-b border-slate-100 last:border-0">
+              <td class="px-4 py-3 font-medium text-slate-700">{row.label}</td>
+              <td class="px-4 py-3 text-slate-600">{row.wso}</td>
+              <td class="px-4 py-3 text-slate-600">{row.jem}</td>
+              <td class="px-4 py-3 text-slate-600">{row.tfm}</td>
+            </tr>
+          {/each}
+          <tr class="bg-slate-50/50">
+            <td class="px-4 py-3 font-medium text-slate-700">
+              Agencies
+              {#if dateFmt}<span class="block text-xs font-normal text-slate-400">as of {dateFmt}</span>{/if}
+            </td>
+            <td class="px-4 py-3 font-semibold tabular-nums text-slate-900">{intFmt.format(allModelCounts["Warrant Service Officer"] ?? 0)}</td>
+            <td class="px-4 py-3 font-semibold tabular-nums text-slate-900">{intFmt.format(allModelCounts["Jail Enforcement Model"] ?? 0)}</td>
+            <td class="px-4 py-3 font-semibold tabular-nums text-slate-900">{intFmt.format(allModelCounts["Task Force Model"] ?? 0)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </section>
 
   <!-- See also -->
   {#if seeAlso.length > 0}
-    <div class="mt-4 flex flex-wrap gap-2">
-      {#each seeAlso as term}
-        <a
-          href={localizeHref(`/glossary#term-${term.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`)}
-          class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600 no-underline hover:border-slate-400 hover:text-slate-900"
-        >{term}</a>
+    <div class="mt-8 border-t border-slate-200 pt-6">
+      <p class="text-sm font-semibold uppercase tracking-wider text-slate-400">See also</p>
+      <div class="mt-2 flex flex-wrap gap-2">
+        {#each seeAlso as term}
+          <a
+            href={localizeHref(MODEL_SLUG[term] ? `/model/${MODEL_SLUG[term]}` : `/glossary#term-${term.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`)}
+            class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600 no-underline hover:border-slate-400 hover:text-slate-900"
+          >{term}</a>
+        {/each}
+      </div>
+    </div>
+  {/if}
+
+  <!-- Primary sources -->
+  <section class="mt-12 border-t border-slate-200 pt-8">
+    <h2 class="font-serif text-xl font-bold text-slate-900">Primary sources</h2>
+    <ul class="mt-4 space-y-2">
+      {#each PRIMARY_SOURCES as source}
+        <li class="text-sm">
+          <a
+            href={source.url}
+            target="_blank"
+            rel="noreferrer"
+            class="text-slate-600 underline underline-offset-2 hover:text-slate-900"
+          >{source.label}</a>
+        </li>
       {/each}
-    </div>
-  {/if}
-
-  <!-- Agency count -->
-  <div class="mt-10 border-t border-slate-200 pt-8">
-    <div class="flex items-baseline gap-3">
-      <p class="font-mono text-3xl font-semibold tabular-nums text-slate-900">
-        {intFmt.format(agencies.length)}
-      </p>
-      <p class="text-slate-500">participating agencies</p>
-    </div>
-    {#if dateFmt}
-      <p class="mt-1 text-xs italic text-slate-400">As of {dateFmt}</p>
-    {/if}
-  </div>
-
-  <!-- Agency list -->
-  <div class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-    {#each pageAgencies as agency (agency.slug)}
-      <a
-        href={localizeHref(`/agency/${agency.slug}`)}
-        class="group rounded-lg border border-slate-200 bg-white p-4 no-underline hover:border-slate-300 hover:shadow-sm"
-      >
-        <p class="font-semibold leading-snug text-slate-900 group-hover:text-slate-700">
-          {agency.name}
-        </p>
-        <p class="mt-0.5 text-sm text-slate-500">
-          {[agency.city, STATE_NAMES[agency.state] ?? agency.state].filter(Boolean).join(", ")}
-        </p>
-      </a>
-    {/each}
-  </div>
-
-  {#if totalPages > 1}
-    <div class="mt-6 flex items-center justify-between gap-4">
-      <button
-        type="button"
-        on:click={() => { currentPage = Math.max(1, currentPage - 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-        disabled={currentPage === 1}
-        class="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-        </svg>
-        <span class="hidden sm:inline">Previous</span>
-      </button>
-      <p class="text-sm text-slate-500">
-        {pageStart + 1}–{pageEnd} of {intFmt.format(agencies.length)}
-      </p>
-      <button
-        type="button"
-        on:click={() => { currentPage = Math.min(totalPages, currentPage + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-        disabled={currentPage === totalPages}
-        class="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        <span class="hidden sm:inline">Next</span>
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-        </svg>
-      </button>
-    </div>
-  {/if}
+    </ul>
+  </section>
 
 </main>

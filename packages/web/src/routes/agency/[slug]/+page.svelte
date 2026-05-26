@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { PageData } from "./$types";
-  import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_SHORT } from "$lib/colors";
+  import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_SHORT, MODEL_SLUG } from "$lib/colors";
   import { localizeHref, getLocale } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
   import AgencySearch from "$lib/components/AgencySearch.svelte";
@@ -113,12 +113,23 @@
       </div>
       <div class="flex flex-wrap gap-1.5">
         {#each agency.models as model}
-          <span
-            class="rounded px-2.5 py-1 text-sm font-semibold"
+          <a
+            href={localizeHref(`/model/${MODEL_SLUG[model] ?? ''}`)}
+            class="rounded px-2.5 py-1 text-sm font-semibold no-underline hover:opacity-85"
             style="background: {MODEL_COLORS[model] ?? '#e2e8f0'}; color: {MODEL_TEXT_COLORS[model] ?? '#0f172a'};"
           >
             {MODEL_SHORT[model] ?? model}
-          </span>
+          </a>
+        {/each}
+      </div>
+      <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+        {#each agency.models as model}
+          {#if MODEL_SLUG[model]}
+            <a
+              href={localizeHref(`/model/${MODEL_SLUG[model]}`)}
+              class="text-xs text-slate-400 no-underline hover:text-slate-600 hover:underline"
+            >About the {MODEL_SHORT[model] ?? model} agreement →</a>
+          {/if}
         {/each}
       </div>
     </div>

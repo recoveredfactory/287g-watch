@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { PageData } from "./$types";
-  import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_DARK_COLORS, MODEL_SHORT, MODEL_SLUG } from "$lib/colors";
+  import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_DARK_COLORS, MODEL_SHORT, MODEL_SLUG, MODEL_ORDER } from "$lib/colors";
   import { STATE_NAMES } from "$lib/states";
   import NationalMap from "$lib/components/NationalMap.svelte";
   import { browser } from "$app/environment";
@@ -23,12 +23,12 @@
   // ── Search + filter ────────────────────────────────────────────────────────
   let searchQuery = "";
   let activeModels: Set<string> = new Set();
-  let selectedState = "";
+  let selectedStates: Set<string> = new Set();
   let selectedYear = "";
   let currentPage = 1;
   const PAGE_SIZE = 25;
 
-  const ALL_MODELS = Object.keys(MODEL_SHORT);
+  const ALL_MODELS = MODEL_ORDER;
 
   // ── URL state persistence ──────────────────────────────────────────────────
   const SLUG_TO_MODEL = Object.fromEntries(
@@ -101,7 +101,7 @@
     urlSyncTimer = setTimeout(() => {
       const params = new URLSearchParams();
       if (searchQuery.trim()) params.set("q", searchQuery.trim());
-      if (selectedState) params.set("state", selectedState);
+      if (selectedStates.size > 0) params.set("states", [...selectedStates].join(","));
       if (selectedYear) params.set("year", selectedYear);
       if (activeModels.size > 0)
         params.set("models", [...activeModels].map((m) => MODEL_SLUG[m]).filter(Boolean).join(","));
@@ -113,30 +113,28 @@
 
   // Only sync URL for user-initiated changes after mount. Initial-state setup
   // (URL params, geo default) runs inside onMount and intentionally skips sync.
-  $: { searchQuery; selectedState; selectedYear; activeModels; currentPage;
+  $: { searchQuery; selectedStates; selectedYear; activeModels; currentPage;
     if (mounted) scheduleUrlSync();
   }
 
   onMount(async () => {
     const params = new URLSearchParams(location.search);
     const q = params.get("q");
-    const stateParam = params.get("state");
     const models = params.get("models");
     const page = params.get("page");
     if (q) searchQuery = q;
-    if (stateParam) selectedState = stateParam;
+    // Support both ?states=TX,FL (new) and legacy ?state=TX
+    const statesParam = params.get("states") ?? params.get("state");
+    if (statesParam) selectedStates = new Set(statesParam.split(",").filter(Boolean));
     const year = params.get("year");
     if (year) selectedYear = year;
     if (models)
       activeModels = new Set(models.split(",").map((s) => SLUG_TO_MODEL[s]).filter(Boolean));
 
-    // Geo: silently default the state filter if the URL didn't specify one.
-    // Always record the detected state so the "use my state" link can surface
-    // when URL specified a different one.
+    // Geo: detect user's state for the toggle button but do NOT auto-filter.
     const geo = await getCachedGeo();
     if (geo.state && allStates.includes(geo.state)) {
       detectedState = geo.state;
-      if (!stateParam) selectedState = detectedState;
     }
 
     // Set page last — filter changes above will reset currentPage to 1 reactively,
@@ -162,7 +160,7 @@
       (a.county ?? "").toLowerCase().includes(q);
     const matchesModel =
       activeModels.size === 0 || a.models.some((m) => activeModels.has(m));
-    const matchesState = !selectedState || a.state === selectedState;
+    const matchesState = selectedStates.size === 0 || selectedStates.has(a.state);
     const matchesYear = !selectedYear || a.signed_date?.startsWith(selectedYear);
     return matchesSearch && matchesModel && matchesState && matchesYear;
   });
@@ -175,6 +173,13 @@
   $: pageEnd = Math.min(pageStart + PAGE_SIZE, filteredAgencies.length);
   $: pageAgencies = filteredAgencies.slice(pageStart, pageEnd);
 
+  const toggleState = (state: string) => {
+    const next = new Set(selectedStates);
+    if (next.has(state)) next.delete(state);
+    else next.add(state);
+    selectedStates = next;
+  };
+
   const toggleModel = (model: string) => {
     const next = new Set(activeModels);
     if (next.has(model)) next.delete(model);
@@ -185,11 +190,11 @@
   const clearFilters = () => {
     searchQuery = "";
     activeModels = new Set();
-    selectedState = "";
+    selectedStates = new Set();
     selectedYear = "";
   };
 
-  $: hasActiveFilters = searchQuery.trim() !== "" || activeModels.size > 0 || selectedState !== "" || selectedYear !== "";
+  $: hasActiveFilters = searchQuery.trim() !== "" || activeModels.size > 0 || selectedStates.size > 0 || selectedYear !== "";
 
   function modelDesc(model: string): { short: string; detail: string } {
     switch (model) {
@@ -335,7 +340,8 @@
         </div>
         <!-- Legend -->
         <div class="flex flex-wrap gap-x-4 gap-y-2 sm:gap-x-6">
-          {#each Object.entries(MODEL_SHORT) as [full, short]}
+          {#each MODEL_ORDER as full}
+            {@const short = MODEL_SHORT[full]}
             <span class="flex items-center gap-1.5 text-xs text-slate-600 sm:text-sm">
               <span
                 class="inline-block h-2.5 w-2.5 rounded-full border border-white shadow-sm sm:h-3 sm:w-3"
@@ -357,7 +363,7 @@
             </div>
           </div>
         {:else}
-          <NationalMap agencies={data.agencies} />
+          <NationalMap agencies={data.agencies} {selectedStates} />
         {/if}
       </div>
     </div>
@@ -405,35 +411,38 @@
             />
           </div>
 
-          <!-- Quick toggle: All states ↔ user's detected state. Shows whenever
-               geo resolved, so landing-on-Florida users can flip to the full
-               picture in one click without hunting in the dropdown below. -->
-          {#if detectedState}
-            <div class="flex flex-wrap items-center gap-1.5">
-              <button
-                type="button"
-                on:click={() => (selectedState = "")}
-                class="rounded-md border px-3 py-1 text-sm font-medium transition {selectedState === '' ? 'border-[#ce1483] bg-[#ce1483] text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}"
-              >{m.home_search_all_states()}</button>
-              <button
-                type="button"
-                on:click={() => (selectedState = detectedState ?? '')}
-                class="rounded-md border px-3 py-1 text-sm font-medium transition {selectedState === detectedState ? 'border-[#ce1483] bg-[#ce1483] text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}"
-              >{STATE_NAMES[detectedState] ?? detectedState}</button>
-            </div>
-          {/if}
-
           <!-- State + model row — wraps cleanly on mobile -->
           <div class="flex flex-wrap items-center gap-2">
             <select
-              bind:value={selectedState}
               class="max-w-[11rem] rounded-md border border-slate-300 bg-white py-2 pl-3 pr-7 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:max-w-none"
+              on:change={(e) => { if (e.currentTarget.value) { toggleState(e.currentTarget.value); e.currentTarget.value = ""; } }}
             >
-              <option value="">{m.home_search_all_states()}</option>
-              {#each allStates as state}
+              <option value="">{selectedStates.size === 0 ? m.home_search_all_states() : "Add state…"}</option>
+              {#each allStates.filter(s => !selectedStates.has(s)) as state}
                 <option value={state}>{STATE_NAMES[state] ?? state}</option>
               {/each}
             </select>
+
+            {#each [...selectedStates].sort() as state}
+              <button
+                type="button"
+                on:click={() => toggleState(state)}
+                class="flex items-center gap-1 rounded-full border border-slate-500 bg-slate-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
+              >
+                {STATE_NAMES[state] ?? state}
+                <span aria-hidden="true" class="opacity-70">×</span>
+              </button>
+            {/each}
+
+            {#if detectedState && !selectedStates.has(detectedState)}
+              <button
+                type="button"
+                on:click={() => toggleState(detectedState!)}
+                class="text-xs text-blue-800 underline underline-offset-2 hover:text-blue-900"
+              >
+                {m.home_search_use_detected_state({ state: STATE_NAMES[detectedState] ?? detectedState })}
+              </button>
+            {/if}
 
             <select
               bind:value={selectedYear}

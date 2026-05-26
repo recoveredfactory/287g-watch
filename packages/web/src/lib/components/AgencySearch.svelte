@@ -2,7 +2,7 @@
   import { goto } from "$app/navigation";
   import { localizeHref } from "$lib/paraglide/runtime";
   import { STATE_NAMES } from "$lib/states";
-  import { MODEL_SHORT } from "$lib/colors";
+  import { MODEL_SHORT, MODEL_COLORS, MODEL_TEXT_COLORS } from "$lib/colors";
   import type { Agency } from "../../routes/+page.server";
 
   export let agencies: Agency[];
@@ -160,10 +160,13 @@
           <p class="font-semibold text-slate-900 leading-snug">
             {@html hl(agency.name)}
           </p>
-          <p class="mt-0.5 text-xs text-slate-500">
-            {@html hl([agency.city, STATE_NAMES[agency.state] ?? agency.state].filter(Boolean).join(", "))}
+          <p class="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500">
+            <span>{@html hl([agency.city, STATE_NAMES[agency.state] ?? agency.state].filter(Boolean).join(", "))}</span>
             {#if agency.primary_model}
-              · {MODEL_SHORT[agency.primary_model] ?? agency.primary_model}
+              <span
+                class="rounded px-1.5 py-0.5 text-[10px] font-semibold leading-none"
+                style="background: {MODEL_COLORS[agency.primary_model] ?? '#e2e8f0'}; color: {MODEL_TEXT_COLORS[agency.primary_model] ?? '#0f172a'};"
+              >{MODEL_SHORT[agency.primary_model] ?? agency.primary_model}</span>
             {/if}
           </p>
         </li>

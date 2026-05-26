@@ -29,20 +29,24 @@
     overflow-x: hidden;
   }
 
+  input, select, textarea {
+    accent-color: #475569; /* slate-600 — prevents model pink leaking into native form controls */
+  }
+
   h1, h2, h3 {
     font-family: "Playfair Display", Georgia, serif;
   }
 
   a {
-    @apply text-blue-800 underline decoration-blue-300 underline-offset-2;
+    @apply font-semibold text-slate-600 underline decoration-slate-300 underline-offset-2;
   }
 
   a:hover {
-    @apply decoration-blue-800;
+    @apply text-slate-900 decoration-slate-500;
   }
 
   a:focus-visible {
-    @apply outline-none ring-2 ring-blue-600 ring-offset-2;
+    @apply outline-none ring-2 ring-slate-500 ring-offset-2;
   }
 
   /* Header and footer links override the global blue */
