@@ -405,6 +405,24 @@
             />
           </div>
 
+          <!-- Quick toggle: All states ↔ user's detected state. Shows whenever
+               geo resolved, so landing-on-Florida users can flip to the full
+               picture in one click without hunting in the dropdown below. -->
+          {#if detectedState}
+            <div class="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                on:click={() => (selectedState = "")}
+                class="rounded-md border px-3 py-1 text-sm font-medium transition {selectedState === '' ? 'border-[#ce1483] bg-[#ce1483] text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}"
+              >{m.home_search_all_states()}</button>
+              <button
+                type="button"
+                on:click={() => (selectedState = detectedState ?? '')}
+                class="rounded-md border px-3 py-1 text-sm font-medium transition {selectedState === detectedState ? 'border-[#ce1483] bg-[#ce1483] text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}"
+              >{STATE_NAMES[detectedState] ?? detectedState}</button>
+            </div>
+          {/if}
+
           <!-- State + model row — wraps cleanly on mobile -->
           <div class="flex flex-wrap items-center gap-2">
             <select
@@ -416,16 +434,6 @@
                 <option value={state}>{STATE_NAMES[state] ?? state}</option>
               {/each}
             </select>
-
-            {#if detectedState && selectedState !== detectedState}
-              <button
-                type="button"
-                on:click={() => (selectedState = detectedState ?? "")}
-                class="text-xs text-blue-800 underline underline-offset-2 hover:text-blue-900"
-              >
-                {m.home_search_use_detected_state({ state: STATE_NAMES[detectedState] ?? detectedState })}
-              </button>
-            {/if}
 
             <select
               bind:value={selectedYear}
