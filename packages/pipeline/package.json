@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "ingest": "tsx ingest.ts"
+    "ingest": "tsx ingest.ts",
+    "build:muckrock": "tsx build-muckrock-snapshot.ts"
   },
   "dependencies": {
     "adm-zip": "^0.5.16",

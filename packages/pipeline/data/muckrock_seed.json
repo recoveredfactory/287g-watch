@@ -1,0 +1,77 @@
+{
+  "multirequest": {
+    "id": 175020,
+    "title": "ICE Detainers and 287(g) Policies",
+    "absolute_url": "https://www.muckrock.com/foi/multirequest/ice-detainers-and-287g-policies-175020/",
+    "filer": "Jasmine Lewin"
+  },
+  "reporter_guide": {
+    "title": "How to follow the paper trail of ICE's local immigration enforcement",
+    "absolute_url": "https://www.muckrock.com/news/archives/2026/may/20/how-to-follow-the-paper-trail-of-ices-local-immigration-enforcement/",
+    "publisher": "MuckRock"
+  },
+  "requests": [
+    {
+      "foia_id": 208502,
+      "absolute_url": "https://www.muckrock.com/foi/cook-county-365/ice-detainers-and-287g-policies-cook-county-sheriff-208502/",
+      "agency_label": "Cook County Sheriff",
+      "jurisdiction": "Cook County, IL",
+      "agency_slug": null,
+      "match_note": "Not in 287(g) index — Illinois has no enrolled agencies in our dataset"
+    },
+    {
+      "foia_id": 208501,
+      "absolute_url": "https://www.muckrock.com/foi/dupage-county-7373/ice-detainers-and-287g-policies-dupage-county-sheriff-208501/",
+      "agency_label": "DuPage County Sheriff",
+      "jurisdiction": "DuPage County, IL",
+      "agency_slug": null,
+      "match_note": "Not in 287(g) index"
+    },
+    {
+      "foia_id": 208496,
+      "absolute_url": "https://www.muckrock.com/foi/el-paso-county-2608/ice-detainers-and-287g-policies-el-paso-county-sheriff-208496/",
+      "agency_label": "El Paso County Sheriff",
+      "jurisdiction": "El Paso County, TX",
+      "agency_slug": null,
+      "match_note": "Not in 287(g) index"
+    },
+    {
+      "foia_id": 208495,
+      "absolute_url": "https://www.muckrock.com/foi/harris-county-393/ice-detainers-and-287g-policies-harris-county-sheriff-208495/",
+      "agency_label": "Harris County Sheriff",
+      "jurisdiction": "Harris County, TX",
+      "agency_slug": null,
+      "match_note": "Not in 287(g) index"
+    },
+    {
+      "foia_id": 208500,
+      "absolute_url": "https://www.muckrock.com/foi/mecklenburg-4793/ice-detainers-and-287g-policies-mecklenburg-county-sheriffs-office-208500/",
+      "agency_label": "Mecklenburg County Sheriff's Office",
+      "jurisdiction": "Mecklenburg County, NC",
+      "agency_slug": null,
+      "match_note": "Not in 287(g) index"
+    },
+    {
+      "foia_id": 208498,
+      "absolute_url": "https://www.muckrock.com/foi/miami-dade-county-7318/ice-detainers-and-287g-policies-miami-dade-sheriffs-office-208498/",
+      "agency_label": "Miami-dade Sheriff's Office",
+      "jurisdiction": "Miami-Dade County, FL",
+      "agency_slug": "miami-dade-sheriffs-office-fl"
+    },
+    {
+      "foia_id": 208497,
+      "absolute_url": "https://www.muckrock.com/foi/polk-county-204/ice-detainers-and-287g-policies-polk-county-sheriff-208497/",
+      "agency_label": "Polk County Sheriff",
+      "jurisdiction": "Polk County, FL",
+      "agency_slug": "polk-county-sheriffs-office-fl"
+    },
+    {
+      "foia_id": 208499,
+      "absolute_url": "https://www.muckrock.com/foi/yancey-county-4659/ice-detainers-and-287g-policies-yancey-county-sheriffs-office-208499/",
+      "agency_label": "Yancey County Sheriff's Office",
+      "jurisdiction": "Yancey County, NC",
+      "agency_slug": null,
+      "match_note": "Not in 287(g) index"
+    }
+  ]
+}
