@@ -12,6 +12,8 @@
   // (same dynamic route, same component instance) actually refreshes content.
   $: ({ agency, agencies, muckrock } = data);
 
+  $: agencyBySlug = new Map(agencies.map((a) => [a.slug, a]));
+
   const MUCKROCK_SIGNUP_URL = "https://accounts.muckrock.com/accounts/signup/";
 
   const statusLabel = (status: string): string => {
@@ -135,14 +137,36 @@
     </div>
   </div>
 
+  <!-- Editorial notes -->
+  {#if agency.notes && agency.notes.length > 0}
+    <aside class="mt-6 rounded-lg border-l-4 border-amber-400 bg-amber-50 p-4 text-sm text-amber-900">
+      <ul class="space-y-2">
+        {#each agency.notes as note}
+          <li>
+            {note.text}
+            {#if note.related_slug && agencyBySlug.get(note.related_slug)}
+              {@const related = agencyBySlug.get(note.related_slug)}
+              <a
+                href={localizeHref(`/agency/${related.slug}`)}
+                class="ml-1 font-semibold no-underline hover:underline"
+              >View {related.name} →</a>
+            {/if}
+          </li>
+        {/each}
+      </ul>
+    </aside>
+  {/if}
+
   <!-- Location map -->
   <div class="mt-6 h-[260px] overflow-hidden rounded-lg border border-slate-200 shadow-sm sm:h-[320px]">
-    <AgencyMap
-      lat={agency.lat}
-      lng={agency.lng}
-      state={agency.state}
-      primaryModel={agency.primary_model}
-    />
+    {#key agency.slug}
+      <AgencyMap
+        lat={agency.lat}
+        lng={agency.lng}
+        state={agency.state}
+        primaryModel={agency.primary_model}
+      />
+    {/key}
   </div>
 
   <!-- Key facts -->
