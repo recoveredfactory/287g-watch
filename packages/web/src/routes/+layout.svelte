@@ -103,7 +103,7 @@
 </a>
 
 <div
-  class={`page-fade ${isNavigating ? "page-fade--loading" : ""} ${bannerVisible ? "pb-20" : ""}`}
+  class={`page-fade ${isNavigating ? "page-fade--loading" : ""} ${bannerVisible ? "pb-28" : ""}`}
   style:--staging-banner-height={isProdStage ? "0px" : "28px"}
 >
   {#if !isProdStage}

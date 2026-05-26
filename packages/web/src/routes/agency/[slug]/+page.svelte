@@ -102,7 +102,7 @@
   <div class="mt-6">
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div>
-        <h1 class="text-3xl font-black leading-tight text-slate-900 sm:text-4xl">
+        <h1 class="text-2xl font-black leading-tight text-slate-900 sm:text-3xl">
           {agency.name}
         </h1>
         <p class="mt-1 text-base text-slate-500">
@@ -307,8 +307,8 @@
           <li class="relative pb-5 last:pb-0">
             <!-- Timeline dot -->
             <span
-              class="absolute -left-[1.4375rem] top-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-white ring-2"
-              style="background: {event.removed.length && !event.added.length ? '#f87171' : event.added.length ? '#4ade80' : '#94a3b8'}; ring-color: {event.removed.length && !event.added.length ? '#fca5a5' : event.added.length ? '#86efac' : '#cbd5e1'};"
+              class="absolute -left-[1.4375rem] top-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-white"
+              style="background: {event.removed.length && !event.added.length ? '#f87171' : event.added.length ? '#4ade80' : '#94a3b8'}; box-shadow: 0 0 0 2px {event.removed.length && !event.added.length ? '#fca5a5' : event.added.length ? '#86efac' : '#cbd5e1'};"
             ></span>
             <time class="block text-xs font-semibold uppercase tracking-wider text-slate-400">
               {new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' }).format(new Date(event.date))}
