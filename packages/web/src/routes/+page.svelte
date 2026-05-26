@@ -512,7 +512,7 @@
               <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
               </svg>
-              {m.home_pagination_previous()}
+              <span class="hidden sm:inline">{m.home_pagination_previous()}</span>
             </button>
 
             <p class="text-sm text-slate-500">
@@ -529,7 +529,7 @@
               disabled={currentPage === totalPages}
               class="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {m.home_pagination_next()}
+              <span class="hidden sm:inline">{m.home_pagination_next()}</span>
               <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
               </svg>
