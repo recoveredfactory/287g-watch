@@ -7,6 +7,7 @@
 
   export let agencies: Agency[];
   export let currentSlug: string = "";
+  export let currentAgencyName: string = "";
   export let placeholder: string = "Search agencies…";
 
   let query = "";
@@ -15,7 +16,18 @@
   let inputEl: HTMLInputElement;
   let listEl: HTMLUListElement;
 
-  $: results = query.trim().length < 2
+  // When the active agency changes (mount, or nav between agencies), reset the
+  // input to display that agency's name as a passive "you are here" header.
+  // Tracked separately so user typing isn't clobbered by reactive re-runs.
+  let lastSeenAgencyName = "";
+  $: if (currentAgencyName !== lastSeenAgencyName) {
+    lastSeenAgencyName = currentAgencyName;
+    query = currentAgencyName;
+  }
+
+  // Skip search results while the input is still displaying the current
+  // agency name — don't surface the page-you're-on as a search result.
+  $: results = (query.trim().length < 2 || query === currentAgencyName)
     ? []
     : agencies
         .filter((a) => {
@@ -71,6 +83,22 @@
       activeIdx = -1;
     }
   }
+
+  function onFocus() {
+    // Clear the "you are here" header so the user can type freely.
+    if (query === currentAgencyName) query = "";
+  }
+
+  function onBlur() {
+    // If the user leaves the field without typing, restore the header so the
+    // input keeps acting as a page indicator. Delayed so a click on a search
+    // result (which blurs the input first) can run select() before this fires.
+    setTimeout(() => {
+      if (!query.trim() && currentAgencyName && document.activeElement !== inputEl) {
+        query = currentAgencyName;
+      }
+    }, 150);
+  }
 </script>
 
 <!-- pointerdown fires on first touch contact on iOS; click does not on non-interactive elements -->
@@ -101,6 +129,8 @@
       aria-activedescendant={activeIdx >= 0 ? `agency-opt-${activeIdx}` : undefined}
       class="w-full rounded-md border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-base text-slate-900 placeholder:text-slate-400 focus:border-[#ce1483] focus:outline-none focus:ring-1 focus:ring-[#ce1483] sm:py-2 sm:text-sm"
       on:keydown={onKeydown}
+      on:focus={onFocus}
+      on:blur={onBlur}
     />
   </div>
 

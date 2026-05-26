@@ -86,7 +86,7 @@
   style="top: calc(var(--site-header-height) + var(--staging-banner-height));"
 >
   <div class="mx-auto max-w-4xl">
-    <AgencySearch {agencies} currentSlug={agency.slug} />
+    <AgencySearch {agencies} currentSlug={agency.slug} currentAgencyName={agency.name} />
   </div>
 </div>
 
