@@ -10,7 +10,7 @@
   const { modelName, slug, definition, seeAlso, agencies, snapshotDate } = data;
 
   const siteUrl = import.meta.env.PUBLIC_SITE_URL ?? "https://tracking287g.com";
-  const title = `${modelName} — Tracking 287(g)`;
+  const title = `${modelName} — 287(g) Explorer`;
   const canonicalUrl = `${siteUrl}/model/${slug}`;
 
   const intFmt = new Intl.NumberFormat();

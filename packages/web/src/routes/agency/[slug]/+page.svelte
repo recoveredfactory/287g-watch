@@ -69,7 +69,7 @@
 <!-- Sticky agency search bar -->
 <div
   class="sticky z-40 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur sm:px-6"
-  style="top: var(--site-header-height);"
+  style="top: calc(var(--site-header-height) + var(--staging-banner-height));"
 >
   <div class="mx-auto max-w-4xl">
     <AgencySearch {agencies} currentSlug={agency.slug} />

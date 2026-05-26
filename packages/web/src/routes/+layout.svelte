@@ -23,7 +23,7 @@
     return document.cookie.split(";").some((c) => c.trim().startsWith(`${localeCookieName}=`));
   }
 
-  const siteName = "Tracking 287(g)";
+  const siteName = "287(g) Explorer";
 
   const stage = (import.meta.env.PUBLIC_STAGE || "local").toString();
   const isProdStage = stage === "prod" || stage === "production";
@@ -92,15 +92,20 @@
   {m.skip_to_main()}
 </a>
 
-<div class={`page-fade ${isNavigating ? "page-fade--loading" : ""} ${bannerVisible ? "pb-20" : ""}`}>
+<div
+  class={`page-fade ${isNavigating ? "page-fade--loading" : ""} ${bannerVisible ? "pb-20" : ""}`}
+  style:--staging-banner-height={isProdStage ? "0px" : "28px"}
+>
   {#if !isProdStage}
     <div
-      class="sticky top-0 z-[60] flex items-center justify-center gap-2 bg-amber-400 px-4 py-1 text-center text-xs font-semibold uppercase tracking-wider text-amber-950"
+      class="sticky top-0 z-[60] flex items-center justify-center gap-2 bg-red-600 px-4 py-1 text-center text-xs font-semibold uppercase tracking-wider text-white"
       role="alert"
       aria-label="Non-production environment warning"
+      style="height: var(--staging-banner-height);"
     >
-      <span aria-hidden="true">⚠</span>
-      <span>{m.staging_banner({ stage })}</span>
+      <span>{m.staging_banner()}</span>
+      <span aria-hidden="true">•</span>
+      <code class="font-mono normal-case tracking-normal">{stage}</code>
     </div>
   {/if}
   {#if mismatchTarget}
@@ -140,8 +145,7 @@
   {/if}
   <header
     class="sticky z-50 border-b border-black/20 backdrop-blur"
-    style:top={isProdStage ? "0" : "28px"}
-    style="background-color: #191919;"
+    style="top: var(--staging-banner-height); background-color: #191919;"
   >
     <div class="mx-auto max-w-6xl px-4 sm:px-6">
       <div class="flex flex-col py-3 sm:h-14 sm:flex-row sm:items-center sm:justify-between sm:py-0">

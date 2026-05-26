@@ -196,7 +196,7 @@
     description,
     url: siteUrl,
     license: "https://creativecommons.org/licenses/by/4.0/",
-    creator: { "@type": "Organization", name: "Tracking 287(g)" },
+    creator: { "@type": "Organization", name: "287(g) Explorer" },
   })}</` + `script>`}
 </svelte:head>
 
@@ -357,7 +357,7 @@
       <!-- Filter controls — sticky once scrolled into view -->
       <div
         class="sticky z-40 -mx-4 border-b border-slate-200 bg-stone-50/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6"
-        style="top: var(--site-header-height);"
+        style="top: calc(var(--site-header-height) + var(--staging-banner-height));"
       >
         <div class="space-y-3">
           <!-- Search input — full width on mobile -->
