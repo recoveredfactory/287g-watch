@@ -4,6 +4,7 @@
   import { browser } from "$app/environment";
   import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_SHORT } from "$lib/colors";
   import { toInsetCoords } from "$lib/insetTransforms";
+  import { ensurePmtilesProtocol, pmtilesBaseSource } from "$lib/map/pmtiles";
 
   export let selectedStates: Set<string> = new Set();
 
@@ -85,6 +86,7 @@
     if (!browser) return;
 
     const ml = await import("maplibre-gl");
+    await ensurePmtilesProtocol(ml);
 
     const FIT_BOUNDS = FULL_BOUNDS;
     const FIT_OPTIONS = { padding: 24, animate: false };
@@ -174,18 +176,21 @@
         },
       });
 
-      // Highways — casing + fill for a clean road look
-      map.addSource("highways", {
-        type: "geojson",
-        data: "/us-highways.geojson",
-      });
+      // Shared PMTiles base — roads + place labels. Standard web-mercator,
+      // so layers only align with the lower-48; AK/HI/territory insets are
+      // intentionally left without road/city detail in this iteration.
+      map.addSource("base", pmtilesBaseSource());
 
-      // Casing (slightly wider, darker) drawn first so fill sits on top
+      // Highway casing (kind: highway/major_road) — wider darker line under
+      // the fill, matching the look of the previous hand-baked layer.
       map.addLayer({
-        id: "highway-casing",
+        id: "road-casing",
         type: "line",
-        source: "highways",
+        source: "base",
+        "source-layer": "roads",
         minzoom: 4,
+        filter: ["in", ["get", "kind"], ["literal", ["highway", "major_road"]]],
+        layout: { "line-cap": "round", "line-join": "round" },
         paint: {
           "line-color": "#a0b0bc",
           "line-width": ["interpolate", ["linear"], ["zoom"], 4, 1.5, 8, 3, 12, 5],
@@ -194,10 +199,13 @@
       });
 
       map.addLayer({
-        id: "highway-fill",
+        id: "road-fill",
         type: "line",
-        source: "highways",
+        source: "base",
+        "source-layer": "roads",
         minzoom: 4,
+        filter: ["in", ["get", "kind"], ["literal", ["highway", "major_road"]]],
+        layout: { "line-cap": "round", "line-join": "round" },
         paint: {
           "line-color": "#eef2f5",
           "line-width": ["interpolate", ["linear"], ["zoom"], 4, 0.6, 8, 1.5, 12, 3],
@@ -205,20 +213,37 @@
         },
       });
 
-      // Cities — major (pop ≥ 300k) from zoom 4, all from zoom 6
-      map.addSource("cities", {
-        type: "geojson",
-        data: "/us-cities.geojson",
+      // Medium roads fade in at city zoom for context
+      map.addLayer({
+        id: "road-medium",
+        type: "line",
+        source: "base",
+        "source-layer": "roads",
+        minzoom: 8,
+        filter: ["==", ["get", "kind"], "medium_road"],
+        paint: {
+          "line-color": "#cdd6dc",
+          "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.4, 12, 1.5],
+          "line-opacity": 0.8,
+        },
       });
 
+      // Place labels — Protomaps `population_rank`: lower = more populous.
+      // Tiered so the national view shows only the biggest cities and more
+      // appear as the user zooms in.
       map.addLayer({
-        id: "cities-major",
+        id: "places-major",
         type: "symbol",
-        source: "cities",
+        source: "base",
+        "source-layer": "places",
         minzoom: 4,
-        filter: ["<=", ["get", "rank"], 2],
+        filter: [
+          "all",
+          ["==", ["get", "kind"], "locality"],
+          ["<=", ["get", "population_rank"], 7],
+        ],
         layout: {
-          "text-field": ["get", "name"],
+          "text-field": ["coalesce", ["get", "name:en"], ["get", "name"]],
           "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
           "text-size": ["interpolate", ["linear"], ["zoom"], 4, 10, 8, 13],
           "text-anchor": "top",
@@ -234,13 +259,18 @@
       });
 
       map.addLayer({
-        id: "cities-minor",
+        id: "places-minor",
         type: "symbol",
-        source: "cities",
+        source: "base",
+        "source-layer": "places",
         minzoom: 6,
-        filter: ["<=", ["get", "rank"], 3],
+        filter: [
+          "all",
+          ["==", ["get", "kind"], "locality"],
+          ["<=", ["get", "population_rank"], 9],
+        ],
         layout: {
-          "text-field": ["get", "name"],
+          "text-field": ["coalesce", ["get", "name:en"], ["get", "name"]],
           "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
           "text-size": ["interpolate", ["linear"], ["zoom"], 6, 9, 10, 12],
           "text-anchor": "top",
@@ -256,12 +286,14 @@
       });
 
       map.addLayer({
-        id: "cities-all",
+        id: "places-all",
         type: "symbol",
-        source: "cities",
+        source: "base",
+        "source-layer": "places",
         minzoom: 8,
+        filter: ["==", ["get", "kind"], "locality"],
         layout: {
-          "text-field": ["get", "name"],
+          "text-field": ["coalesce", ["get", "name:en"], ["get", "name"]],
           "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
           "text-size": 10,
           "text-anchor": "top",

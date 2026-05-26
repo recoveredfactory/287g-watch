@@ -4,6 +4,11 @@
   import { MODEL_COLORS } from "$lib/colors";
   import { toInsetCoords } from "$lib/insetTransforms";
   import { STATE_NAMES } from "$lib/states";
+  import { ensurePmtilesProtocol, pmtilesBaseSource } from "$lib/map/pmtiles";
+
+  // Inset territories sit at shifted coords; loading PMTiles over them
+  // would draw foreign tiles. Affects 5 agencies total (AK, GU, MP).
+  const INSET_STATES = new Set(["AK", "HI", "PR", "VI", "GU", "MP", "AS"]);
 
   export let lat: number | null | undefined = undefined;
   export let lng: number | null | undefined = undefined;
@@ -25,7 +30,9 @@
     if (!browser || !container) return;
 
     const ml = await import("maplibre-gl");
+    await ensurePmtilesProtocol(ml);
 
+    const showPmtilesRoads = !INSET_STATES.has(state);
     const dotCoords: [number, number] | null =
       lat != null && lng != null ? toInsetCoords(lng, lat, state) : null;
 
@@ -90,6 +97,55 @@
         source: "counties",
         paint: { "line-color": "#c8d4dc", "line-width": 0.4 },
       });
+
+      // PMTiles roads — only safe over the lower-48 + DC. The inset
+      // territories use shifted coordinates that don't align with the
+      // PMTiles' real-world mercator tiles.
+      if (showPmtilesRoads) {
+        map.addSource("base", pmtilesBaseSource());
+
+        // Highways/major roads — casing + fill, higher fidelity than the
+        // homepage view because the agency map sits at statewide zoom.
+        map.addLayer({
+          id: "road-casing",
+          type: "line",
+          source: "base",
+          "source-layer": "roads",
+          filter: ["in", ["get", "kind"], ["literal", ["highway", "major_road"]]],
+          layout: { "line-cap": "round", "line-join": "round" },
+          paint: {
+            "line-color": "#a0b0bc",
+            "line-width": ["interpolate", ["linear"], ["zoom"], 4, 1.5, 8, 3],
+            "line-opacity": 0.75,
+          },
+        });
+        map.addLayer({
+          id: "road-fill",
+          type: "line",
+          source: "base",
+          "source-layer": "roads",
+          filter: ["in", ["get", "kind"], ["literal", ["highway", "major_road"]]],
+          layout: { "line-cap": "round", "line-join": "round" },
+          paint: {
+            "line-color": "#eef2f5",
+            "line-width": ["interpolate", ["linear"], ["zoom"], 4, 0.6, 8, 1.8],
+            "line-opacity": 0.95,
+          },
+        });
+        map.addLayer({
+          id: "road-medium",
+          type: "line",
+          source: "base",
+          "source-layer": "roads",
+          minzoom: 6,
+          filter: ["==", ["get", "kind"], "medium_road"],
+          paint: {
+            "line-color": "#cdd6dc",
+            "line-width": ["interpolate", ["linear"], ["zoom"], 6, 0.3, 9, 1],
+            "line-opacity": 0.8,
+          },
+        });
+      }
 
       if (dotCoords) {
         const color = MODEL_COLORS[primaryModel ?? ""] ?? MODEL_FALLBACK;
