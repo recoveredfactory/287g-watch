@@ -134,6 +134,30 @@
         <dd class="mt-1 font-semibold text-slate-900">{intFmt.format(agency.population)}</dd>
       </div>
     {/if}
+    {#if agency.lee?.officer_ct != null}
+      <div>
+        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_officers()}</dt>
+        <dd class="mt-1 font-semibold text-slate-900">{intFmt.format(agency.lee.officer_ct)}</dd>
+      </div>
+    {/if}
+    {#if agency.lee?.civilian_ct != null}
+      <div>
+        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_civilian_staff()}</dt>
+        <dd class="mt-1 font-semibold text-slate-900">{intFmt.format(agency.lee.civilian_ct)}</dd>
+      </div>
+    {/if}
+    {#if agency.lee?.total_pe_ct != null}
+      <div>
+        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_total_personnel()}</dt>
+        <dd class="mt-1 font-semibold text-slate-900">{intFmt.format(agency.lee.total_pe_ct)}</dd>
+      </div>
+    {/if}
+    {#if agency.agreement?.operating_budget != null}
+      <div>
+        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_operating_budget()}</dt>
+        <dd class="mt-1 font-semibold text-slate-900">${intFmt.format(agency.agreement.operating_budget)}</dd>
+      </div>
+    {/if}
     {#if agency.moa_url}
       <div>
         <dt class="text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_moa_heading()}</dt>
@@ -148,6 +172,9 @@
       </div>
     {/if}
   </dl>
+  {#if agency.lee?.data_year}
+    <p class="mt-2 text-xs italic text-slate-400">{m.agency_staffing_note({ year: agency.lee.data_year })}</p>
+  {/if}
 
   <!-- Agreement -->
   {#if agency.moa_url}
