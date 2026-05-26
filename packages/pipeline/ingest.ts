@@ -13,11 +13,12 @@
  */
 
 import AdmZip from 'adm-zip'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import slugifyLib from 'slugify'
 import { read as xlsxRead, utils as xlsxUtils } from 'xlsx'
+import { parse as parseYaml } from 'yaml'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const OUT_DIR = resolve(__dirname, '../web/static/data/dist')
@@ -108,6 +109,12 @@ export interface AgreementMetadata {
   agency_type: string | null
 }
 
+export interface AgencyNote {
+  kind: string
+  related_slug?: string
+  text: string
+}
+
 interface Agency {
   slug: string
   name: string
@@ -127,6 +134,7 @@ interface Agency {
   history: HistoryEvent[]
   lee: LeeData | null
   agreement: AgreementMetadata | null
+  notes: AgencyNote[] | null
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -486,6 +494,7 @@ for (const row of grouped) {
     history: buildHistory(hKey),
     lee: null,
     agreement: null,
+    notes: null,
   })
 }
 
@@ -939,7 +948,40 @@ for (const s of stateCoverage) {
   )
 }
 
-// ── 7. Write output ────────────────────────────────────────────────────────────
+// ── 7. Merge editorial notes overlay ──────────────────────────────────────────
+
+const NOTES_PATH = resolve(__dirname, 'data/agency_notes.yaml')
+if (existsSync(NOTES_PATH)) {
+  const raw = parseYaml(readFileSync(NOTES_PATH, 'utf8')) as
+    | Record<string, AgencyNote[]>
+    | null
+  const overlay = raw ?? {}
+  const slugSet = new Set(agencies.map((a) => a.slug))
+  let attached = 0
+  let orphaned = 0
+  for (const [slug, notes] of Object.entries(overlay)) {
+    if (!slugSet.has(slug)) {
+      console.warn(`  notes overlay: unknown slug '${slug}' (skipped)`)
+      orphaned++
+      continue
+    }
+    // Validate related_slug references too
+    for (const n of notes) {
+      if (n.related_slug && !slugSet.has(n.related_slug)) {
+        console.warn(`  notes overlay: '${slug}' references unknown related_slug '${n.related_slug}'`)
+      }
+    }
+  }
+  for (const a of agencies) {
+    if (overlay[a.slug]) {
+      a.notes = overlay[a.slug]
+      attached++
+    }
+  }
+  console.log(`\nNotes overlay: attached ${attached} agencies${orphaned ? `, ${orphaned} orphaned` : ''}`)
+}
+
+// ── 8. Write output ────────────────────────────────────────────────────────────
 
 mkdirSync(OUT_DIR, { recursive: true })
 writeFileSync(resolve(OUT_DIR, 'agency_index.json'), JSON.stringify(agencies, null, 2))
