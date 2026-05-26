@@ -211,7 +211,7 @@
       <h1 class="mt-2 text-3xl font-black leading-tight text-slate-900 sm:mt-3 sm:text-5xl lg:text-6xl">
         {m.home_hero_headline_line1()}<br class="hidden sm:block" /> {m.home_hero_headline_line2()}
       </h1>
-      <p class="prose-editorial mt-4 text-base sm:mt-6 sm:text-lg first-letter:float-left first-letter:mr-2 first-letter:mt-1 first-letter:font-serif first-letter:text-6xl first-letter:font-normal first-letter:leading-[0.85] first-letter:text-slate-800">
+      <p class="prose-editorial mt-4 text-base sm:mt-6 sm:text-lg">
         <Gloss text={m.home_hero_lead()} />
       </p>
 
