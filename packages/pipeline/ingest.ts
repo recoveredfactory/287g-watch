@@ -133,13 +133,14 @@ interface Agency {
 
 function titleAgency(s: string): string {
   const lower = new Set(['of', 'the', 'a', 'an', 'and', 'or', 'in', 'at', 'by', 'for', 'to'])
+  const capSegments = (word: string) =>
+    word.split('-').map((seg) => seg.charAt(0).toUpperCase() + seg.slice(1)).join('-')
   return s
     .trim()
     .split(/\s+/)
     .map((word, i) => {
       const lw = word.toLowerCase()
-      const capped = lw.charAt(0).toUpperCase() + lw.slice(1)
-      return i === 0 || !lower.has(lw) ? capped : lw
+      return i === 0 || !lower.has(lw) ? capSegments(lw) : lw
     })
     .join(' ')
 }
