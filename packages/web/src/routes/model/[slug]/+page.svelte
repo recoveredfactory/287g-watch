@@ -199,7 +199,7 @@
         {#each seeAlso as term}
           <a
             href={localizeHref(MODEL_SLUG[term] ? `/model/${MODEL_SLUG[term]}` : `/glossary#term-${term.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`)}
-            class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600 no-underline hover:border-slate-400 hover:text-slate-900"
+            class="rounded border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600 no-underline hover:border-slate-400 hover:text-slate-900"
           >{term}</a>
         {/each}
       </div>

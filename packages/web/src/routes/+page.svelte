@@ -239,7 +239,7 @@
       <p class="text-xs font-semibold uppercase tracking-widest text-slate-400 sm:text-sm">
         {m.home_hero_eyebrow()}
       </p>
-      <h1 class="mt-2 text-3xl font-black leading-tight text-slate-900 sm:mt-3 sm:text-5xl lg:text-6xl">
+      <h1 class="mt-2 text-2xl font-black leading-tight text-slate-900 sm:mt-3 sm:text-4xl lg:text-5xl">
         {m.home_hero_headline_line1()}<br class="hidden sm:block" /> {m.home_hero_headline_line2()}
       </h1>
       <p class="prose-editorial mt-4 text-base sm:mt-6 sm:text-lg">
@@ -295,21 +295,21 @@
         {#each ALL_MODELS as model}
           {@const desc = modelDesc(model)}
           <div
-            class="flex flex-col overflow-hidden rounded-lg border shadow-sm"
+            class="flex flex-col overflow-hidden rounded border shadow-sm"
             style="border-color: {MODEL_COLORS[model]};"
           >
-            <div class="px-3 py-2.5" style="background: {MODEL_COLORS[model]};">
+            <div class="px-4 py-3" style="background: {MODEL_COLORS[model]};">
               <h3
-                class="font-sans text-xs font-bold uppercase tracking-widest"
+                class="font-sans text-sm font-bold uppercase tracking-widest"
                 style="color: {MODEL_TEXT_COLORS[model] ?? '#ffffff'};"
               >{model.replace(/ Model$/, '')}</h3>
             </div>
-            <div class="flex flex-1 flex-col gap-2 px-3 py-3" style="background: {MODEL_COLORS[model]}28;">
-              <p class="text-xs leading-relaxed text-slate-700">{desc.short}</p>
+            <div class="flex flex-1 flex-col gap-3 px-4 py-4" style="background: {MODEL_COLORS[model]}28;">
+              <p class="text-sm leading-relaxed text-slate-700">{@html desc.short}</p>
               <div class="flex items-end justify-between gap-2">
                 <a
                   href={localizeHref(`/model/${MODEL_SLUG[model]}`)}
-                  class="text-xs font-semibold no-underline hover:underline"
+                  class="text-sm font-semibold no-underline hover:underline"
                   style="color: {MODEL_DARK_COLORS[model] ?? '#334155'};"
                 >Learn more →</a>
                 {#if data.modelCounts[model]}
@@ -370,10 +370,10 @@
   </section>
 
   <!-- ── Support callout ──────────────────────────────────────────────────── -->
-  <section class="border-b border-slate-200 bg-white px-4 py-5 sm:px-6">
+  <section class="border-b border-slate-200 bg-gray-100 px-4 py-5 sm:px-6">
     <div class="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-      <p class="text-sm text-slate-500">
-        {m.home_support_prefix()} <a href="https://vsr.recoveredfactory.net/en" target="_blank" rel="noreferrer" class="font-medium text-slate-700">Recovered Factory</a>{m.home_support_suffix()}
+      <p class="text-sm text-slate-700">
+        {m.home_support_prefix()} <a href="https://vsr.recoveredfactory.net/en" target="_blank" rel="noreferrer" class="font-semibold text-slate-900">Recovered Factory</a>{m.home_support_suffix()}
       </p>
       <a
         href="https://vsr.recoveredfactory.net/en"
@@ -427,7 +427,8 @@
               <button
                 type="button"
                 on:click={() => toggleState(state)}
-                class="flex items-center gap-1 rounded-full border border-slate-500 bg-slate-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
+                class="flex items-center gap-1 rounded border px-3 py-1.5 text-xs font-semibold text-white"
+                style="background-color: #2c2c2c; border-color: #2c2c2c;"
               >
                 {STATE_NAMES[state] ?? state}
                 <span aria-hidden="true" class="opacity-70">×</span>
@@ -438,7 +439,7 @@
               <button
                 type="button"
                 on:click={() => toggleState(detectedState!)}
-                class="text-xs text-blue-800 underline underline-offset-2 hover:text-blue-900"
+                class="text-xs underline underline-offset-2" style="color: #23272b;"
               >
                 {m.home_search_use_detected_state({ state: STATE_NAMES[detectedState] ?? detectedState })}
               </button>
@@ -459,7 +460,7 @@
               <button
                 type="button"
                 on:click={() => toggleModel(model)}
-                class="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors"
+                class="flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs font-semibold transition-colors"
                 style={active
                   ? `background: ${MODEL_COLORS[model]}; border-color: ${MODEL_COLORS[model]}; color: ${MODEL_TEXT_COLORS[model] ?? '#fff'};`
                   : "background: white; border-color: #cbd5e1; color: #475569;"}
@@ -485,7 +486,7 @@
           <button
             type="button"
             on:click={clearFilters}
-            class="text-blue-800 underline underline-offset-2 hover:text-blue-900"
+            class="underline underline-offset-2" style="color: #23272b;"
           >{m.home_search_clear_filters()}</button>
         {:else}
           {m.home_search_baseline({
@@ -502,51 +503,68 @@
           <button
             type="button"
             on:click={clearFilters}
-            class="mt-2 text-sm text-blue-800 underline underline-offset-2"
+            class="mt-2 text-sm underline underline-offset-2" style="color: #23272b;"
           >
             {m.home_search_clear_filters()}
           </button>
         </div>
       {:else}
-        <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {#each pageAgencies as agency (agency.slug)}
-            <div class="group relative rounded-lg border border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm">
-              <a
-                href={localizeHref(`/agency/${agency.slug}`)}
-                class="block p-4 no-underline active:bg-slate-50"
-              >
-                <p class="font-semibold leading-snug text-slate-900 group-hover:text-slate-700">
-                  {agency.name}
-                </p>
-                <p class="mt-0.5 text-sm text-slate-500">
-                  {[agency.city, STATE_NAMES[agency.state] ?? agency.state]
-                    .filter(Boolean)
-                    .join(", ")}
-                </p>
-                <div class="mt-2 flex flex-wrap gap-1.5" class:pr-12={!!agency.moa_url}>
-                  {#each agency.models as model}
-                    <span
-                      class="model-badge"
-                      class:model-badge--jail={model.includes("Jail")}
-                      class:model-badge--taskforce={model.includes("Task")}
-                      class:model-badge--wso={model.includes("Warrant")}
-                    >
-                      {MODEL_SHORT[model] ?? model}
-                    </span>
-                  {/each}
-                </div>
-              </a>
-              {#if agency.moa_url}
-                <a
-                  href={agency.moa_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  class="absolute bottom-4 right-3 text-xs text-slate-400 no-underline hover:text-slate-700"
-                  aria-label="View agreement PDF for {agency.name}"
-                >PDF ↗</a>
-              {/if}
-            </div>
-          {/each}
+        <div class="mt-4 overflow-x-auto rounded-lg border border-slate-200">
+          <table class="w-full min-w-[600px] text-sm">
+            <thead>
+              <tr class="border-b border-slate-200 bg-slate-50 text-left">
+                <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Agency</th>
+                <th class="px-3 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Agreement</th>
+                <th class="px-3 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Signed</th>
+                <th class="hidden px-3 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Population</th>
+                <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Links</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              {#each pageAgencies as agency (agency.slug)}
+                <tr class="group hover:bg-slate-50">
+                  <td class="px-4 py-3">
+                    <a
+                      href={localizeHref(`/agency/${agency.slug}`)}
+                      class="font-semibold leading-snug text-slate-900 no-underline hover:underline"
+                    >{agency.name}</a>
+                    <p class="mt-0.5 text-xs text-slate-400">
+                      {[agency.city, agency.state].filter(Boolean).join(", ")}
+                    </p>
+                  </td>
+                  <td class="px-3 py-3">
+                    <div class="flex flex-wrap gap-1">
+                      {#each agency.models as model}
+                        <span
+                          class="model-badge"
+                          class:model-badge--jail={model.includes("Jail")}
+                          class:model-badge--taskforce={model.includes("Task")}
+                          class:model-badge--wso={model.includes("Warrant")}
+                        >{MODEL_SHORT[model] ?? model}</span>
+                      {/each}
+                    </div>
+                  </td>
+                  <td class="px-3 py-3 tabular-nums text-slate-500">
+                    {agency.signed_date ? agency.signed_date.slice(0, 4) : "—"}
+                  </td>
+                  <td class="hidden px-3 py-3 tabular-nums text-slate-500">
+                    {agency.population ? popFmt.format(agency.population) : "—"}
+                  </td>
+                  <td class="px-4 py-3">
+                    <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold">
+                      {#if agency.moa_url}
+                        <a href={agency.moa_url} target="_blank" rel="noreferrer" class="no-underline hover:underline">MOA ↗</a>
+                      {/if}
+                      {#if agency.contact_website}
+                        <a href={agency.contact_website} target="_blank" rel="noreferrer" class="no-underline hover:underline">Web ↗</a>
+                      {/if}
+                      <a href="https://www.muckrock.com/foi/create/" target="_blank" rel="noreferrer" class="no-underline hover:underline">FOIA ↗</a>
+                    </div>
+                  </td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
         </div>
 
         <!-- Pagination -->
