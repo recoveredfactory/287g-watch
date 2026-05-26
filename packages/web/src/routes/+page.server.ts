@@ -21,6 +21,12 @@ export type AgreementMetadata = {
   agency_type: string | null;
 };
 
+export type AgencyNote = {
+  kind: string;
+  related_slug?: string;
+  text: string;
+};
+
 export type Agency = {
   slug: string;
   name: string;
@@ -43,6 +49,7 @@ export type Agency = {
   history?: HistoryEvent[];
   lee?: LeeData | null;
   agreement?: AgreementMetadata | null;
+  notes?: AgencyNote[] | null;
 };
 
 export type StateMeta = {
