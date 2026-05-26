@@ -45,6 +45,15 @@ export type Agency = {
   agreement?: AgreementMetadata | null;
 };
 
+export type StateMeta = {
+  state: string;
+  local_le_agencies: number;
+  participating: number;
+  pct: number;
+  population_served: number;
+  state_local_population: number;
+};
+
 export type PageData = {
   agencies: Agency[];
   agencyCount: number;
@@ -52,14 +61,22 @@ export type PageData = {
   populationCovered: number;
   snapshotDate: string | null;
   modelCounts: Record<string, number>;
+  stateMeta: Record<string, StateMeta>;
 };
 
 export const load = async ({ fetch }): Promise<PageData> => {
   try {
     const url = "/data/dist/agency_index.json";
-    const res = await fetch(url);
+    const [res, metaRes] = await Promise.all([
+      fetch(url),
+      fetch("/data/dist/state_meta.json"),
+    ]);
     if (!res.ok) throw new Error(`${res.status} ${url}`);
     const agencies: Agency[] = await res.json();
+    const stateMetaArr: StateMeta[] = metaRes.ok ? await metaRes.json() : [];
+    const stateMeta: Record<string, StateMeta> = Object.fromEntries(
+      stateMetaArr.map((s) => [s.state, s]),
+    );
 
     const states = new Set(agencies.map((a) => a.state));
     const populationCovered = agencies.reduce((sum, a) => sum + (a.population ?? 0), 0);
@@ -83,6 +100,7 @@ export const load = async ({ fetch }): Promise<PageData> => {
       populationCovered,
       snapshotDate,
       modelCounts,
+      stateMeta,
     };
   } catch {
     return {
@@ -92,6 +110,7 @@ export const load = async ({ fetch }): Promise<PageData> => {
       populationCovered: 0,
       snapshotDate: null,
       modelCounts: {},
+      stateMeta: {},
     };
   }
 };

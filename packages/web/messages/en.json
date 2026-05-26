@@ -33,6 +33,11 @@
   "home_stat_states": "states",
   "home_stat_population": "people in participating jurisdictions",
 
+  "home_hero_state_callout_standard": "In {state}, {agency_pct}% of agencies are participating, covering {pop_pct}% of the state population.",
+  "home_hero_state_callout_fl": "In {state}, {agency_pct}% of agencies are participating, representing nearly 100% population coverage.",
+  "home_hero_state_callout_none": "No agencies in {state} currently participate in 287(g).",
+
+
   "home_map_heading": "287(g) agencies, by program model",
   "home_map_subhead": "Click any dot to view the agency's agreement and records.",
   "home_map_empty_title": "No data loaded",
