@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from "svelte";
   import { goto } from "$app/navigation";
   import { browser } from "$app/environment";
-  import { MODEL_COLORS } from "$lib/colors";
+  import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_SHORT } from "$lib/colors";
   import { toInsetCoords } from "$lib/insetTransforms";
 
   export let selectedStates: Set<string> = new Set();
@@ -310,12 +310,20 @@
         const f = e.features[0];
         const p = f.properties;
         const coords = f.geometry.coordinates.slice();
+        const modelBadges = p.models
+          ? p.models.split(", ").map((model: string) => {
+              const bg = MODEL_COLORS[model] ?? "#e2e8f0";
+              const fg = MODEL_TEXT_COLORS[model] ?? "#0f172a";
+              const label = MODEL_SHORT[model] ?? model;
+              return `<span style="display:inline-block;background:${bg};color:${fg};border-radius:3px;padding:1px 7px;font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;">${label}</span>`;
+            }).join(" ")
+          : "";
         popup
           .setLngLat(coords)
           .setHTML(
             `<div class="popup-name">${p.name}</div>` +
             `<div class="popup-sub">${[p.city, p.state].filter(Boolean).join(", ")}</div>` +
-            (p.models ? `<div class="popup-model">${p.models}</div>` : ""),
+            (modelBadges ? `<div class="popup-badges">${modelBadges}</div>` : ""),
           )
           .addTo(map);
       });
@@ -353,6 +361,10 @@
     font-family: "Inter", system-ui, sans-serif;
     font-size: 13px;
     max-width: 220px;
+    background: #ffffff;
+  }
+  :global(.map-popup .maplibregl-popup-tip) {
+    border-top-color: #ffffff !important;
   }
   :global(.map-popup .popup-name) {
     font-weight: 600;
@@ -364,10 +376,10 @@
     margin-top: 2px;
     font-size: 12px;
   }
-  :global(.map-popup .popup-model) {
-    color: #334155;
-    margin-top: 4px;
-    font-size: 11px;
-    font-style: italic;
+  :global(.map-popup .popup-badges) {
+    margin-top: 5px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
   }
 </style>

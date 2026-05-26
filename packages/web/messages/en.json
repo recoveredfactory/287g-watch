@@ -52,11 +52,11 @@
   "home_models_glossary_link": "See the glossary",
   "home_models_glossary_suffix": "for key definitions.",
 
-  "model_jem_short": "Officers screen people booked into local jails for immigration status.",
+  "model_jem_short": "If officers <strong>suspect</strong> a person is illegally in the country and is detained, they can <strong>check databases</strong> or <strong>interview</strong> them about their citizenship.",
   "model_jem_detail": "Participating officers may issue civil detainers — requests for jails to hold people beyond their scheduled release so ICE can take custody. JEM operates inside detention facilities only, not in the community. It is the oldest and most common 287(g) model.",
-  "model_tfm_short": "Officers work alongside ICE agents in the community to make immigration arrests.",
+  "model_tfm_short": "This is the <strong>broadest authorization.</strong> Officers <strong>work alongside</strong> ICE agents in the <strong>community</strong> to make immigration arrests.",
   "model_tfm_detail": "TFM grants the broadest authority of the three models. Participating officers can stop, question, and arrest individuals in the community — not only those already in custody. They operate jointly with ICE field agents on targeted enforcement operations.",
-  "model_wso_short": "Officers are authorized to serve administrative warrants on people ICE has already identified.",
+  "model_wso_short": "This is the most <strong>limited</strong> model. Officers execute ICE administrative warrants on <strong>specific</strong> named individuals <strong>already</strong> incarcerated or detained.",
   "model_wso_detail": "Introduced around 2020, the WSO model is narrower than JEM or TFM. Officers may only serve administrative warrants on specific individuals ICE has already identified for removal. They cannot initiate independent enforcement or conduct community operations.",
 
   "home_search_heading": "Search agencies",

@@ -249,13 +249,13 @@
 {#if bannerVisible}
   <div
     class="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between gap-4 px-4 py-4 sm:px-6"
-    style="background-color: #1e3a5f;"
+    style="background-color: #2c2c2c;"
     role="complementary"
     aria-label="Support Recovered Factory"
   >
     <div class="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-4">
       <p class="text-sm font-semibold text-white">{m.rf_banner_question()}</p>
-      <p class="text-sm text-slate-300 sm:truncate">
+      <p class="text-sm text-white/80 sm:truncate">
         {m.rf_banner_pitch()}
       </p>
     </div>
@@ -272,7 +272,7 @@
       <button
         on:click={dismissBanner}
         aria-label={m.rf_banner_dismiss()}
-        class="flex h-7 w-7 items-center justify-center rounded text-slate-400 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+        class="flex h-7 w-7 items-center justify-center rounded text-white/50 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
       >
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4" aria-hidden="true">
           <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"/>
