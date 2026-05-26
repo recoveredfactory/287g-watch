@@ -30,8 +30,11 @@
         })
         .slice(0, 8);
 
-  $: if (results.length > 0) open = true;
-  $: if (results.length === 0) { open = false; activeIdx = -1; }
+  // Auto-select the top result whenever the query changes so Enter "just
+  // works" without pressing ArrowDown first. Also resets a stale highlight
+  // when the result set shifts under the user.
+  $: open = results.length > 0;
+  $: activeIdx = results.length > 0 ? 0 : -1;
 
   function hl(text: string): string {
     const q = query.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -52,7 +55,7 @@
       return;
     }
     if (e.key === "ArrowDown") { e.preventDefault(); activeIdx = Math.min(activeIdx + 1, results.length - 1); scrollActive(); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); activeIdx = Math.max(activeIdx - 1, -1); scrollActive(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); activeIdx = Math.max(activeIdx - 1, 0); scrollActive(); }
     else if (e.key === "Enter" && activeIdx >= 0) { e.preventDefault(); select(results[activeIdx]); }
     else if (e.key === "Escape") { open = false; activeIdx = -1; inputEl.blur(); }
   }
