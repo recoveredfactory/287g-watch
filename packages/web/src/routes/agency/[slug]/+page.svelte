@@ -126,12 +126,14 @@
 
   <!-- Location map -->
   <div class="mt-6 h-[260px] overflow-hidden rounded-lg border border-slate-200 shadow-sm sm:h-[320px]">
-    <AgencyMap
-      lat={agency.lat}
-      lng={agency.lng}
-      state={agency.state}
-      primaryModel={agency.primary_model}
-    />
+    {#key agency.slug}
+      <AgencyMap
+        lat={agency.lat}
+        lng={agency.lng}
+        state={agency.state}
+        primaryModel={agency.primary_model}
+      />
+    {/key}
   </div>
 
   <!-- Key facts -->
