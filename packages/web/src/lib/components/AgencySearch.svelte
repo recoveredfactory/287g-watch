@@ -27,6 +27,8 @@
 
   // Skip search results while the input is still displaying the current
   // agency name — don't surface the page-you're-on as a search result.
+  // Sort by jurisdiction population descending so "Miami-Dade Sheriff" (FL,
+  // 2.7M) beats "Miami" (OH, ~85K) for same-name disambiguation.
   $: results = (query.trim().length < 2 || query === currentAgencyName)
     ? []
     : agencies
@@ -40,6 +42,7 @@
             (STATE_NAMES[a.state] ?? "").toLowerCase().includes(q)
           );
         })
+        .sort((a, b) => (b.population ?? b.lee?.population ?? 0) - (a.population ?? a.lee?.population ?? 0))
         .slice(0, 8);
 
   // Auto-select the top result whenever the query changes so Enter "just
