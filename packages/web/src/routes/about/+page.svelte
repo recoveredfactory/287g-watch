@@ -14,7 +14,7 @@
   <h1 class="text-3xl font-black text-slate-900 sm:text-4xl">{m.about_heading()}</h1>
 
   <div class="prose-editorial mt-8">
-    <p><strong>Tracking 287(g)</strong> {m.about_intro_1_after_name()}</p>
+    <p><strong>287(g) Explorer</strong> {m.about_intro_1_after_name()}</p>
 
     <p>{m.about_intro_2()}</p>
 

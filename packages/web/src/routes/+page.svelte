@@ -196,7 +196,7 @@
     description,
     url: siteUrl,
     license: "https://creativecommons.org/licenses/by/4.0/",
-    creator: { "@type": "Organization", name: "Tracking 287(g)" },
+    creator: { "@type": "Organization", name: "287(g) Explorer" },
   })}</` + `script>`}
 </svelte:head>
 
@@ -208,7 +208,7 @@
       <p class="text-xs font-semibold uppercase tracking-widest text-slate-400 sm:text-sm">
         {m.home_hero_eyebrow()}
       </p>
-      <h1 class="mt-2 text-3xl font-black leading-tight text-slate-900 sm:mt-3 sm:text-5xl lg:text-6xl">
+      <h1 class="mt-2 text-3xl font-black leading-tight text-slate-900 sm:mt-3 sm:text-4xl lg:text-5xl">
         {m.home_hero_headline_line1()}<br class="hidden sm:block" /> {m.home_hero_headline_line2()}
       </h1>
       <p class="prose-editorial mt-4 text-base sm:mt-6 sm:text-lg">
@@ -357,7 +357,7 @@
       <!-- Filter controls — sticky once scrolled into view -->
       <div
         class="sticky z-40 -mx-4 border-b border-slate-200 bg-stone-50/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6"
-        style="top: var(--site-header-height);"
+        style="top: calc(var(--site-header-height) + var(--staging-banner-height));"
       >
         <div class="space-y-3">
           <!-- Search input — full width on mobile -->
