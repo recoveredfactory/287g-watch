@@ -20,6 +20,13 @@
 
   const bgColor = MODEL_COLORS[modelName] ?? "#e2e8f0";
   const textColor = MODEL_TEXT_COLORS[modelName] ?? "#0f172a";
+
+  const PAGE_SIZE = 25;
+  let currentPage = 1;
+  $: totalPages = Math.max(1, Math.ceil(agencies.length / PAGE_SIZE));
+  $: pageStart = (currentPage - 1) * PAGE_SIZE;
+  $: pageEnd = Math.min(pageStart + PAGE_SIZE, agencies.length);
+  $: pageAgencies = agencies.slice(pageStart, pageEnd);
 </script>
 
 <svelte:head>
@@ -31,7 +38,7 @@
   <meta property="og:url" content={canonicalUrl} />
 </svelte:head>
 
-<main id="main-content" class="mx-auto max-w-4xl px-4 py-12 sm:px-6">
+<main id="main-content" class="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
 
   <!-- Breadcrumb -->
   <nav class="text-sm text-slate-500" aria-label="Breadcrumb">
@@ -49,7 +56,7 @@
       <p class="font-sans text-xs font-bold uppercase tracking-widest" style="color: {textColor}; opacity: 0.75;">
         287(g) Agreement Type
       </p>
-      <h1 class="mt-2 font-sans text-3xl font-black leading-tight sm:text-4xl" style="color: {textColor};">
+      <h1 class="mt-2 font-sans text-2xl font-black leading-tight sm:text-3xl" style="color: {textColor};">
         {modelName}
       </h1>
     </div>
@@ -88,7 +95,7 @@
 
   <!-- Agency list -->
   <div class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-    {#each agencies as agency (agency.slug)}
+    {#each pageAgencies as agency (agency.slug)}
       <a
         href={localizeHref(`/agency/${agency.slug}`)}
         class="group rounded-lg border border-slate-200 bg-white p-4 no-underline hover:border-slate-300 hover:shadow-sm"
@@ -102,5 +109,35 @@
       </a>
     {/each}
   </div>
+
+  {#if totalPages > 1}
+    <div class="mt-6 flex items-center justify-between gap-4">
+      <button
+        type="button"
+        on:click={() => { currentPage = Math.max(1, currentPage - 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+        disabled={currentPage === 1}
+        class="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+        <span class="hidden sm:inline">Previous</span>
+      </button>
+      <p class="text-sm text-slate-500">
+        {pageStart + 1}–{pageEnd} of {intFmt.format(agencies.length)}
+      </p>
+      <button
+        type="button"
+        on:click={() => { currentPage = Math.min(totalPages, currentPage + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+        disabled={currentPage === totalPages}
+        class="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <span class="hidden sm:inline">Next</span>
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+    </div>
+  {/if}
 
 </main>

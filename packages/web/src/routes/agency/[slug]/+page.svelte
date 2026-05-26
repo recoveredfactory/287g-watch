@@ -90,7 +90,7 @@
   </div>
 </div>
 
-<main id="main-content" class="mx-auto max-w-4xl px-4 py-12 sm:px-6">
+<main id="main-content" class="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
   <!-- Breadcrumb -->
   <nav class="text-sm text-slate-500" aria-label="Breadcrumb">
     <a href={localizeHref("/")} class="no-underline hover:underline">{m.agency_breadcrumb_home()}</a>
@@ -288,7 +288,7 @@
         {#if agency.contact_website}
           <div class="flex gap-4">
             <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_contact_website()}</dt>
-            <dd><a href={agency.contact_website} target="_blank" rel="noreferrer">{agency.contact_website}</a></dd>
+            <dd class="min-w-0 break-all"><a href={agency.contact_website} target="_blank" rel="noreferrer">{agency.contact_website}</a></dd>
           </div>
         {/if}
       </dl>

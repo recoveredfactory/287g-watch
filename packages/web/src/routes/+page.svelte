@@ -333,7 +333,7 @@
 
   <!-- ── Support callout ──────────────────────────────────────────────────── -->
   <section class="border-b border-slate-200 bg-white px-4 py-5 sm:px-6">
-    <div class="mx-auto flex max-w-6xl items-center justify-between gap-4">
+    <div class="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
       <p class="text-sm text-slate-500">
         {m.home_support_prefix()} <a href="https://vsr.recoveredfactory.net/en" target="_blank" rel="noreferrer" class="font-medium text-slate-700">Recovered Factory</a>{m.home_support_suffix()}
       </p>
@@ -341,7 +341,7 @@
         href="https://vsr.recoveredfactory.net/en"
         target="_blank"
         rel="noreferrer"
-        class="shrink-0 rounded border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 no-underline hover:border-slate-400 hover:text-slate-900 hover:no-underline"
+        class="self-start rounded border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 no-underline hover:border-slate-400 hover:text-slate-900 hover:no-underline sm:shrink-0 sm:self-auto"
       >
         {m.home_support_hire_us()}
       </a>
@@ -369,7 +369,7 @@
               type="search"
               bind:value={searchQuery}
               placeholder={m.home_search_placeholder()}
-              class="w-full rounded-md border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              class="w-full rounded-md border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-base text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:text-sm"
             />
           </div>
 
@@ -377,7 +377,7 @@
           <div class="flex flex-wrap items-center gap-2">
             <select
               bind:value={selectedState}
-              class="rounded-md border border-slate-300 bg-white py-2 pl-3 pr-7 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              class="max-w-[11rem] rounded-md border border-slate-300 bg-white py-2 pl-3 pr-7 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:max-w-none"
             >
               <option value="">{m.home_search_all_states()}</option>
               {#each allStates as state}
