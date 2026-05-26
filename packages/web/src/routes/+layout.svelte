@@ -159,7 +159,7 @@
           <a href={localizeHref("/")} class="no-underline hover:text-white/70">{m.nav_map()}</a>
           <a href={localizeHref("/about")} class="no-underline hover:text-white/70">{m.nav_about()}</a>
           <a href={localizeHref("/methodology")} class="no-underline hover:text-white/70">{m.nav_methodology()}</a>
-          <div class="flex items-center gap-2 border-l border-white/20 pl-5 text-xs uppercase tracking-wider" aria-label={m.lang_toggle_aria()}>
+          <div class="ml-auto flex items-center gap-2 border-l border-white/20 pl-5 text-xs uppercase tracking-wider" aria-label={m.lang_toggle_aria()}>
             {#each locales as l, i}
               {#if i > 0}<span aria-hidden="true" class="text-white/30">·</span>{/if}
               <a
