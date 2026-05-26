@@ -29,6 +29,9 @@
   const isProdStage = stage === "prod" || stage === "production";
   const faviconHref = isProdStage ? "/favicon.svg" : "/favicon-staging.svg";
 
+  // Umami analytics: load on deployed stages (prod + staging), skip local dev.
+  const umamiEnabled = stage !== "local";
+
   $: locale = getLocale();
   $: isEs = locale === "es";
 
@@ -83,6 +86,13 @@
     <link rel="alternate" hreflang={l} href="{origin}{hrefFor(l)}" />
   {/each}
   <link rel="alternate" hreflang="x-default" href="{origin}{hrefFor('en')}" />
+  {#if umamiEnabled}
+    <script
+      defer
+      src="https://cloud.umami.is/script.js"
+      data-website-id="5e257c41-7b94-419c-8f4a-d1ce88f7d112"
+    ></script>
+  {/if}
 </svelte:head>
 
 <a
