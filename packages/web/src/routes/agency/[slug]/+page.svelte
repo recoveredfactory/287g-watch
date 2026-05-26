@@ -30,8 +30,8 @@
       addressRegion: agency.state,
       addressCountry: "US",
     },
-    ...(agency.population
-      ? { numberOfEmployees: { "@type": "QuantitativeValue", value: agency.population } }
+    ...(agency.lee?.total_pe_ct
+      ? { numberOfEmployees: { "@type": "QuantitativeValue", value: agency.lee.total_pe_ct } }
       : {}),
   });
 
