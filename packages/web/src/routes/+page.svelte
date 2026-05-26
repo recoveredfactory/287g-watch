@@ -39,6 +39,32 @@
   let mounted = false;
   let detectedState: string | null = null;
 
+  // Geo-aware participation callout. Renders once client-side geo resolves.
+  // FL gets softened phrasing because participation is mandated by SB 168 (2019)
+  // and FBI LEE jurisdiction overlap pushes raw pop coverage above 100%.
+  $: userStateCallout = (() => {
+    if (!detectedState) return null;
+    const stateName = STATE_NAMES[detectedState];
+    const meta = data.stateMeta[detectedState];
+    if (!stateName || !meta || !meta.local_le_agencies) return null;
+    const boldState = `<b>${stateName}</b>`;
+    if (meta.participating === 0) {
+      return m.home_hero_state_callout_none({ state: boldState });
+    }
+    const agencyPct = Math.round((meta.participating / meta.local_le_agencies) * 100);
+    if (detectedState === "FL") {
+      return m.home_hero_state_callout_fl({ state: boldState, agency_pct: agencyPct });
+    }
+    const popPct = meta.state_local_population > 0
+      ? Math.round((meta.population_served / meta.state_local_population) * 100)
+      : 0;
+    return m.home_hero_state_callout_standard({
+      state: boldState,
+      agency_pct: agencyPct,
+      pop_pct: popPct,
+    });
+  })();
+
   // localStorage-cached geo detection — avoids hitting /api/geo on every page load
   const GEO_KEY = "rf-geo-v1";
   const GEO_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -214,6 +240,12 @@
       <p class="prose-editorial mt-4 text-base sm:mt-6 sm:text-lg">
         <Gloss text={m.home_hero_lead()} />
       </p>
+
+      {#if userStateCallout}
+        <p class="mt-4 border-l-4 border-[#ce1483] bg-pink-50/40 px-4 py-3 text-base text-slate-700 sm:text-lg">
+          {@html userStateCallout}
+        </p>
+      {/if}
 
       {#if data.agencyCount > 0}
         <div class="mt-6 flex flex-wrap gap-6 sm:mt-8 sm:gap-8">
