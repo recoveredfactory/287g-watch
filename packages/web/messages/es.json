@@ -130,8 +130,9 @@
   "agency_contact_email": "Correo electrónico",
   "agency_contact_website": "Sitio web",
 
-  "agency_records_heading": "Registros y FOIA",
-  "agency_records_matched_intro": "MuckRock tiene una solicitud pública de registros pendiente con esta agencia sobre sus políticas de detención de ICE y 287(g):",
+  "agency_records_heading": "Profundizar",
+  "agency_records_intro": "Los datos de participación en 287(g) no nos dicen nada sobre lo que sucedió después de que se firmó el acuerdo. Para saber más, el público necesita preguntar o solicitar información formalmente. MuckRock está organizando solicitudes públicas de registros sobre el cumplimiento de inmigración en todo el país:",
+  "agency_records_matched_intro": "Ya se ha presentado una solicitud pública de registros sobre esta agencia:",
   "agency_records_status_done": "Completada",
   "agency_records_status_ack": "Esperando acuse de recibo",
   "agency_records_status_lawsuit": "En litigio",
@@ -139,9 +140,6 @@
   "agency_records_status_unknown": "Estado desconocido",
   "agency_records_completed_on": "Completada el {date}",
   "agency_records_view_on_muckrock": "Ver solicitud en MuckRock →",
-  "agency_records_dive_deeper_heading": "Profundizar",
-  "agency_records_guide_label": "Cómo seguir el rastro documental del cumplimiento local de inmigración de ICE (MuckRock)",
-  "agency_records_diy_prompt": "¿Quieres presentar tu propia solicitud de registros?",
-  "agency_records_diy_cta": "Regístrate con MuckRock →",
-  "agency_records_unmatched_intro": "Aún no tenemos constancia de una solicitud pública de registros para esta agencia. La forma más rápida de descubrir la política de cooperación con ICE de un sheriff es pedirla."
+  "agency_records_guide_label": "Cómo seguir el rastro documental del cumplimiento local de inmigración de ICE",
+  "agency_records_diy_cta": "Regístrate con MuckRock para presentar tu propia solicitud"
 }
