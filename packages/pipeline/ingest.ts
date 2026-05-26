@@ -7,12 +7,13 @@
  *   - Downloads and parses the xlsx file
  *   - Geocodes via Census Bureau county centroid Gazetteer
  *   - Samples one snapshot per week to build per-agency agreement history
+ *   - Joins FBI Law Enforcement Employees data (ORI, officer/civilian counts, population)
  *
  * Output: packages/web/static/data/dist/agency_index.json
  */
 
 import AdmZip from 'adm-zip'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import slugifyLib from 'slugify'
@@ -25,6 +26,15 @@ const GITHUB_SHEETS_API =
   'https://api.github.com/repos/appelson/Tracking_287g/contents/sheets'
 const COUNTY_GAZETTEER_URL =
   'https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2023_Gazetteer/2023_Gaz_counties_national.zip'
+
+const GH_TOKEN = process.env.GITHUB_TOKEN || process.env.GH_TOKEN
+const ghHeaders: Record<string, string> = GH_TOKEN
+  ? { Authorization: `Bearer ${GH_TOKEN}`, 'User-Agent': '287g-explorer-pipeline' }
+  : { 'User-Agent': '287g-explorer-pipeline' }
+
+async function ghFetch(url: string): Promise<Response> {
+  return fetch(url, { headers: url.startsWith('https://api.github.com') || url.startsWith('https://raw.githubusercontent.com') ? ghHeaders : {} })
+}
 
 const STATE_ABBREVS: Record<string, string> = {
   ALABAMA: 'AL', ALASKA: 'AK', ARIZONA: 'AZ', ARKANSAS: 'AR',
@@ -81,6 +91,23 @@ export interface HistoryEvent {
   removed: string[] // models that disappeared since prior sample
 }
 
+export interface LeeData {
+  pub_agency_name: string
+  agency_type_name: string
+  population: number | null
+  officer_ct: number | null
+  civilian_ct: number | null
+  total_pe_ct: number | null
+  pe_ct_per_1000: number | null
+  data_year: number
+}
+
+export interface AgreementMetadata {
+  population_policed: number | null
+  operating_budget: number | null
+  agency_type: string | null
+}
+
 interface Agency {
   slug: string
   name: string
@@ -91,13 +118,15 @@ interface Agency {
   models: string[]
   primary_model: string | null
   signed_date: string | null
-  population: null
+  population: number | null
   lat: number | null
   lng: number | null
   moa_url: string | null
-  ori: null
+  ori: string | null
   snapshot_date: string | null
   history: HistoryEvent[]
+  lee: LeeData | null
+  agreement: AgreementMetadata | null
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -192,7 +221,7 @@ function parseSnapshot(buf: Buffer): Map<string, Set<string>> {
 console.log('Loading latest sheets snapshot...')
 console.log('  Listing snapshot directories via GitHub API...')
 
-const sheetsResp = await fetch(GITHUB_SHEETS_API)
+const sheetsResp = await ghFetch(GITHUB_SHEETS_API)
 if (!sheetsResp.ok) throw new Error(`GitHub API: ${sheetsResp.status}`)
 
 const allEntries = (await sheetsResp.json()) as GHEntry[]
@@ -204,7 +233,7 @@ let latestBuf: Buffer | null = null
 let snapshotName = ''
 
 for (const dir of snapshotDirs.slice(0, 5)) {
-  const filesResp = await fetch(dir.url)
+  const filesResp = await ghFetch(dir.url)
   if (!filesResp.ok) continue
   type GHFile = { name: string; download_url: string }
   const files = (await filesResp.json()) as GHFile[]
@@ -212,7 +241,7 @@ for (const dir of snapshotDirs.slice(0, 5)) {
   if (!xlsxFile) continue
 
   console.log(`  Fetching ${xlsxFile.download_url}`)
-  const dataResp = await fetch(xlsxFile.download_url)
+  const dataResp = await ghFetch(xlsxFile.download_url)
   if (!dataResp.ok) throw new Error(`xlsx fetch: ${dataResp.status}`)
 
   latestBuf = Buffer.from(await dataResp.arrayBuffer())
@@ -263,14 +292,14 @@ for (let i = 0; i < sampledDirs.length; i += BATCH) {
         return { date, agencies: parseSnapshot(latestBuf) }
       }
 
-      const filesResp = await fetch(dir.url)
+      const filesResp = await ghFetch(dir.url)
       if (!filesResp.ok) return null
       type GHFile = { name: string; download_url: string }
       const files = (await filesResp.json()) as GHFile[]
       const xlsxFile = files.find((f) => f.name.endsWith('.xlsx'))
       if (!xlsxFile) return null
 
-      const dataResp = await fetch(xlsxFile.download_url)
+      const dataResp = await ghFetch(xlsxFile.download_url)
       if (!dataResp.ok) return null
 
       const buf = Buffer.from(await dataResp.arrayBuffer())
@@ -454,13 +483,466 @@ for (const row of grouped) {
     ori: null,
     snapshot_date: snapshotDate,
     history: buildHistory(hKey),
+    lee: null,
+    agreement: null,
   })
 }
 
-// ── 6. Write output ────────────────────────────────────────────────────────────
+// ── 5. Join FBI / upstream agency metadata ────────────────────────────────────
+
+console.log('\nJoining FBI LEE + upstream agreements.csv...')
+
+const LEE_CSV = resolve(__dirname, 'data/fbi_lee_latest.csv')
+const UPSTREAM_AGREEMENTS_URL =
+  'https://raw.githubusercontent.com/appelson/Tracking_287g/main/agreements.csv'
+
+interface LeeRow {
+  ori: string
+  data_year: number
+  pub_agency_name: string
+  state_abbr: string
+  county_name: string
+  agency_type_name: string
+  population: number | null
+  officer_ct: number | null
+  civilian_ct: number | null
+  total_pe_ct: number | null
+  pe_ct_per_1000: number | null
+}
+
+interface UpstreamEntry {
+  ori: string | null
+  population_policed: number | null
+  operating_budget: number | null
+  agency_type: string | null
+}
+
+function parseCSV(text: string): string[][] {
+  const rows: string[][] = []
+  let row: string[] = []
+  let field = ''
+  let inQuotes = false
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++ }
+        else inQuotes = false
+      } else field += c
+    } else {
+      if (c === '"') inQuotes = true
+      else if (c === ',') { row.push(field); field = '' }
+      else if (c === '\n') { row.push(field); rows.push(row); row = []; field = '' }
+      else if (c === '\r') { /* skip */ }
+      else field += c
+    }
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row) }
+  return rows
+}
+
+function numOrNull(s: string): number | null {
+  if (s == null || s === '') return null
+  const n = Number(s)
+  return Number.isFinite(n) ? n : null
+}
+
+const leeText = readFileSync(LEE_CSV, 'utf8')
+const leeRowsArr = parseCSV(leeText)
+const leeHeaders = leeRowsArr[0]
+const lc = Object.fromEntries(leeHeaders.map((h, i) => [h, i])) as Record<string, number>
+const leeRows: LeeRow[] = []
+// FBI historically codes Nebraska as "NB"; everywhere else uses USPS "NE".
+const FBI_STATE_FIXUP: Record<string, string> = { NB: 'NE' }
+for (let i = 1; i < leeRowsArr.length; i++) {
+  const r = leeRowsArr[i]
+  if (!r[lc.ori]) continue
+  const rawState = r[lc.state_abbr]
+  leeRows.push({
+    ori: r[lc.ori],
+    data_year: Number(r[lc.data_year]),
+    pub_agency_name: r[lc.pub_agency_name],
+    state_abbr: FBI_STATE_FIXUP[rawState] ?? rawState,
+    county_name: r[lc.county_name],
+    agency_type_name: r[lc.agency_type_name],
+    population: numOrNull(r[lc.population]),
+    officer_ct: numOrNull(r[lc.officer_ct]),
+    civilian_ct: numOrNull(r[lc.civilian_ct]),
+    total_pe_ct: numOrNull(r[lc.total_pe_ct]),
+    pe_ct_per_1000: numOrNull(r[lc.pe_ct_per_1000]),
+  })
+}
+console.log(`  Loaded ${leeRows.length} FBI LEE rows`)
+
+const leeByOri = new Map<string, LeeRow>()
+for (const r of leeRows) leeByOri.set(r.ori, r)
+
+// Fetch upstream curated agreements.csv (~33% coverage but ORIs are hand-vetted)
+console.log(`  Fetching ${UPSTREAM_AGREEMENTS_URL}`)
+const upResp = await ghFetch(UPSTREAM_AGREEMENTS_URL)
+const upRowsArr = upResp.ok ? parseCSV(await upResp.text()) : [[]]
+const upHeaders = upRowsArr[0]
+const uc = Object.fromEntries(upHeaders.map((h, i) => [h, i])) as Record<string, number>
+
+const STATE_FULL_TO_ABBR: Record<string, string> = Object.fromEntries(
+  Object.entries(STATE_ABBREVS).map(([full, ab]) => [full, ab]),
+)
+
+function upNorm(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/'/g, '')
+    .replace(/[^a-z0-9 ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+const upstream = new Map<string, UpstreamEntry>()
+for (let i = 1; i < upRowsArr.length; i++) {
+  const r = upRowsArr[i]
+  if (r.length < 2) continue
+  const state = STATE_FULL_TO_ABBR[(r[uc.state] ?? '').toUpperCase()]
+  const name = r[uc.agency]
+  if (!state || !name) continue
+  const k = `${state}|${upNorm(name)}`
+  if (upstream.has(k)) continue
+  const ori = r[uc.ori]
+  upstream.set(k, {
+    ori: ori && ori !== 'NA' ? ori : null,
+    population_policed: numOrNull(r[uc.population_policed]),
+    operating_budget: numOrNull(r[uc.operating_budget]),
+    agency_type: r[uc.agency_type] || null,
+  })
+}
+console.log(`  Loaded ${upstream.size} upstream agreement entries (${[...upstream.values()].filter(e => e.ori).length} with ORI)`)
+
+// FBI agency_type → bucket
+const FBI_BUCKET: Record<string, string> = {
+  'County': 'county',
+  'City': 'city',
+  'State Police': 'state_police',
+  'Other State Agency': 'state_other',
+  'Federal': 'federal',
+  'Tribal': 'tribal',
+  'University or College': 'university',
+  'Other': 'other',
+}
+
+function leeNorm(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/'/g, '')
+    .replace(/[^a-z0-9 ]+/g, ' ')
+    .replace(/\bsaint\b/g, 'st')
+    .replace(/\bdept\b/g, 'department')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+// Common city-name suffixes the FBI dataset includes but 287g often omits
+// (Sunny Isles Beach ↔ Sunny Isles, X Township ↔ X). Strip from FBI side to
+// generate alternate lookup keys.
+const FBI_CITY_TRAILS = [/\s+beach$/i, /\s+village$/i, /\s+township$/i, /\s+city$/i, /\s+borough$/i, /\s+town$/i]
+
+const leeLookup = new Map<string, LeeRow>()
+const leeLookupCollapsed = new Map<string, LeeRow>()
+for (const r of leeRows) {
+  const bucket = FBI_BUCKET[r.agency_type_name] ?? 'other'
+  const name = leeNorm(r.pub_agency_name)
+  if (!r.state_abbr || !name) continue
+  const variants = new Set([name])
+  if (bucket === 'city') {
+    for (const re of FBI_CITY_TRAILS) {
+      const stripped = name.replace(re, '').trim()
+      if (stripped) variants.add(stripped)
+    }
+  }
+  for (const v of variants) {
+    const k = `${r.state_abbr}|${bucket}|${v}`
+    const prev = leeLookup.get(k)
+    if (!prev || prev.data_year < r.data_year) leeLookup.set(k, r)
+    const ck = `${r.state_abbr}|${bucket}|${v.replace(/ /g, '')}`
+    const cprev = leeLookupCollapsed.get(ck)
+    if (!cprev || cprev.data_year < r.data_year) leeLookupCollapsed.set(ck, r)
+  }
+}
+
+const CITY_SUFFIXES = [
+  /\s+police services department$/i, /\s+public safety department$/i,
+  /\s+department of public safety$/i,
+  /\s+police department$/i, /\s+police services$/i, /\s+public safety$/i,
+  /\s+department of police$/i, /\s+marshal'?s? office$/i,
+  /\s+police$/i, /\bpd$/i,
+]
+const CITY_PREFIXES = [/^city of\s+/i, /^town of\s+/i, /^township of\s+/i, /^village of\s+/i, /^borough of\s+/i]
+const COUNTY_SUFFIXES_287 = [
+  /\s+county sheriff'?s? office$/i, /\s+county sheriff'?s? department$/i, /\s+county sheriff'?s?$/i,
+  /\s+parish sheriff'?s? office$/i, /\s+parish sheriff'?s? department$/i,
+  /\s+borough sheriff'?s? office$/i,
+  /\s+sheriff'?s? office$/i, /\s+sheriff'?s? department$/i, /\s+sheriff'?s?$/i,
+  /\s+county$/i, /\s+parish$/i,
+]
+const STATE_SUFFIXES = [/\s+department$/i, /\s+police department$/i, /\s+division$/i]
+const UNIVERSITY_SUFFIXES = [/\s+board of trustees$/i, /\s+department of public safety$/i, /\s+police department$/i]
+const UNIVERSITY_PREFIXES = [/^district board of trustees of\s+/i, /^board of trustees of\s+/i]
+
+function applyRegexes(s: string, regexes: RegExp[]): string {
+  let cur = s
+  for (const r of regexes) cur = cur.replace(r, '').trim()
+  return cur
+}
+
+function dedupeNonEmpty(arr: string[]): string[] {
+  return [...new Set(arr)].filter(Boolean)
+}
+
+function cityCandidates(name: string): string[] {
+  return dedupeNonEmpty([
+    name,
+    applyRegexes(name, [...CITY_PREFIXES, ...CITY_SUFFIXES]),
+    applyRegexes(name, CITY_SUFFIXES),
+    applyRegexes(name, CITY_PREFIXES),
+  ])
+}
+
+function countyCandidates(name: string, county: string | null): string[] {
+  const out = [applyRegexes(name, COUNTY_SUFFIXES_287)]
+  if (county) out.push(county.replace(/\s+(County|Parish|Borough|Census Area|City and Borough|Municipality)$/i, '').trim())
+  return dedupeNonEmpty(out)
+}
+
+function stateCandidates(name: string): string[] {
+  return dedupeNonEmpty([name, applyRegexes(name, STATE_SUFFIXES)])
+}
+
+function universityCandidates(name: string): string[] {
+  return dedupeNonEmpty([
+    name,
+    applyRegexes(name, [...UNIVERSITY_PREFIXES, ...UNIVERSITY_SUFFIXES]),
+    applyRegexes(name, UNIVERSITY_SUFFIXES),
+    applyRegexes(name, UNIVERSITY_PREFIXES),
+  ])
+}
+
+function findLee(state: string, buckets: string[], candidates: string[]): LeeRow | null {
+  for (const b of buckets) {
+    for (const c of candidates) {
+      const row = leeLookup.get(`${state}|${b}|${leeNorm(c)}`)
+      if (row) return row
+    }
+  }
+  // Whitespace-collapsed fallback: "la salle" ↔ "lasalle"
+  for (const b of buckets) {
+    for (const c of candidates) {
+      const row = leeLookupCollapsed.get(`${state}|${b}|${leeNorm(c).replace(/ /g, '')}`)
+      if (row) return row
+    }
+  }
+  return null
+}
+
+function matchAgency(a: Agency): LeeRow | null {
+  if (a.agency_type === 'County') {
+    const m = findLee(a.state, ['county'], countyCandidates(a.name, a.county))
+    if (m) return m
+    // Consolidated city-counties / independent cities (Jacksonville, Hopewell, etc.)
+    return findLee(a.state, ['city'], cityCandidates(a.name.replace(/\s+sheriff'?s? office$/i, '').replace(/\s+county$/i, '')))
+  }
+  if (a.agency_type === 'Municipality') {
+    const cands = cityCandidates(a.name)
+    const buckets = ['city']
+    if (/university|college/i.test(a.name)) buckets.push('university', 'other')
+    else if (/airport/i.test(a.name)) buckets.push('other')
+    const m = findLee(a.state, buckets, cands)
+    if (m) return m
+    if (/university|college/i.test(a.name)) return findLee(a.state, ['university'], universityCandidates(a.name))
+    return null
+  }
+  if (a.agency_type === 'State Agency') {
+    const cands = stateCandidates(a.name)
+    return (
+      findLee(a.state, ['state_police', 'state_other'], cands) ||
+      findLee(a.state, ['federal', 'other', 'university'], cands) ||
+      findLee(a.state, ['university'], universityCandidates(a.name))
+    )
+  }
+  return null
+}
+
+// Try upstream agreements.csv first (hand-curated ORI), then fall back to FBI name match.
+// 287g name "X County Sheriff's Office" appears in upstream as "x county sheriff" etc.
+function upstreamCandidates(name: string): string[] {
+  const n = upNorm(name)
+  return dedupeNonEmpty([
+    n,
+    n.replace(/\s+sheriffs office$/, ' sheriff').replace(/\s+sheriffs department$/, ' sheriff').replace(/\s+sheriffs$/, ' sheriff'),
+    n.replace(/\s+police department$/, ' police'),
+    n.replace(/\s+(office|department)$/, ''),
+  ])
+}
+
+function findUpstream(state: string, name: string): UpstreamEntry | null {
+  for (const c of upstreamCandidates(name)) {
+    const hit = upstream.get(`${state}|${c}`)
+    if (hit) return hit
+  }
+  return null
+}
+
+function leeToLeeData(lee: LeeRow): LeeData {
+  return {
+    pub_agency_name: lee.pub_agency_name,
+    agency_type_name: lee.agency_type_name,
+    population: lee.population,
+    officer_ct: lee.officer_ct,
+    civilian_ct: lee.civilian_ct,
+    total_pe_ct: lee.total_pe_ct,
+    pe_ct_per_1000: lee.pe_ct_per_1000,
+    data_year: lee.data_year,
+  }
+}
+
+let oriMatched = 0
+let oriFromUpstream = 0
+let oriFromHeuristic = 0
+let leeAttached = 0
+let agreementAttached = 0
+const leeYearDist = new Map<number, number>()
+
+for (const a of agencies) {
+  const up = findUpstream(a.state, a.name)
+  if (up) {
+    a.agreement = {
+      population_policed: up.population_policed,
+      operating_budget: up.operating_budget,
+      agency_type: up.agency_type,
+    }
+    agreementAttached++
+    if (up.ori) {
+      a.ori = up.ori
+      oriFromUpstream++
+    }
+    if (up.population_policed != null) a.population = up.population_policed
+  }
+
+  if (!a.ori) {
+    const lee = matchAgency(a)
+    if (lee) {
+      a.ori = lee.ori
+      oriFromHeuristic++
+    }
+  }
+
+  if (a.ori) {
+    oriMatched++
+    const lee = leeByOri.get(a.ori)
+    if (lee) {
+      a.lee = leeToLeeData(lee)
+      leeAttached++
+      leeYearDist.set(lee.data_year, (leeYearDist.get(lee.data_year) ?? 0) + 1)
+      if (a.population == null) a.population = lee.population
+    }
+  }
+}
+
+console.log(
+  `  ORI matched: ${oriMatched}/${agencies.length} (${Math.round((100 * oriMatched) / agencies.length)}%) — upstream:${oriFromUpstream}, heuristic:${oriFromHeuristic}`,
+)
+console.log(
+  `  LEE data attached: ${leeAttached}, agreement metadata attached: ${agreementAttached}`,
+)
+console.log(
+  `  LEE data by year: ` +
+    [...leeYearDist.entries()].sort((a, b) => b[0] - a[0]).map(([y, c]) => `${y}:${c}`).join(', '),
+)
+
+const oriUnmatchedByType = new Map<string, number>()
+for (const a of agencies) {
+  if (a.ori) continue
+  oriUnmatchedByType.set(a.agency_type, (oriUnmatchedByType.get(a.agency_type) ?? 0) + 1)
+}
+if (oriUnmatchedByType.size) {
+  console.log(
+    `  Unmatched by type: ` +
+      [...oriUnmatchedByType.entries()].map(([t, c]) => `${t}:${c}`).join(', '),
+  )
+}
+
+// ── 6. Per-state coverage: % of local LE agencies with a 287(g) agreement ─────
+//
+// Denominator: FBI LEE County + City agencies per state (these are the agencies
+// that could plausibly sign a 287(g) agreement). State DOCs, federal agencies,
+// universities, and tribal LE all participate too but represent a separate slice,
+// so we exclude them from this headline ratio. Drops 287g agencies we couldn't
+// ORI-match — we can't honestly count an agreement we couldn't slot against the
+// FBI roster.
+
+interface StateCoverage {
+  state: string
+  local_le_agencies: number      // FBI LEE County + City count
+  participating: number           // matched 287g agencies that are County or City
+  pct: number                     // participating / local_le_agencies
+  population_served: number       // sum of population for participating local agencies
+  state_local_population: number  // sum of FBI LEE population across all local agencies
+}
+
+const fbiLocalByState = new Map<string, number>()
+const fbiLocalPopByState = new Map<string, number>()
+for (const r of leeRows) {
+  const bucket = FBI_BUCKET[r.agency_type_name]
+  if (bucket !== 'county' && bucket !== 'city') continue
+  fbiLocalByState.set(r.state_abbr, (fbiLocalByState.get(r.state_abbr) ?? 0) + 1)
+  if (r.population) fbiLocalPopByState.set(r.state_abbr, (fbiLocalPopByState.get(r.state_abbr) ?? 0) + r.population)
+}
+
+// Use FBI LEE's jurisdictional population (sheriff = unincorporated, city = city
+// proper) so sums across the same county don't double-count. The agency-level
+// `population` field is fine for per-agency display, but uses upstream's
+// whole-county figure for sheriffs which would inflate state totals.
+const participatingByState = new Map<string, number>()
+const popServedByState = new Map<string, number>()
+for (const a of agencies) {
+  if (!a.ori) continue
+  if (a.agency_type !== 'County' && a.agency_type !== 'Municipality') continue
+  participatingByState.set(a.state, (participatingByState.get(a.state) ?? 0) + 1)
+  if (a.lee?.population) popServedByState.set(a.state, (popServedByState.get(a.state) ?? 0) + a.lee.population)
+}
+
+const stateCoverage: StateCoverage[] = []
+const allStates = new Set<string>([...fbiLocalByState.keys(), ...participatingByState.keys()])
+for (const state of allStates) {
+  const denom = fbiLocalByState.get(state) ?? 0
+  const num = participatingByState.get(state) ?? 0
+  if (denom === 0) continue
+  stateCoverage.push({
+    state,
+    local_le_agencies: denom,
+    participating: num,
+    pct: num / denom,
+    population_served: popServedByState.get(state) ?? 0,
+    state_local_population: fbiLocalPopByState.get(state) ?? 0,
+  })
+}
+stateCoverage.sort((a, b) => b.pct - a.pct)
+
+console.log('\nState 287(g) coverage of local LE (agency_count_pct | pop_served / state_local_pop):')
+for (const s of stateCoverage) {
+  const popPct = s.state_local_population > 0
+    ? ((s.population_served / s.state_local_population) * 100).toFixed(0) + '%'
+    : 'n/a'
+  console.log(
+    `  ${s.state}: ${s.participating}/${s.local_le_agencies} (${(s.pct * 100).toFixed(1)}%) | ` +
+    `pop ${s.population_served.toLocaleString()} / ${s.state_local_population.toLocaleString()} (${popPct})`,
+  )
+}
+
+// ── 7. Write output ────────────────────────────────────────────────────────────
 
 mkdirSync(OUT_DIR, { recursive: true })
 writeFileSync(resolve(OUT_DIR, 'agency_index.json'), JSON.stringify(agencies, null, 2))
+writeFileSync(resolve(OUT_DIR, 'state_meta.json'), JSON.stringify(stateCoverage, null, 2))
 
 const geocoded = agencies.filter((a) => a.lat !== null).length
 const withHistory = agencies.filter((a) => a.history.length > 0).length

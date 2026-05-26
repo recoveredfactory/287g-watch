@@ -4,6 +4,23 @@ export type HistoryEvent = {
   removed: string[];
 };
 
+export type LeeData = {
+  pub_agency_name: string;
+  agency_type_name: string;
+  population: number | null;
+  officer_ct: number | null;
+  civilian_ct: number | null;
+  total_pe_ct: number | null;
+  pe_ct_per_1000: number | null;
+  data_year: number;
+};
+
+export type AgreementMetadata = {
+  population_policed: number | null;
+  operating_budget: number | null;
+  agency_type: string | null;
+};
+
 export type Agency = {
   slug: string;
   name: string;
@@ -18,11 +35,14 @@ export type Agency = {
   lat?: number;
   lng?: number;
   moa_url?: string;
+  ori?: string | null;
   contact_address?: string;
   contact_phone?: string;
   contact_email?: string;
   contact_website?: string;
   history?: HistoryEvent[];
+  lee?: LeeData | null;
+  agreement?: AgreementMetadata | null;
 };
 
 export type PageData = {
