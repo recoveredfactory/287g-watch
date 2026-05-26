@@ -15,6 +15,8 @@ export type ModelPageData = {
   seeAlso: string[];
   agencies: Agency[];
   snapshotDate: string | null;
+  stateCount: number;
+  allModelCounts: Record<string, number>;
 };
 
 export const load = async ({ fetch, params }): Promise<ModelPageData> => {
@@ -34,6 +36,15 @@ export const load = async ({ fetch, params }): Promise<ModelPageData> => {
       .sort()
       .at(-1) ?? null;
 
+  const stateCount = new Set(agencies.map((a) => a.state)).size;
+
+  const allModelCounts: Record<string, number> = {};
+  for (const a of all) {
+    for (const m of a.models) {
+      allModelCounts[m] = (allModelCounts[m] ?? 0) + 1;
+    }
+  }
+
   const term = GLOSSARY_TERMS.find((t) => t.term === modelName);
 
   return {
@@ -43,5 +54,7 @@ export const load = async ({ fetch, params }): Promise<ModelPageData> => {
     seeAlso: term?.seeAlso ?? [],
     agencies,
     snapshotDate,
+    stateCount,
+    allModelCounts,
   };
 };

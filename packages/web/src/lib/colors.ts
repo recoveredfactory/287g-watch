@@ -17,6 +17,12 @@ export const MODEL_DARK_COLORS: Record<string, string> = {
   "Warrant Service Officer": "#2F4A22",
 };
 
+export const MODEL_ORDER: string[] = [
+  "Warrant Service Officer",
+  "Jail Enforcement Model",
+  "Task Force Model",
+];
+
 export const MODEL_SLUG: Record<string, string> = {
   "Jail Enforcement Model": "jail",
   "Task Force Model": "taskforce",

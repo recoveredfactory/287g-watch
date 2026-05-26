@@ -5,6 +5,8 @@
   import { MODEL_COLORS } from "$lib/colors";
   import { toInsetCoords } from "$lib/insetTransforms";
 
+  export let selectedStates: Set<string> = new Set();
+
   export let agencies: Array<{
     slug: string;
     name: string;
@@ -21,6 +23,32 @@
   let map: any = null;
 
   const MODEL_FALLBACK = "#94a3b8";
+  const FULL_BOUNDS: [[number, number], [number, number]] = [[-127, 21], [-65, 50]];
+
+  function fitToSelection() {
+    if (!map) return;
+    if (selectedStates.size === 0) {
+      map.fitBounds(FULL_BOUNDS, { padding: 24, duration: 500 });
+      return;
+    }
+    const points = agencies
+      .filter((a) => selectedStates.has(a.state) && a.lat != null && a.lng != null)
+      .map((a) => toInsetCoords(a.lng!, a.lat!, a.state));
+    if (points.length === 0) {
+      map.fitBounds(FULL_BOUNDS, { padding: 24, duration: 500 });
+      return;
+    }
+    let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+    for (const [lng, lat] of points) {
+      if (lng < minLng) minLng = lng;
+      if (lat < minLat) minLat = lat;
+      if (lng > maxLng) maxLng = lng;
+      if (lat > maxLat) maxLat = lat;
+    }
+    map.fitBounds([[minLng, minLat], [maxLng, maxLat]], { padding: 60, duration: 500, maxZoom: 8 });
+  }
+
+  $: selectedStates, fitToSelection();
 
   $: geojson = {
     type: "FeatureCollection",
@@ -58,7 +86,7 @@
 
     const ml = await import("maplibre-gl");
 
-    const FIT_BOUNDS: [[number, number], [number, number]] = [[-127, 21], [-65, 50]];
+    const FIT_BOUNDS = FULL_BOUNDS;
     const FIT_OPTIONS = { padding: 24, animate: false };
 
     const ro = new ResizeObserver(() => {
@@ -123,8 +151,8 @@
         type: "line",
         source: "states",
         paint: {
-          "line-color": "#b8c4cf",
-          "line-width": 0.75,
+          "line-color": "#94a3b8",
+          "line-width": 1.5,
         },
       });
 
