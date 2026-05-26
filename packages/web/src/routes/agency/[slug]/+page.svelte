@@ -10,7 +10,19 @@
 
   // Reactive destructure so navigating between agencies via the sticky search
   // (same dynamic route, same component instance) actually refreshes content.
-  $: ({ agency, agencies } = data);
+  $: ({ agency, agencies, muckrock } = data);
+
+  const MUCKROCK_SIGNUP_URL = "https://accounts.muckrock.com/accounts/signup/";
+
+  const statusLabel = (status: string): string => {
+    switch (status) {
+      case "done": return m.agency_records_status_done();
+      case "ack": return m.agency_records_status_ack();
+      case "lawsuit": return m.agency_records_status_lawsuit();
+      case "processed": return m.agency_records_status_processed();
+      default: return m.agency_records_status_unknown();
+    }
+  };
 
   const siteUrl = import.meta.env.PUBLIC_SITE_URL ?? "https://tracking287g.com";
   $: title = m.agency_meta_title({ agency_name: agency.name });
@@ -195,6 +207,60 @@
       </a>
     </section>
   {/if}
+
+  <!-- Dive deeper -->
+  <section class="mt-10">
+    <h2 class="font-serif text-xl font-bold text-slate-900">{m.agency_records_heading()}</h2>
+    <p class="mt-2 text-slate-600">{m.agency_records_intro()}</p>
+
+    {#if muckrock.requests.length > 0}
+      <div class="mt-5">
+        <p class="text-sm font-semibold text-slate-700">{m.agency_records_matched_intro()}</p>
+        <ul class="mt-3 space-y-3">
+          {#each muckrock.requests as req}
+            <li class="overflow-hidden rounded-lg border border-slate-200 shadow-sm">
+              <div class="flex items-baseline justify-between gap-4 bg-slate-100 px-4 py-2">
+                <p class="font-sans text-xs font-bold uppercase tracking-widest text-slate-700">
+                  {req.status === "done" && req.datetime_done
+                    ? m.agency_records_completed_on({ date: dateFmt(req.datetime_done) ?? "" })
+                    : statusLabel(req.status)}
+                </p>
+                <p class="text-xs text-slate-400">MuckRock #{req.foia_id}</p>
+              </div>
+              <div class="bg-white px-4 py-3">
+                <p class="text-sm italic leading-relaxed text-slate-700">“{req.title}”</p>
+                <a
+                  href={req.absolute_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  class="mt-2 inline-block text-xs font-semibold no-underline hover:underline"
+                >{m.agency_records_view_on_muckrock()}</a>
+              </div>
+            </li>
+          {/each}
+        </ul>
+      </div>
+    {/if}
+
+    <ul class="mt-5 space-y-2 text-sm">
+      <li>
+        <a
+          href={muckrock.reporter_guide.absolute_url}
+          target="_blank"
+          rel="noreferrer"
+          class="font-semibold no-underline hover:underline"
+        >{m.agency_records_guide_label()} →</a>
+      </li>
+      <li>
+        <a
+          href={MUCKROCK_SIGNUP_URL}
+          target="_blank"
+          rel="noreferrer"
+          class="font-semibold no-underline hover:underline"
+        >{m.agency_records_diy_cta()} →</a>
+      </li>
+    </ul>
+  </section>
 
   <!-- Contact -->
   <section class="mt-10">
