@@ -8,7 +8,9 @@
 
   export let data: PageData;
 
-  const { agency, agencies } = data;
+  // Reactive destructure so navigating between agencies via the sticky search
+  // (same dynamic route, same component instance) actually refreshes content.
+  $: ({ agency, agencies } = data);
 
   const siteUrl = import.meta.env.PUBLIC_SITE_URL ?? "https://tracking287g.com";
   $: title = m.agency_meta_title({ agency_name: agency.name });
