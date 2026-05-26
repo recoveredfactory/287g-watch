@@ -303,7 +303,7 @@
       <h2 class="font-serif text-xl font-bold text-slate-900">Agreement History</h2>
       <p class="mt-1 text-sm text-slate-500">Changes recorded since tracking began. Gaps between entries mean no changes were detected that week.</p>
       <ol class="mt-5 space-y-0 border-l-2 border-slate-200 pl-5">
-        {#each agency.history as event, i}
+        {#each [...agency.history].reverse() as event, i}
           <li class="relative pb-5 last:pb-0">
             <!-- Timeline dot -->
             <span
