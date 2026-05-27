@@ -66,7 +66,7 @@
   "home_search_all_states": "All states",
   "home_search_match_count": "{matched} of {total} agencies match",
   "home_search_clear_filters": "Clear filters",
-  "home_search_baseline": "{count} agencies across {states} states",
+  "home_search_baseline": "{rows} rows across {agencies} agencies in {states} states",
   "home_search_no_match": "No agencies match your search.",
   "home_search_use_detected_state": "Use my state ({state})",
   "home_search_year_signed": "Year signed",
