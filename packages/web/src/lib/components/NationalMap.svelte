@@ -44,6 +44,7 @@
     state: string;
     tint: string;
     line: string;
+    lineWidth: number;
     county: string;
     roadCasing: string;
     roadFill: string;
@@ -55,13 +56,15 @@
   };
 
   // Two picks drafted off the brand colors. Cream is the warm editorial-
-  // atlas default; dark gives the same map an analytical, presentation feel.
+  // atlas default; dark is a steely analytical mode — cool charcoal, thin
+  // slate borders, no warmth.
   const PALETTES: Record<PaletteKey, PaletteSpec> = {
     cream: {
       bg: "#f0e9d8",
       state: "#fcfaf2",
       tint: "#d8c8a8",
       line: "#b9ad8e",
+      lineWidth: 1.5,
       county: "#c8d4dc",
       roadCasing: "#a0b0bc",
       roadFill: "#eef2f5",
@@ -72,18 +75,19 @@
       textHalo: "rgba(252,250,242,0.9)",
     },
     dark: {
-      bg: "#1f1a14",
-      state: "#2a2520",
-      tint: "#4a3f2a",
-      line: "#5a4f3f",
-      county: "#3a322a",
-      roadCasing: "#5a4f3f",
-      roadFill: "#c8b89c",
-      roadMajorCasing: "#4a4035",
-      roadMajorFill: "#8a7d68",
-      roadMedium: "#544a3d",
-      text: "#e8dccc",
-      textHalo: "rgba(20,16,12,0.85)",
+      bg: "#0c1117",
+      state: "#18202a",
+      tint: "#2d3a4a",
+      line: "#7a8a9c",
+      lineWidth: 0.6,
+      county: "#1f2730",
+      roadCasing: "#2e3744",
+      roadFill: "#8090a0",
+      roadMajorCasing: "#2a3340",
+      roadMajorFill: "#586676",
+      roadMedium: "#2e3744",
+      text: "#c2cad4",
+      textHalo: "rgba(8,12,18,0.9)",
     },
   };
 
@@ -158,8 +162,10 @@
       map.setPaintProperty("state-fills", "fill-color", c.state);
     if (map.getLayer("state-patrol-tint"))
       map.setPaintProperty("state-patrol-tint", "fill-color", c.tint);
-    if (map.getLayer("state-lines"))
+    if (map.getLayer("state-lines")) {
       map.setPaintProperty("state-lines", "line-color", c.line);
+      map.setPaintProperty("state-lines", "line-width", c.lineWidth);
+    }
     if (map.getLayer("county-lines"))
       map.setPaintProperty("county-lines", "line-color", c.county);
     if (map.getLayer("highway-static-casing"))
@@ -266,7 +272,10 @@
         id: "state-lines",
         type: "line",
         source: "states",
-        paint: { "line-color": PALETTES[palette].line, "line-width": 1.5 },
+        paint: {
+          "line-color": PALETTES[palette].line,
+          "line-width": PALETTES[palette].lineWidth,
+        },
       });
 
       // County lines — appear at zoom 5+
