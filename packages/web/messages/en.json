@@ -31,7 +31,7 @@
   "home_hero_lead": "Under Section 287(g) of the Immigration and Nationality Act, local police agencies can sign agreements with ICE that authorize their officers to perform immigration enforcement. The program has expanded dramatically since 2025.",
   "home_stat_agencies": "participating agencies",
   "home_stat_states": "states",
-  "home_stat_population": "people in participating jurisdictions",
+  "home_stat_population": "residents of participating jurisdictions",
   "home_stat_agencies_footnote": "*Unique FBI identifiers; some identifiers have multiple agency names.",
 
   "home_hero_state_callout_standard": "In {state}, {agency_pct}% of agencies are participating, covering {pop_pct}% of the state population.",
@@ -103,7 +103,7 @@
   "methodology_matching_heading": "Matching agencies",
   "methodology_matching_body": "Agency names vary across sources. We normalize names and use fuzzy string matching to link records across datasets, then hand-review ambiguous matches. Each agency in our index includes a confidence score for its cross-source matches.",
   "methodology_limitations_heading": "Limitations",
-  "methodology_limitations_li_1": "Population data is from the FBI's LEE program and reflects jurisdiction size, not the population directly affected by 287(g) enforcement.",
+  "methodology_limitations_li_1": "Population data is from the FBI's LEE program and reflects each agency's jurisdictional residential population — the residents of the area the agency serves, not the people likely to encounter 287(g) enforcement. Jurisdiction size and enforcement scope diverge sharply by agency type and program model: a state highway patrol's jurisdiction is the whole state but its work looks nothing like a small-town police department's, and a county sheriff running a Jail Enforcement Model only touches people who get booked into the jail.",
   "methodology_limitations_li_2": "Some agencies have had agreements lapse and rejoin. Historical participation dates may be incomplete.",
   "methodology_limitations_li_3": "MOA PDFs are not available for all agencies. We link to the appelson archive where available.",
   "methodology_updates_heading": "Updates",
