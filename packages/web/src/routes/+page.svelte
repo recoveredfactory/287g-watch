@@ -465,12 +465,11 @@
           {cursorIdx}
         />
         <div
-          class="count-overlay pointer-events-none absolute inset-x-0 top-2 flex justify-center sm:top-auto sm:bottom-4"
+          class="count-overlay pointer-events-none absolute inset-x-0 top-2 flex flex-col items-center sm:top-auto sm:bottom-4"
           class:visible={showCountOverlay}
           aria-hidden="true"
         >
           <div class="count-card">
-            <div class="count-date">{overlayDateLabel}</div>
             <div class="count-stats">
               <div class="count-stat">
                 <div class="count-number">{intFmt.format(Math.round($displayedCount))}</div>
@@ -483,6 +482,7 @@
               </div>
             </div>
           </div>
+          <div class="count-date">{overlayDateLabel}</div>
         </div>
       {/if}
     </div>
@@ -752,33 +752,33 @@
     /* Fixed width so the box doesn't widen as the count crosses
        thousands or the population step-jumps to a wider compact label. */
     width: 13rem;
-    padding: 0.4rem 0.75rem 0.5rem;
+    padding: 0.5rem 0.75rem 0.55rem;
     border-radius: 0.55rem;
-    background: rgba(255, 255, 255, 0.85);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
+    /* Glassy — readable over the dark map, doesn't cover what's below. */
+    background: rgba(255, 255, 255, 0.55);
+    backdrop-filter: blur(12px) saturate(1.2);
+    -webkit-backdrop-filter: blur(12px) saturate(1.2);
     box-shadow:
-      0 1px 3px rgba(15, 23, 42, 0.08),
-      0 8px 22px rgba(15, 23, 42, 0.06);
+      0 1px 3px rgba(0, 0, 0, 0.15),
+      0 8px 22px rgba(0, 0, 0, 0.18);
   }
   @media (min-width: 640px) {
-    .count-card { width: 15rem; padding: 0.5rem 1rem 0.6rem; }
+    .count-card { width: 15rem; padding: 0.6rem 1rem 0.65rem; }
   }
   .count-date {
+    margin-top: 0.4rem;
     text-align: center;
     font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
     font-variant-numeric: tabular-nums;
-    font-size: 0.62rem;
+    font-size: 0.65rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.18em;
-    color: #475569;
-    padding-bottom: 0.3rem;
-    margin-bottom: 0.35rem;
-    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    letter-spacing: 0.2em;
+    color: #ffffff;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
   }
   @media (min-width: 640px) {
-    .count-date { font-size: 0.7rem; }
+    .count-date { font-size: 0.72rem; }
   }
   .count-stats {
     display: flex;

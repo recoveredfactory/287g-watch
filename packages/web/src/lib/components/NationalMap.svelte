@@ -54,11 +54,15 @@
 
   const MODEL_FALLBACK = "#94a3b8";
   const FULL_BOUNDS: [[number, number], [number, number]] = [[-127, 21], [-65, 50]];
-  // On wide desktops the container aspect can exceed the bbox aspect, which
-  // makes fitBounds size by latitude and pin the southern bound (21°) to the
-  // very bottom — clipping AK's inset (extends to ~18°). Asymmetric bottom
-  // padding gives AK breathing room without redoing the inset transform.
-  const FIT_PADDING: any = isMobile ? 6 : { top: 14, bottom: 70, left: 14, right: 14 };
+  // Asymmetric padding:
+  //   - Mobile pushes the country down (top: 110) so the top-mounted
+  //     counter overlay doesn't cover the lower-48.
+  //   - Desktop reserves bottom space (bottom: 70) so AK's inset (which
+  //     extends to ~18° below the bbox south of 21°) has room on wide
+  //     aspect ratios where fitBounds otherwise pins 21° to the edge.
+  const FIT_PADDING: any = isMobile
+    ? { top: 110, bottom: 8, left: 6, right: 6 }
+    : { top: 14, bottom: 70, left: 14, right: 14 };
 
   function fitToSelection() {
     if (!map) return;
