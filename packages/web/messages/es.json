@@ -32,6 +32,7 @@
   "home_stat_agencies": "agencias participantes",
   "home_stat_states": "estados",
   "home_stat_population": "personas en jurisdicciones participantes",
+  "home_stat_agencies_footnote": "*Identificadores FBI únicos; algunos identificadores agrupan varios nombres de agencia.",
 
   "home_hero_state_callout_standard": "En {state}, {agency_pct}% de las agencias participan, cubriendo {pop_pct}% de la población del estado.",
   "home_hero_state_callout_fl": "En {state}, {agency_pct}% de las agencias participan, lo que representa casi el 100% de cobertura poblacional.",
