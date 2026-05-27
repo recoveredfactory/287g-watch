@@ -136,8 +136,8 @@
   let detectedState: string | null = null;
 
   // Geo-aware participation callout. Renders once client-side geo resolves.
-  // FL gets softened phrasing because participation is mandated by SB 168 (2019)
-  // and FBI LEE jurisdiction overlap pushes raw pop coverage above 100%.
+  // FL gets a distinct message because SB 168 (2019) mandates 287(g)
+  // cooperation — its high coverage isn't comparable to voluntary states.
   $: userStateCallout = (() => {
     if (!detectedState) return null;
     const stateName = STATE_NAMES[detectedState];
@@ -148,12 +148,16 @@
       return m.home_hero_state_callout_none({ state: boldState });
     }
     const agencyPct = Math.round((meta.participating / meta.local_le_agencies) * 100);
-    if (detectedState === "FL") {
-      return m.home_hero_state_callout_fl({ state: boldState, agency_pct: agencyPct });
-    }
     const popPct = meta.state_local_population > 0
       ? Math.round((meta.population_served / meta.state_local_population) * 100)
       : 0;
+    if (detectedState === "FL") {
+      return m.home_hero_state_callout_fl({
+        state: boldState,
+        agency_pct: agencyPct,
+        pop_pct: popPct,
+      });
+    }
     return m.home_hero_state_callout_standard({
       state: boldState,
       agency_pct: agencyPct,

@@ -73,8 +73,10 @@ export type PageData = {
   agencyCountUnique: number;
   stateCount: number;
   populationCovered: number;
-  // Same dedupe applied to population: shared-ORI rows resolve to the same LEE
-  // population row, so summing the raw list double-counts them. See #92.
+  // Same dedupe applied to population, plus we restrict to local agencies
+  // (County + Municipality). State-level rows like state police match LEE
+  // rows that report the whole-state population, which would compound with
+  // the local pops we're already summing. See #92 and #99.
   populationCoveredUnique: number;
   snapshotDate: string | null;
   modelCounts: Record<string, number>;
@@ -97,21 +99,36 @@ export const load = async ({ fetch }): Promise<PageData> => {
 
     const states = new Set(agencies.map((a) => a.state));
     const populationCovered = agencies.reduce((sum, a) => sum + (a.population ?? 0), 0);
-    const popByOri = new Map<string, number>();
-    let nullOriRows = 0;
-    let nullOriPop = 0;
+
+    // Dedupe by ORI for the headline count. Every participating agency
+    // counts — including state-level ones — so don't filter by agency_type
+    // here. See #92.
+    const oriSeen = new Set<string>();
+    let nullOriCount = 0;
     for (const a of agencies) {
+      if (a.ori) oriSeen.add(a.ori);
+      else nullOriCount++;
+    }
+    const agencyCountUnique = oriSeen.size + nullOriCount;
+
+    // Population sum is *local* only — state-level agencies report their
+    // whole-state population via LEE (Idaho State Police = ~95% of Idaho,
+    // etc.) which would compound with the county/city pops below. Same ORI
+    // dedupe as above for the county sheriff + corrections double-counts.
+    // See #99.
+    const localPopByOri = new Map<string, number>();
+    let nullOriLocalPop = 0;
+    for (const a of agencies) {
+      if (a.agency_type !== "County" && a.agency_type !== "Municipality") continue;
       const pop = a.population ?? 0;
       if (a.ori) {
-        if (!popByOri.has(a.ori)) popByOri.set(a.ori, pop);
+        if (!localPopByOri.has(a.ori)) localPopByOri.set(a.ori, pop);
       } else {
-        nullOriRows++;
-        nullOriPop += pop;
+        nullOriLocalPop += pop;
       }
     }
-    const agencyCountUnique = popByOri.size + nullOriRows;
     const populationCoveredUnique =
-      [...popByOri.values()].reduce((s, p) => s + p, 0) + nullOriPop;
+      [...localPopByOri.values()].reduce((s, p) => s + p, 0) + nullOriLocalPop;
     const snapshotDate = agencies
       .map((a) => (a as any).snapshot_date as string | undefined)
       .filter(Boolean)

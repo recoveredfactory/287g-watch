@@ -926,11 +926,22 @@ for (const r of leeRows) {
 // proper) so sums across the same county don't double-count. The agency-level
 // `population` field is fine for per-agency display, but uses upstream's
 // whole-county figure for sheriffs which would inflate state totals.
+//
+// Dedupe by ORI before tallying participation: several counties (Miami-Dade,
+// Orange, Pasco, Volusia, …) appear in the ICE sheet as both a sheriff's
+// office and a corrections department under the same FBI ORI. Both rows
+// match the same LEE record, so summing them double-counts the agency *and*
+// the people it serves. See #99.
 const participatingByState = new Map<string, number>()
 const popServedByState = new Map<string, number>()
+const seenOriByState = new Map<string, Set<string>>()
 for (const a of agencies) {
   if (!a.ori) continue
   if (a.agency_type !== 'County' && a.agency_type !== 'Municipality') continue
+  const seen = seenOriByState.get(a.state) ?? new Set<string>()
+  if (seen.has(a.ori)) continue
+  seen.add(a.ori)
+  seenOriByState.set(a.state, seen)
   participatingByState.set(a.state, (participatingByState.get(a.state) ?? 0) + 1)
   if (a.lee?.population) popServedByState.set(a.state, (popServedByState.get(a.state) ?? 0) + a.lee.population)
 }
