@@ -20,7 +20,15 @@
     lat?: number | null;
     lng?: number | null;
     lee?: { officer_ct?: number | null } | null;
+    signed_date?: string | null;
   }> = [];
+
+  // Continuous timeline cursor for the smooth playback animation. The value is
+  // a fractional month index relative to Jan 2025 (idx 0 = Jan 2025, idx 16 =
+  // May 2026, etc.). Agencies signed before Jan 2025 carry a large negative
+  // signed_idx so they're shown unconditionally. null = no timeline; the layer
+  // renders all dots at full opacity.
+  export let cursorIdx: number | null = null;
 
   // States with a literal state police / highway patrol participating —
   // rendered with a subtle warm tint so readers can see at a glance which
@@ -63,7 +71,7 @@
       state: "#f5f4f5",
       tint: "#efe7dc",
       line: "#94a3b8",
-      lineWidth: 1.5,
+      lineWidth: isMobile ? 0.9 : 1.5,
       county: "#c8d4dc",
       roadCasing: "#a0b0bc",
       roadFill: "#eef2f5",
@@ -119,6 +127,20 @@
 
   $: selectedStates, fitToSelection();
 
+  // Fractional month index from Jan 2025 (idx 0). Pre-2025 signings (and any
+  // missing dates) get a deeply negative value so they're always past the
+  // fade-in window — i.e. shown unconditionally as the baseline.
+  const BASELINE_IDX = -10000;
+  const TIMELINE_EPOCH_YEAR = 2025;
+  const signedDateIdx = (d?: string | null): number => {
+    if (!d || d.length < 10) return BASELINE_IDX;
+    const y = Number(d.slice(0, 4));
+    const m = Number(d.slice(5, 7));
+    const day = Number(d.slice(8, 10));
+    if (y < TIMELINE_EPOCH_YEAR) return BASELINE_IDX;
+    return (y - TIMELINE_EPOCH_YEAR) * 12 + (m - 1) + (day - 1) / 31;
+  };
+
   $: geojson = {
     type: "FeatureCollection",
     features: agencies
@@ -138,6 +160,7 @@
             population: a.population ?? 0,
             officer_ct: a.lee?.officer_ct ?? 0,
             color: MODEL_COLORS[a.primary_model ?? ""] ?? MODEL_FALLBACK,
+            signed_idx: signedDateIdx(a.signed_date),
           },
         };
       }),
@@ -150,6 +173,50 @@
   };
 
   $: if (map) updateSource();
+
+  // Smooth timeline transitions. Each dot fades + pops in over FADE_WINDOW
+  // months after its signing date, so a continuous cursor reveals the data as
+  // a gentle wave rather than monthly cliff. Baseline dots (negative
+  // signed_idx) clamp to full opacity at every cursor.
+  const FADE_WINDOW = 0.35;
+  const BASE_OPACITY = 0.7;
+  const fadeMultiplier = (cursor: number) => [
+    "interpolate", ["linear"],
+    ["-", cursor, ["get", "signed_idx"]],
+    -0.001, 0,
+    0, 0,
+    FADE_WINDOW, 1,
+  ];
+  const opacityWithFade = (cursor: number) => [
+    "*", BASE_OPACITY, fadeMultiplier(cursor),
+  ];
+
+  // MapLibre rule: ["zoom"] can only appear as the direct input of a top-level
+  // interpolate/step, never nested. So instead of wrapping the existing radius
+  // expression in ["*", fade, ...], we keep `interpolate(linear, [zoom], ...)`
+  // at the top and multiply fade INTO each per-zoom stop's output.
+  let radiusStops: Array<[number, any]> = [];
+  const baseRadiusExpression = (): any => {
+    if (!radiusStops.length) return 1;
+    return ["interpolate", ["linear"], ["zoom"], ...radiusStops.flat()];
+  };
+  const radiusWithFade = (cursor: number): any => {
+    if (!radiusStops.length) return 1;
+    const fm = fadeMultiplier(cursor);
+    const flat: any[] = [];
+    for (const [z, r] of radiusStops) flat.push(z, ["*", fm, r]);
+    return ["interpolate", ["linear"], ["zoom"], ...flat];
+  };
+
+  $: if (map && map.getLayer && map.getLayer("agencies")) {
+    if (cursorIdx == null) {
+      map.setPaintProperty("agencies", "circle-opacity", BASE_OPACITY);
+      map.setPaintProperty("agencies", "circle-radius", baseRadiusExpression());
+    } else {
+      map.setPaintProperty("agencies", "circle-opacity", opacityWithFade(cursorIdx));
+      map.setPaintProperty("agencies", "circle-radius", radiusWithFade(cursorIdx));
+    }
+  }
 
   // Re-paint when the user toggles the palette via the selector. Covers
   // every layer that has a palette-driven color so the switch updates
@@ -513,6 +580,19 @@
         0, low * SCALE,
         sizeDomainMax, high * SCALE,
       ];
+      // Captured so the timeline cursor's paint updates can rebuild the radius
+      // interpolation each frame with the fade multiplier applied per-stop.
+      radiusStops = [
+        [3, radius(0.8, 7)],
+        [6, radius(2.2, 12)],
+        [10, radius(4, 20)],
+      ];
+      const initialRadius = cursorIdx == null
+        ? baseRadiusExpression()
+        : radiusWithFade(cursorIdx);
+      const initialOpacity = cursorIdx == null
+        ? BASE_OPACITY
+        : opacityWithFade(cursorIdx);
       map.addLayer({
         id: "agencies",
         type: "circle",
@@ -526,13 +606,8 @@
           "circle-stroke-width": 0.6,
           "circle-stroke-color": PALETTES[palette].bg,
           "circle-stroke-opacity": 1,
-          "circle-radius": [
-            "interpolate", ["linear"], ["zoom"],
-            3, radius(0.8, 7),
-            6, radius(2.2, 12),
-            10, radius(4, 20),
-          ],
-          "circle-opacity": 0.7,
+          "circle-radius": initialRadius,
+          "circle-opacity": initialOpacity,
         },
       });
 
@@ -544,11 +619,19 @@
         className: "map-popup",
       });
 
+      const isFeatureVisible = (p: any): boolean => {
+        if (cursorIdx == null) return true;
+        const idx = Number(p.signed_idx);
+        if (!Number.isFinite(idx)) return true;
+        return idx <= cursorIdx;
+      };
+
       map.on("mouseenter", "agencies", (e: any) => {
         if (!e.features?.length) return;
-        map.getCanvas().style.cursor = "pointer";
         const f = e.features[0];
         const p = f.properties;
+        if (!isFeatureVisible(p)) return;
+        map.getCanvas().style.cursor = "pointer";
         const coords = f.geometry.coordinates.slice();
         const modelBadges = p.models
           ? p.models.split(", ").map((model: string) => {
@@ -575,6 +658,7 @@
 
       map.on("click", "agencies", (e: any) => {
         if (!e.features?.length) return;
+        if (!isFeatureVisible(e.features[0].properties)) return;
         const slug = e.features[0].properties.slug;
         if (slug) goto(`/agency/${slug}`);
       });

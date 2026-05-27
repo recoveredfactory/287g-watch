@@ -3,6 +3,7 @@
   import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_DARK_COLORS, MODEL_SHORT, MODEL_SLUG, MODEL_ORDER } from "$lib/colors";
   import { STATE_NAMES } from "$lib/states";
   import NationalMap from "$lib/components/NationalMap.svelte";
+  import MapTimelineScrubber from "$lib/components/MapTimelineScrubber.svelte";
   import { browser } from "$app/environment";
   import { onMount } from "svelte";
   import { localizeHref } from "$lib/paraglide/runtime";
@@ -28,6 +29,35 @@
     slate: "#efe7dc",
     dark:  "#2d3a4a",
   };
+
+  // ── Timeline cursor (experimental, #76) ────────────────────────────────────
+  // Continuous fractional-month index relative to Jan 2025. The map fades and
+  // pops each dot in as the cursor passes its signing date; pre-2025 signings
+  // are pinned as a baseline. See caveat in MapTimelineScrubber.svelte.
+  const TIMELINE_EPOCH_YEAR = 2025;
+  const BASELINE_IDX = -10000;
+  const signedIdx = (d: string | null | undefined): number => {
+    if (!d || d.length < 10) return BASELINE_IDX;
+    const y = Number(d.slice(0, 4));
+    const m = Number(d.slice(5, 7));
+    const day = Number(d.slice(8, 10));
+    if (y < TIMELINE_EPOCH_YEAR) return BASELINE_IDX;
+    return (y - TIMELINE_EPOCH_YEAR) * 12 + (m - 1) + (day - 1) / 31;
+  };
+  $: signedIndices = data.agencies.map((a) => signedIdx(a.signed_date));
+  const today = new Date();
+  const todayIdx =
+    (today.getUTCFullYear() - TIMELINE_EPOCH_YEAR) * 12 +
+    today.getUTCMonth() +
+    (today.getUTCDate() - 1) / 31;
+  const minIdx = 0;
+  $: maxIdx = Math.max(
+    todayIdx,
+    ...signedIndices.filter((i) => i > BASELINE_IDX),
+  ) + 0.5;
+  let cursorIdx = NaN;
+  $: if (Number.isNaN(cursorIdx) && Number.isFinite(maxIdx)) cursorIdx = maxIdx;
+  $: countAtCursor = signedIndices.filter((i) => i <= cursorIdx).length;
 
   // ── Search + filter ────────────────────────────────────────────────────────
   let searchQuery = "";
@@ -394,9 +424,17 @@
           {selectedStates}
           statePatrolStates={Object.values(data.stateMeta).filter((s) => s.has_state_patrol).map((s) => s.state)}
           palette={$mapPalette}
+          {cursorIdx}
         />
       {/if}
     </div>
+    {#if data.agencies.length > 0 && signedIndices.length > 0 && Number.isFinite(maxIdx)}
+      <div class="bg-white">
+        <div class="mx-auto max-w-6xl">
+          <MapTimelineScrubber {minIdx} {maxIdx} labelMaxIdx={todayIdx} bind:cursorIdx {countAtCursor} />
+        </div>
+      </div>
+    {/if}
   </section>
 
   <!-- ── Support callout ──────────────────────────────────────────────────── -->
