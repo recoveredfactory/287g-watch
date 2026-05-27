@@ -47,10 +47,6 @@
   "home_map_empty_title": "No data loaded",
   "home_map_empty_subtitle": "Run the pipeline to generate agency data.",
 
-  "home_support_prefix": "This project is made possible by",
-  "home_support_suffix": ", a data journalism studio.",
-  "home_support_hire_us": "Hire us",
-
   "home_models_heading": "The three agreement types",
   "home_models_subhead": "The three 287(g) program models grant different scopes of authority to local officers.",
   "home_models_glossary_link": "See the glossary",
