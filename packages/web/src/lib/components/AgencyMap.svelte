@@ -204,16 +204,14 @@
           source: "context-agencies",
           paint: {
             "circle-color": ["get", "color"],
+            "circle-stroke-width": 0,
             "circle-radius": [
               "interpolate", ["linear"], ["zoom"],
-              4, ["interpolate", ["linear"], sqrtOfficers, 0, 1.2 * SCALE, 18, 4.5 * SCALE],
-              7, ["interpolate", ["linear"], sqrtOfficers, 0, 1.8 * SCALE, 18, 6.5 * SCALE],
-              10, ["interpolate", ["linear"], sqrtOfficers, 0, 2.5 * SCALE, 18, 9 * SCALE],
+              4, ["interpolate", ["linear"], sqrtOfficers, 0, 1.2 * SCALE, 18, 5 * SCALE],
+              7, ["interpolate", ["linear"], sqrtOfficers, 0, 2.2 * SCALE, 18, 8 * SCALE],
+              10, ["interpolate", ["linear"], sqrtOfficers, 0, 3.5 * SCALE, 18, 12 * SCALE],
             ],
-            "circle-opacity": 0.55,
-            "circle-stroke-width": 0.5,
-            "circle-stroke-color": "#ffffff",
-            "circle-stroke-opacity": 0.6,
+            "circle-opacity": 0.6,
           },
         });
       }

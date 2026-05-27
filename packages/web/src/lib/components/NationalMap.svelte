@@ -475,16 +475,18 @@
         source: "agencies",
         paint: {
           "circle-color": ["get", "color"],
+          // No stroke — the white outline was reading as a halo, especially
+          // in the dark palette. Without it, dots feel like saturated marks
+          // rather than outlined targets; overlap is handled by partial
+          // opacity instead.
+          "circle-stroke-width": 0,
           "circle-radius": [
             "interpolate", ["linear"], ["zoom"],
             3, radius(0.8, 7),
-            6, radius(1.8, 11),
-            10, radius(3, 16),
+            6, radius(2.2, 12),
+            10, radius(4, 20),
           ],
-          "circle-stroke-width": 0.8,
-          "circle-stroke-color": "#ffffff",
-          "circle-stroke-opacity": 0.85,
-          "circle-opacity": 0.78,
+          "circle-opacity": 0.82,
         },
       });
 
