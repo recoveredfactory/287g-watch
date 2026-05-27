@@ -130,7 +130,7 @@
       aria-autocomplete="list"
       aria-controls="agency-search-list"
       aria-activedescendant={activeIdx >= 0 ? `agency-opt-${activeIdx}` : undefined}
-      class="w-full rounded-md border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-base text-slate-900 placeholder:text-slate-400 focus:border-[#ce1483] focus:outline-none focus:ring-1 focus:ring-[#ce1483] sm:py-2 sm:text-sm"
+      class="w-full rounded-md border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-base text-slate-900 placeholder:text-slate-400 focus:border-[#BE6079] focus:outline-none focus:ring-1 focus:ring-[#BE6079] sm:py-2 sm:text-sm"
       on:keydown={onKeydown}
       on:focus={onFocus}
       on:blur={onBlur}
@@ -153,7 +153,7 @@
           class="cursor-pointer px-4 py-3 text-sm sm:py-2.5"
           class:bg-slate-50={i === activeIdx}
           class:border-l-2={agency.slug === currentSlug}
-          style={agency.slug === currentSlug ? "border-color: #ce1483;" : ""}
+          style={agency.slug === currentSlug ? "border-color: #BE6079;" : ""}
           on:click={() => select(agency)}
           on:mouseenter={() => (activeIdx = i)}
         >

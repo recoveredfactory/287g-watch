@@ -131,6 +131,9 @@ interface Agency {
   moa_url: string | null
   ori: string | null
   snapshot_date: string | null
+  contact_website: string | null
+  contact_phone: string | null
+  contact_address: string | null
   history: HistoryEvent[]
   lee: LeeData | null
   agreement: AgreementMetadata | null
@@ -491,6 +494,9 @@ for (const row of grouped) {
     moa_url: row.moa_url,
     ori: null,
     snapshot_date: snapshotDate,
+    contact_website: null,
+    contact_phone: null,
+    contact_address: null,
     history: buildHistory(hKey),
     lee: null,
     agreement: null,
@@ -880,7 +886,43 @@ if (oriUnmatchedByType.size) {
   )
 }
 
-// ── 6. Per-state coverage: % of local LE agencies with a 287(g) agreement ─────
+// ── 6. CSLLEA 2018 — fill missing operating budgets via ORI ──────────────────
+
+const CSLLEA_TSV = resolve(__dirname, 'data/csllea_2018.tsv')
+if (existsSync(CSLLEA_TSV)) {
+  const cslleaText = readFileSync(CSLLEA_TSV, 'utf8')
+  const cslleaRows = parseCSV(cslleaText.replace(/\t/g, ','))
+  const cslleaHeaders = cslleaRows[0]
+  const cc = Object.fromEntries(cslleaHeaders.map((h, i) => [h.trim(), i])) as Record<string, number>
+  const cslleaByOri = new Map<string, string[]>()
+  for (let i = 1; i < cslleaRows.length; i++) {
+    const r = cslleaRows[i]
+    const ori = r[cc.ORI9]?.trim()
+    if (ori) cslleaByOri.set(ori, r)
+  }
+
+  const MISSING_CODES = new Set(['-9', '-8', '-7', '0', ''])
+  let budgetFilled = 0
+  for (const a of agencies) {
+    if (!a.ori) continue
+    const existing = a.agreement?.operating_budget
+    if (existing != null) continue
+    const row = cslleaByOri.get(a.ori)
+    if (!row) continue
+    const raw = row[cc.OPBUDGET]?.trim()
+    if (!raw || MISSING_CODES.has(raw)) continue
+    const budget = Number(raw)
+    if (!Number.isFinite(budget) || budget <= 0) continue
+    if (!a.agreement) a.agreement = { population_policed: null, operating_budget: null, agency_type: null }
+    a.agreement.operating_budget = budget
+    budgetFilled++
+  }
+  console.log(`\nCSLLEA 2018: filled operating budget for ${budgetFilled} agencies`)
+} else {
+  console.log('\nCSLLEA 2018 not found — skipping budget fill')
+}
+
+// ── 7. Per-state coverage: % of local LE agencies with a 287(g) agreement ─────
 //
 // Denominator: FBI LEE County + City agencies per state (these are the agencies
 // that could plausibly sign a 287(g) agreement). State DOCs, federal agencies,
@@ -962,7 +1004,98 @@ for (const s of stateCoverage) {
   )
 }
 
-// ── 7. Merge editorial notes overlay ──────────────────────────────────────────
+// ── 7. Join MOA index ─────────────────────────────────────────────────────────
+
+const MOA_INDEX_PATH = resolve(__dirname, 'data/moa_index.json')
+if (existsSync(MOA_INDEX_PATH)) {
+  const moaIndex = JSON.parse(readFileSync(MOA_INDEX_PATH, 'utf8')) as Record<string, string>
+
+  function moaNorm(s: string): string {
+    return s
+      .toLowerCase()
+      .replace(/'/g, '')
+      .replace(/[^a-z0-9 ]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  }
+
+  let moaAttached = 0
+  for (const a of agencies) {
+    if (a.moa_url) continue
+    const key = `${a.state}|${moaNorm(a.name)}`
+    const url = moaIndex[key]
+    if (url) {
+      a.moa_url = url
+      moaAttached++
+    }
+  }
+  console.log(`\nMOA index: attached ${moaAttached}/${agencies.length} agencies`)
+} else {
+  console.log('\nMOA index not found — run `pnpm build:moa-index` to generate it')
+}
+
+// ── 8. Wikidata website enrichment ────────────────────────────────────────────
+
+const WIKIDATA_PATH = resolve(__dirname, 'data/wikidata_websites.json')
+if (existsSync(WIKIDATA_PATH)) {
+  const wikidata = JSON.parse(readFileSync(WIKIDATA_PATH, 'utf8')) as Record<string, string>
+
+  function wdNorm(s: string): string {
+    return s
+      .toLowerCase()
+      .replace(/'/g, '')
+      .replace(/[^a-z0-9 ]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  }
+
+  let wdAttached = 0
+  for (const a of agencies) {
+    if (a.contact_website) continue
+    const key = `${a.state}|${wdNorm(a.name)}`
+    const url = wikidata[key]
+    if (url) {
+      a.contact_website = url
+      wdAttached++
+    }
+  }
+  console.log(`\nWikidata: attached website for ${wdAttached} agencies`)
+}
+
+// ── 8b. Scraped contacts (Playwright) ─────────────────────────────────────────
+
+const SCRAPED_PATH = resolve(__dirname, 'data/scraped_contacts.json')
+if (existsSync(SCRAPED_PATH)) {
+  const scraped = JSON.parse(readFileSync(SCRAPED_PATH, 'utf8')) as Record<
+    string,
+    { website?: string; phone?: string; address?: string }
+  >
+
+  function scrapedNorm(s: string): string {
+    return s
+      .toLowerCase()
+      .replace(/'/g, '')
+      .replace(/[^a-z0-9 ]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  }
+
+  let scrapedAttached = 0
+  for (const a of agencies) {
+    const key = `${a.state}|${scrapedNorm(a.name)}`
+    const entry = scraped[key]
+    if (!entry) continue
+    if (!a.contact_website && entry.website) { a.contact_website = entry.website; scrapedAttached++ }
+    else if (entry.website || entry.phone || entry.address) scrapedAttached++
+    if (!a.contact_phone && entry.phone) a.contact_phone = entry.phone
+    if (!a.contact_address && entry.address) a.contact_address = entry.address
+  }
+  console.log(`\nScraped contacts: enriched ${scrapedAttached} agencies`)
+} else {
+  console.log('\nScraped contacts not found — run `pnpm scrape:contacts` to generate')
+}
+
+// ── 9. Merge editorial notes overlay ──────────────────────────────────────────
 
 const NOTES_PATH = resolve(__dirname, 'data/agency_notes.yaml')
 if (existsSync(NOTES_PATH)) {
@@ -995,7 +1128,7 @@ if (existsSync(NOTES_PATH)) {
   console.log(`\nNotes overlay: attached ${attached} agencies${orphaned ? `, ${orphaned} orphaned` : ''}`)
 }
 
-// ── 8. Write output ────────────────────────────────────────────────────────────
+// ── 10. Write output ───────────────────────────────────────────────────────────
 
 mkdirSync(OUT_DIR, { recursive: true })
 writeFileSync(resolve(OUT_DIR, 'agency_index.json'), JSON.stringify(agencies, null, 2))
