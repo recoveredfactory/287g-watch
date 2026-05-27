@@ -241,6 +241,17 @@
       map.scrollZoom.disable();
       map.on("zoomend", syncScrollZoom);
 
+      // Same idea for drag-pan: at the locked floor the map already fills the
+      // inset frame, so dragging would just slide the country into empty
+      // space. Re-enable once the user zooms in.
+      const syncDragPan = () => {
+        if (!map) return;
+        if (map.getZoom() > map.getMinZoom() + 0.05) map.dragPan.enable();
+        else map.dragPan.disable();
+      };
+      map.dragPan.disable();
+      map.on("zoomend", syncDragPan);
+
       const statesGj = await fetch("/us-inset.geojson").then((r) => r.json());
       map.addSource("states", { type: "geojson", data: statesGj });
 
