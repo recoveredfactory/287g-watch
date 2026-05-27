@@ -35,7 +35,7 @@
   "home_stat_agencies_footnote": "*Unique FBI identifiers; some identifiers have multiple agency names.",
 
   "home_hero_state_callout_standard": "In {state}, {agency_pct}% of agencies are participating, covering {pop_pct}% of the state population.",
-  "home_hero_state_callout_fl": "In {state}, {agency_pct}% of agencies are participating, representing nearly 100% population coverage.",
+  "home_hero_state_callout_fl": "In {state}, {agency_pct}% of agencies are participating, covering {pop_pct}% of the state population. Florida mandates 287(g) cooperation under SB 168 (2019).",
   "home_hero_state_callout_none": "No agencies in {state} currently participate in 287(g).",
 
 

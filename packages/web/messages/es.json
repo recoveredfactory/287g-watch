@@ -35,7 +35,7 @@
   "home_stat_agencies_footnote": "*Identificadores FBI únicos; algunos identificadores agrupan varios nombres de agencia.",
 
   "home_hero_state_callout_standard": "En {state}, {agency_pct}% de las agencias participan, cubriendo {pop_pct}% de la población del estado.",
-  "home_hero_state_callout_fl": "En {state}, {agency_pct}% de las agencias participan, lo que representa casi el 100% de cobertura poblacional.",
+  "home_hero_state_callout_fl": "En {state}, {agency_pct}% de las agencias participan, cubriendo {pop_pct}% de la población del estado. Florida exige la cooperación 287(g) bajo SB 168 (2019).",
   "home_hero_state_callout_none": "Ninguna agencia en {state} participa actualmente en 287(g).",
 
 
