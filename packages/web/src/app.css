@@ -94,7 +94,11 @@
   }
 
   .prose-editorial a {
-    @apply decoration-1;
+    @apply text-slate-900 decoration-1 underline decoration-slate-400 underline-offset-2;
+  }
+
+  .prose-editorial a:hover {
+    @apply decoration-slate-700;
   }
 
   .prose-editorial ul,
