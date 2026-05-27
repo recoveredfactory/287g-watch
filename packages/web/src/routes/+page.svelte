@@ -11,7 +11,7 @@
 
   export let data: PageData;
 
-  const siteUrl = import.meta.env.PUBLIC_SITE_URL ?? "https://tracking287g.com";
+  const siteUrl = import.meta.env.PUBLIC_SITE_URL ?? "https://287g.recoveredfactory.net";
   const title = m.home_meta_title();
   $: description = data.agencyCount > 0
     ? m.home_meta_description_with_count({ count: intFmt.format(data.agencyCount) })
