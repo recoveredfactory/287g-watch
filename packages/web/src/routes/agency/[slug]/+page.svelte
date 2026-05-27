@@ -219,8 +219,9 @@
     {#if agency.lee?.population != null}
       <div>
         <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_population()}</dt>
-        <dd class="mt-1 text-xl font-bold text-slate-900">{intFmt.format(agency.lee.population)}</dd>
-        <dd class="mt-0.5 text-xs text-slate-400">FBI LEE {agency.lee.data_year}</dd>
+        <dd class="mt-1 text-xl font-bold text-slate-900">
+          {intFmt.format(agency.lee.population)}<span class="ml-1.5 text-xs font-normal text-slate-400">FBI {agency.lee.data_year}</span>
+        </dd>
       </div>
     {:else if agency.population != null}
       <div>
@@ -231,29 +232,33 @@
     {#if agency.lee?.officer_ct != null}
       <div>
         <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_officers()}</dt>
-        <dd class="mt-1 text-xl font-bold text-slate-900">{intFmt.format(agency.lee.officer_ct)}</dd>
-        <dd class="mt-0.5 text-xs text-slate-400">FBI LEE {agency.lee.data_year}</dd>
+        <dd class="mt-1 text-xl font-bold text-slate-900">
+          {intFmt.format(agency.lee.officer_ct)}<span class="ml-1.5 text-xs font-normal text-slate-400">FBI {agency.lee.data_year}</span>
+        </dd>
       </div>
     {/if}
     {#if agency.lee?.civilian_ct != null}
       <div>
         <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_civilian_staff()}</dt>
-        <dd class="mt-1 text-xl font-bold text-slate-900">{intFmt.format(agency.lee.civilian_ct)}</dd>
-        <dd class="mt-0.5 text-xs text-slate-400">FBI LEE {agency.lee.data_year}</dd>
+        <dd class="mt-1 text-xl font-bold text-slate-900">
+          {intFmt.format(agency.lee.civilian_ct)}<span class="ml-1.5 text-xs font-normal text-slate-400">FBI {agency.lee.data_year}</span>
+        </dd>
       </div>
     {/if}
     {#if agency.lee?.total_pe_ct != null}
       <div>
         <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_total_personnel()}</dt>
-        <dd class="mt-1 text-xl font-bold text-slate-900">{intFmt.format(agency.lee.total_pe_ct)}</dd>
-        <dd class="mt-0.5 text-xs text-slate-400">FBI LEE {agency.lee.data_year}</dd>
+        <dd class="mt-1 text-xl font-bold text-slate-900">
+          {intFmt.format(agency.lee.total_pe_ct)}<span class="ml-1.5 text-xs font-normal text-slate-400">FBI {agency.lee.data_year}</span>
+        </dd>
       </div>
     {/if}
     {#if agency.lee?.pe_ct_per_1000 != null}
       <div>
         <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">Officers per 1,000</dt>
-        <dd class="mt-1 text-xl font-bold text-slate-900">{agency.lee.pe_ct_per_1000.toFixed(2)}</dd>
-        <dd class="mt-0.5 text-xs text-slate-400">FBI LEE {agency.lee.data_year}</dd>
+        <dd class="mt-1 text-xl font-bold text-slate-900">
+          {agency.lee.pe_ct_per_1000.toFixed(2)}<span class="ml-1.5 text-xs font-normal text-slate-400">FBI {agency.lee.data_year}</span>
+        </dd>
       </div>
     {/if}
     {#if agency.agreement?.population_policed != null}
