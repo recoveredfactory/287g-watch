@@ -229,36 +229,31 @@
       map.fitBounds(FIT_BOUNDS, FIT_OPTIONS);
       map.setMinZoom(map.getZoom());
 
-      // Don't hijack page scroll at the locked-floor zoom — at full zoom-out
-      // there's nothing to scroll-zoom into anyway, and a wheel over the map
-      // would otherwise eat the page scroll. Re-enables once the user has
-      // zoomed in via the +/− buttons, double-click, or pinch.
-      const syncScrollZoom = () => {
-        if (!map) return;
-        if (map.getZoom() > map.getMinZoom() + 0.05) map.scrollZoom.enable();
-        else map.scrollZoom.disable();
-      };
-      map.scrollZoom.disable();
-      map.on("zoomend", syncScrollZoom);
-
-      // Same idea for drag-pan: at the locked floor the map already fills the
-      // inset frame, so dragging would just slide the country into empty
-      // space. But once a user has actively zoomed in even once, they're
-      // driving the map — keep dragPan enabled from then on so returning to
-      // floor doesn't strand them with a dead gesture. The original bug only
-      // hits fresh viewers; this still protects them.
+      // Scroll-zoom + drag-pan at the locked floor are both off by default:
+      //   - scroll over the map at full zoom-out would eat the page scroll
+      //     for no benefit (nothing to zoom into)
+      //   - drag at the same zoom slides the country into empty space
+      //
+      // Once the user has actively zoomed in even once (via +/− buttons,
+      // double-click, or pinch), they're driving the map — keep both
+      // controls enabled from then on, even on returns to floor, so we
+      // don't strand them with dead gestures. The original concerns only
+      // hit fresh viewers; the latch still protects them.
       let everZoomedIn = false;
-      const syncDragPan = () => {
+      const syncMapControls = () => {
         if (!map) return;
         if (map.getZoom() > map.getMinZoom() + 0.05) {
           everZoomedIn = true;
+          map.scrollZoom.enable();
           map.dragPan.enable();
         } else if (!everZoomedIn) {
+          map.scrollZoom.disable();
           map.dragPan.disable();
         }
       };
+      map.scrollZoom.disable();
       map.dragPan.disable();
-      map.on("zoomend", syncDragPan);
+      map.on("zoomend", syncMapControls);
 
       const statesGj = await fetch("/us-inset.geojson").then((r) => r.json());
       map.addSource("states", { type: "geojson", data: statesGj });
