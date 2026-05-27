@@ -60,13 +60,22 @@ const redirectBarePathToLocale: Handle = async ({ event, resolve }) => {
   });
 };
 
-const paraglideHandle: Handle = ({ event, resolve }) =>
-  paraglideMiddleware(event.request, ({ request, locale }) => {
+const paraglideHandle: Handle = ({ event, resolve }) => {
+  const path = event.url.pathname;
+  // Paraglide redirects browser document requests for unrecognized URLs to the
+  // locale-prefixed form. That breaks /sitemap.xml and /robots.txt, which must
+  // resolve at the root. Same goes for the static asset and API prefixes —
+  // they never need locale handling.
+  if (STATIC_FILES.includes(path) || STATIC_PREFIXES.some((p) => path.startsWith(p))) {
+    return resolve(event);
+  }
+  return paraglideMiddleware(event.request, ({ request, locale }) => {
     event.request = request;
     return resolve(event, {
       transformPageChunk: ({ html }) =>
         html.replace("%paraglide.lang%", locale).replace("%paraglide.dir%", getTextDirection(locale)),
     });
   });
+};
 
 export const handle: Handle = sequence(redirectBarePathToLocale, paraglideHandle);

@@ -27,7 +27,7 @@
     }
   };
 
-  const siteUrl = import.meta.env.PUBLIC_SITE_URL ?? "https://tracking287g.com";
+  const siteUrl = import.meta.env.PUBLIC_SITE_URL ?? "https://287g.recoveredfactory.net";
   $: title = m.agency_meta_title({ agency_name: agency.name });
   $: description = [
     m.agency_meta_description_base({ agency_name: agency.name, state: agency.state }),
@@ -38,18 +38,29 @@
 
   $: jsonLd = JSON.stringify({
     "@context": "https://schema.org",
-    "@type": "GovernmentOrganization",
-    name: agency.name,
-    url: canonicalUrl,
-    address: {
-      "@type": "PostalAddress",
-      addressLocality: agency.city,
-      addressRegion: agency.state,
-      addressCountry: "US",
-    },
-    ...(agency.lee?.total_pe_ct
-      ? { numberOfEmployees: { "@type": "QuantitativeValue", value: agency.lee.total_pe_ct } }
-      : {}),
+    "@graph": [
+      {
+        "@type": "GovernmentOrganization",
+        name: agency.name,
+        url: canonicalUrl,
+        address: {
+          "@type": "PostalAddress",
+          addressLocality: agency.city,
+          addressRegion: agency.state,
+          addressCountry: "US",
+        },
+        ...(agency.lee?.total_pe_ct
+          ? { numberOfEmployees: { "@type": "QuantitativeValue", value: agency.lee.total_pe_ct } }
+          : {}),
+      },
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: m.agency_breadcrumb_home(), item: siteUrl + localizeHref("/") },
+          { "@type": "ListItem", position: 2, name: agency.name, item: canonicalUrl },
+        ],
+      },
+    ],
   });
 
   const intFmt = new Intl.NumberFormat();
