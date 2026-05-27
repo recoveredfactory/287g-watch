@@ -41,7 +41,9 @@
 
   "home_map_heading": "287(g) agencies, by program model",
   "home_map_subhead": "Click any dot to view the agency's agreement and records.",
-  "home_map_caveat": "This map shows agencies currently participating in 287(g). An agency that stopped its participation last month does not show on this map.",
+  "home_map_size_note": "Dot size scales with sworn officer count (FBI LEE).",
+  "home_map_size_legend_label": "officers",
+  "home_map_caveat": "This map shows agencies currently participating in 287(g). For example, an agency that stopped its participation last month does not show on this map.",
   "home_map_empty_title": "No data loaded",
   "home_map_empty_subtitle": "Run the pipeline to generate agency data.",
 
