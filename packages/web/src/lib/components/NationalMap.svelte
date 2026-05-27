@@ -36,8 +36,8 @@
     browser && import.meta.env.DEV
       ? ((new URLSearchParams(window.location.search).get("scale") as any) ?? "officers")
       : "officers";
-  export type PaletteKey = "cream" | "dark";
-  export let palette: PaletteKey = "cream";
+  import type { PaletteKey } from "$lib/map/paletteStore";
+  export let palette: PaletteKey = "slate";
 
   type PaletteSpec = {
     bg: string;
@@ -55,15 +55,14 @@
     textHalo: string;
   };
 
-  // Two picks drafted off the brand colors. Cream is the warm editorial-
-  // atlas default; dark is a steely analytical mode — cool charcoal, thin
-  // slate borders, no warmth.
+  // Two picks: slate is the cool blue-grey default (matches the agency
+  // page baseline); dark is a steely analytical mode for presentation.
   const PALETTES: Record<PaletteKey, PaletteSpec> = {
-    cream: {
-      bg: "#f0e9d8",
-      state: "#fcfaf2",
-      tint: "#d8c8a8",
-      line: "#b9ad8e",
+    slate: {
+      bg: "#dde4eb",
+      state: "#f5f4f5",
+      tint: "#efe7dc",
+      line: "#94a3b8",
       lineWidth: 1.5,
       county: "#c8d4dc",
       roadCasing: "#a0b0bc",
@@ -71,8 +70,8 @@
       roadMajorCasing: "#b0bcc7",
       roadMajorFill: "#f3f5f7",
       roadMedium: "#cdd6dc",
-      text: "#3d3424",
-      textHalo: "rgba(252,250,242,0.9)",
+      text: "#334155",
+      textHalo: "rgba(255,255,255,0.85)",
     },
     dark: {
       bg: "#0c1117",

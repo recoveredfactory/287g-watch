@@ -6,17 +6,19 @@
 import { writable } from "svelte/store";
 import { browser } from "$app/environment";
 
-export type PaletteKey = "cream" | "dark";
+export type PaletteKey = "slate" | "dark";
 
 const STORAGE_KEY = "rf-map-palette";
 
 function readInitial(): PaletteKey {
-  if (!browser) return "cream";
+  if (!browser) return "slate";
   try {
     const v = localStorage.getItem(STORAGE_KEY);
-    if (v === "cream" || v === "dark") return v;
+    if (v === "slate" || v === "dark") return v;
+    // Migrate the earlier short-lived "cream" key to "slate"
+    if (v === "cream") return "slate";
   } catch {}
-  return "cream";
+  return "slate";
 }
 
 export const mapPalette = writable<PaletteKey>(readInitial());

@@ -22,13 +22,10 @@
 
   // ── Map palette (user-toggleable, persisted across pages) ──────────────────
   import { mapPalette, type PaletteKey } from "$lib/map/paletteStore";
-  const PALETTE_OPTIONS: Array<{ key: PaletteKey; label: string }> = [
-    { key: "cream", label: "Cream" },
-    { key: "dark",  label: "Dark" },
-  ];
+  import MapPaletteSelector from "$lib/components/MapPaletteSelector.svelte";
   // Tint swatch in the legend should match whatever palette is active
   const PALETTE_TINT: Record<PaletteKey, string> = {
-    cream: "#d8c8a8",
+    slate: "#efe7dc",
     dark:  "#2d3a4a",
   };
 
@@ -371,19 +368,7 @@
 
       <!-- Palette selector + zoom-to-detected-state shortcut -->
       <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-500">
-        <div class="flex items-center gap-2">
-          <span class="hidden sm:inline">Map tone:</span>
-          <div class="inline-flex rounded-md border border-slate-300 bg-white p-0.5 shadow-sm">
-            {#each PALETTE_OPTIONS as opt}
-              <button
-                type="button"
-                class="rounded px-2.5 py-1 text-xs font-medium transition-colors {$mapPalette === opt.key ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'}"
-                on:click={() => mapPalette.set(opt.key)}
-                aria-pressed={$mapPalette === opt.key}
-              >{opt.label}</button>
-            {/each}
-          </div>
-        </div>
+        <MapPaletteSelector />
         {#if detectedState && STATE_NAMES[detectedState] && data.stateMeta[detectedState]?.participating > 0 && !(selectedStates.size === 1 && selectedStates.has(detectedState))}
           <button
             type="button"

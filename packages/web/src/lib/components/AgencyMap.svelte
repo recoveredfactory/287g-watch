@@ -29,7 +29,7 @@
     haloFill: string;
   };
   const AGENCY_PALETTES: Record<PaletteKey, AgencyPalette> = {
-    cream: {
+    slate: {
       bg: "#dde4eb",
       stateBg: "#eef0f2",
       stateHighlight: "#fafaf8",
@@ -98,9 +98,9 @@
       lat != null && lng != null ? toInsetCoords(lng, lat, state) : null;
     // Read the persisted palette on mount; we'll also subscribe below so
     // a toggle from another tab/page applies live.
-    let p: AgencyPalette = AGENCY_PALETTES.cream;
+    let p: AgencyPalette = AGENCY_PALETTES.slate;
     unsubscribePalette = mapPalette.subscribe((v) => {
-      p = AGENCY_PALETTES[v] ?? AGENCY_PALETTES.cream;
+      p = AGENCY_PALETTES[v] ?? AGENCY_PALETTES.slate;
       // After the map is created and styled, re-paint the changed layers.
       if (map && map.isStyleLoaded()) repaintPalette();
     });
