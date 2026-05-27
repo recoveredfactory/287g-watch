@@ -1,8 +1,12 @@
 <script lang="ts">
   import { localizeHref } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
+  import Gloss from "$lib/components/Gloss.svelte";
   $: title = m.about_meta_title();
   $: description = m.about_meta_description();
+  // Page-wide first-mention tracker: gloss the first time each term appears
+  // anywhere on the page, not once per paragraph.
+  const seen = new Set<string>();
 </script>
 
 <svelte:head>
@@ -14,17 +18,17 @@
   <h1 class="text-2xl font-black text-slate-900 sm:text-4xl">{m.about_heading()}</h1>
 
   <div class="prose-editorial mt-6 sm:mt-8">
-    <p><strong>287(g) Watch</strong> {m.about_intro_1_after_name()}</p>
+    <p><strong>287(g) Watch</strong> <Gloss text={m.about_intro_1_after_name()} {seen} /></p>
 
-    <p>{m.about_intro_2()}</p>
+    <p><Gloss text={m.about_intro_2()} {seen} /></p>
 
     <h2 class="mt-8 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.about_why_heading()}</h2>
 
-    <p>{m.about_why_1()}</p>
+    <p><Gloss text={m.about_why_1()} {seen} /></p>
 
     <h2 class="mt-8 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.about_involve_heading()}</h2>
 
-    <p>{m.about_involve_lead()}</p>
+    <p><Gloss text={m.about_involve_lead()} {seen} /></p>
 
     <ul>
       <li>

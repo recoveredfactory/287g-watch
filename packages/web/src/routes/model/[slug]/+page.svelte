@@ -2,6 +2,8 @@
   import type { ModelPageData } from "./+page.server";
   import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_DARK_COLORS, MODEL_SLUG } from "$lib/colors";
   import { localizeHref } from "$lib/paraglide/runtime";
+  import Gloss from "$lib/components/Gloss.svelte";
+  import { termSlug, TERMS_MAP } from "$lib/glossary/terms";
   import {
     PROGRAM_FINDINGS,
     DETAINER_NOTE,
@@ -29,6 +31,14 @@
 
   const content = MODEL_RICH_CONTENT[modelName];
 
+  // Backlink to the glossary entry for this model, if one exists. Seeds the
+  // page-wide first-mention tracker with the model's own term so the model
+  // name in body copy doesn't dot-underline back to a page the reader is
+  // already on.
+  const glossaryEntryHref = TERMS_MAP.has(modelName.toLowerCase())
+    ? `/glossary#term-${termSlug(modelName)}`
+    : null;
+  const seen = new Set<string>([modelName.toLowerCase()]);
 </script>
 
 <svelte:head>
@@ -59,6 +69,12 @@
       {intFmt.format(agencies.length)} participating agencies
       {#if dateFmt}<span class="italic">· as of {dateFmt}</span>{/if}
     </p>
+    {#if glossaryEntryHref}
+      <a
+        href={localizeHref(glossaryEntryHref)}
+        class="mt-2 inline-block text-xs font-semibold text-slate-500 underline underline-offset-2 hover:text-slate-900"
+      >See in glossary →</a>
+    {/if}
   </div>
 
   {#if content}
@@ -67,13 +83,13 @@
       <h2 class="font-serif text-xl font-bold text-slate-900">Overview</h2>
       <div class="mt-3 max-w-2xl space-y-3">
         {#each content.overviewParas as para}
-          <p class="leading-relaxed text-slate-700">{para}</p>
+          <p class="leading-relaxed text-slate-700"><Gloss text={para} {seen} /></p>
         {/each}
       </div>
 
       {#if content.keyDistinction}
         <p class="mt-4 max-w-2xl rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-relaxed text-slate-600">
-          <strong class="font-semibold text-slate-800">Key distinction:</strong> {content.keyDistinction}
+          <strong class="font-semibold text-slate-800">Key distinction:</strong> <Gloss text={content.keyDistinction} {seen} />
         </p>
       {/if}
 
@@ -83,7 +99,7 @@
           {#each content.officerCan as item}
             <li class="flex items-start gap-2 text-sm text-slate-700">
               <span class="mt-0.5 shrink-0 font-bold" style="color: {bgColor};">→</span>
-              {item}
+              <Gloss text={item} {seen} />
             </li>
           {/each}
         </ul>
@@ -93,7 +109,7 @@
     <!-- Training -->
     <section class="mt-8 border-t border-slate-200 pt-8">
       <h2 class="font-serif text-xl font-bold text-slate-900">Training requirements</h2>
-      <p class="mt-2 max-w-2xl leading-relaxed text-slate-700">{content.trainingText}</p>
+      <p class="mt-2 max-w-2xl leading-relaxed text-slate-700"><Gloss text={content.trainingText} {seen} /></p>
     </section>
 
     <!-- Background (JEM only — includes dynamic "as of" line) -->
@@ -102,7 +118,7 @@
         <h2 class="font-serif text-xl font-bold text-slate-900">Background</h2>
         <div class="mt-3 max-w-2xl space-y-3">
           {#each content.backgroundParas as para}
-            <p class="leading-relaxed text-slate-700">{para}</p>
+            <p class="leading-relaxed text-slate-700"><Gloss text={para} {seen} /></p>
           {/each}
           {#if dateFmt}
             <p class="leading-relaxed text-slate-700">
