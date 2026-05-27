@@ -6,6 +6,8 @@
   import MapTimelineScrubber from "$lib/components/MapTimelineScrubber.svelte";
   import { browser } from "$app/environment";
   import { onMount } from "svelte";
+  import { tweened } from "svelte/motion";
+  import { cubicOut } from "svelte/easing";
   import { localizeHref } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
   import Gloss from "$lib/components/Gloss.svelte";
@@ -20,6 +22,10 @@
 
   const intFmt = new Intl.NumberFormat();
   const popFmt = new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 });
+  // Overlay-only: round to the nearest million. The tweened value updates
+  // many times per second; one-decimal precision makes the trailing digit
+  // flicker. Whole-million steps still feel like a counter ticking up.
+  const popFmtOverlay = new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 0 });
 
   // ── Map palette (user-toggleable, persisted across pages) ──────────────────
   import { mapPalette } from "$lib/map/paletteStore";
@@ -40,6 +46,7 @@
     return (y - TIMELINE_EPOCH_YEAR) * 12 + (m - 1) + (day - 1) / 31;
   };
   $: signedIndices = data.agencies.map((a) => signedIdx(a.signed_date));
+  $: agencyPops = data.agencies.map((a) => a.population ?? 0);
   const today = new Date();
   const todayIdx =
     (today.getUTCFullYear() - TIMELINE_EPOCH_YEAR) * 12 +
@@ -53,6 +60,39 @@
   let cursorIdx = NaN;
   $: if (Number.isNaN(cursorIdx) && Number.isFinite(maxIdx)) cursorIdx = maxIdx;
   $: countAtCursor = signedIndices.filter((i) => i <= cursorIdx).length;
+  $: popAtCursor = signedIndices.reduce(
+    (sum, idx, i) => (idx <= cursorIdx ? sum + agencyPops[i] : sum),
+    0,
+  );
+
+  // Big number overlay on the map. Visible while the scrubber is playing or
+  // while the cursor is held away from "today" so the user always sees the
+  // live count change. Smooth tween catches up with easing — gives the digits
+  // that "ticking up" feel without per-keystroke jank.
+  let timelinePlaying = false;
+  const displayedCount = tweened(0, { duration: 280, easing: cubicOut });
+  const displayedPop = tweened(0, { duration: 280, easing: cubicOut });
+  $: displayedCount.set(countAtCursor);
+  $: displayedPop.set(popAtCursor);
+
+  // Linger logic: when playback ends (or the user releases at the end), keep
+  // the overlay visible for 2s so the final tally has presence before it fades.
+  const LINGER_MS = 2000;
+  let lingerActive = false;
+  let lingerTimer: ReturnType<typeof setTimeout> | null = null;
+  let wasTimelinePlaying = false;
+  $: if (wasTimelinePlaying !== timelinePlaying) {
+    if (wasTimelinePlaying && !timelinePlaying) {
+      lingerActive = true;
+      if (lingerTimer) clearTimeout(lingerTimer);
+      lingerTimer = setTimeout(() => { lingerActive = false; }, LINGER_MS);
+    }
+    wasTimelinePlaying = timelinePlaying;
+  }
+  $: showCountOverlay =
+    timelinePlaying ||
+    lingerActive ||
+    (Number.isFinite(maxIdx) && cursorIdx < maxIdx - 0.05);
 
   // ── Search + filter ────────────────────────────────────────────────────────
   let searchQuery = "";
@@ -416,12 +456,30 @@
           palette={$mapPalette}
           {cursorIdx}
         />
+        <div
+          class="count-overlay pointer-events-none absolute inset-x-0 top-2 flex justify-center sm:top-4"
+          class:visible={showCountOverlay}
+          class:playing={timelinePlaying}
+          aria-hidden="true"
+        >
+          <div class="count-card">
+            <div class="count-stat">
+              <div class="count-number">{intFmt.format(Math.round($displayedCount))}</div>
+              <div class="count-label">agencies</div>
+            </div>
+            <div class="count-divider" aria-hidden="true"></div>
+            <div class="count-stat">
+              <div class="count-number">{popFmtOverlay.format(Math.max(0, $displayedPop))}</div>
+              <div class="count-label">Pop. covered</div>
+            </div>
+          </div>
+        </div>
       {/if}
     </div>
     {#if data.agencies.length > 0 && signedIndices.length > 0 && Number.isFinite(maxIdx)}
       <div class="bg-white">
         <div class="mx-auto max-w-6xl">
-          <MapTimelineScrubber {minIdx} {maxIdx} labelMaxIdx={todayIdx} bind:cursorIdx {countAtCursor} />
+          <MapTimelineScrubber {minIdx} {maxIdx} labelMaxIdx={todayIdx} bind:cursorIdx bind:playing={timelinePlaying} {countAtCursor} />
         </div>
       </div>
     {/if}
@@ -663,3 +721,76 @@
   </section>
 
 </main>
+
+<style>
+  /* Big-number overlay on the map during timeline playback. Sits over the
+     empty space below the inset territories. Fades in/out gently; the inner
+     card gets a soft scale-pop while the timeline is actively playing. */
+  .count-overlay {
+    opacity: 0;
+    transition: opacity 380ms ease-out;
+    transform: translateZ(0);
+  }
+  .count-overlay.visible {
+    opacity: 1;
+  }
+  .count-card {
+    display: inline-flex;
+    align-items: stretch;
+    gap: 0.9rem;
+    padding: 0.45rem 1rem;
+    border-radius: 0.55rem;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    box-shadow:
+      0 1px 3px rgba(15, 23, 42, 0.08),
+      0 8px 22px rgba(15, 23, 42, 0.06);
+    transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    will-change: transform;
+  }
+  @media (min-width: 640px) {
+    .count-card { padding: 0.55rem 1.4rem; gap: 1.25rem; }
+  }
+  .count-overlay.playing .count-card {
+    animation: count-breathe 1.6s ease-in-out infinite;
+  }
+  @keyframes count-breathe {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.025); }
+  }
+  .count-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .count-divider {
+    width: 1px;
+    background: rgba(15, 23, 42, 0.12);
+    align-self: stretch;
+  }
+  .count-number {
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+    font-weight: 800;
+    font-size: 1.4rem;
+    line-height: 1;
+    color: #0f172a;
+    letter-spacing: -0.02em;
+  }
+  @media (min-width: 640px) {
+    .count-number { font-size: 2rem; }
+  }
+  .count-label {
+    margin-top: 0.25rem;
+    font-size: 0.58rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: #64748b;
+  }
+  @media (min-width: 640px) {
+    .count-label { font-size: 0.66rem; }
+  }
+</style>
