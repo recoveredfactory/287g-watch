@@ -3,6 +3,7 @@
   import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_DARK_COLORS, MODEL_SHORT, MODEL_SLUG, MODEL_ORDER } from "$lib/colors";
   import { STATE_NAMES } from "$lib/states";
   import NationalMap from "$lib/components/NationalMap.svelte";
+  import MapTimelineScrubber from "$lib/components/MapTimelineScrubber.svelte";
   import { browser } from "$app/environment";
   import { onMount } from "svelte";
   import { localizeHref } from "$lib/paraglide/runtime";
@@ -19,6 +20,39 @@
 
   const intFmt = new Intl.NumberFormat();
   const popFmt = new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 });
+
+  // ── Map palette (user-toggleable, persisted across pages) ──────────────────
+  import { mapPalette } from "$lib/map/paletteStore";
+  import MapPaletteSelector from "$lib/components/MapPaletteSelector.svelte";
+
+  // ── Timeline cursor (experimental, #76) ────────────────────────────────────
+  // Continuous fractional-month index relative to Jan 2025. The map fades and
+  // pops each dot in as the cursor passes its signing date; pre-2025 signings
+  // are pinned as a baseline. See caveat in MapTimelineScrubber.svelte.
+  const TIMELINE_EPOCH_YEAR = 2025;
+  const BASELINE_IDX = -10000;
+  const signedIdx = (d: string | null | undefined): number => {
+    if (!d || d.length < 10) return BASELINE_IDX;
+    const y = Number(d.slice(0, 4));
+    const m = Number(d.slice(5, 7));
+    const day = Number(d.slice(8, 10));
+    if (y < TIMELINE_EPOCH_YEAR) return BASELINE_IDX;
+    return (y - TIMELINE_EPOCH_YEAR) * 12 + (m - 1) + (day - 1) / 31;
+  };
+  $: signedIndices = data.agencies.map((a) => signedIdx(a.signed_date));
+  const today = new Date();
+  const todayIdx =
+    (today.getUTCFullYear() - TIMELINE_EPOCH_YEAR) * 12 +
+    today.getUTCMonth() +
+    (today.getUTCDate() - 1) / 31;
+  const minIdx = 0;
+  $: maxIdx = Math.max(
+    todayIdx,
+    ...signedIndices.filter((i) => i > BASELINE_IDX),
+  ) + 0.5;
+  let cursorIdx = NaN;
+  $: if (Number.isNaN(cursorIdx) && Number.isFinite(maxIdx)) cursorIdx = maxIdx;
+  $: countAtCursor = signedIndices.filter((i) => i <= cursorIdx).length;
 
   // ── Search + filter ────────────────────────────────────────────────────────
   let searchQuery = "";
@@ -327,8 +361,8 @@
   </section>
 
   <!-- ── Map ──────────────────────────────────────────────────────────────── -->
-  <section class="border-b border-slate-200 bg-stone-50 px-4 py-8 sm:px-6 sm:py-10">
-    <div class="mx-auto max-w-6xl">
+  <section class="border-b border-slate-200 bg-stone-50 pt-8 sm:pt-10">
+    <div class="mx-auto max-w-6xl px-4 sm:px-6">
       <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
         <div>
           <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">
@@ -339,7 +373,7 @@
           </p>
         </div>
         <!-- Legend -->
-        <div class="flex flex-wrap gap-x-4 gap-y-2 sm:gap-x-6">
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-2 sm:gap-x-6">
           {#each MODEL_ORDER as full}
             {@const short = MODEL_SHORT[full]}
             <span class="flex items-center gap-1.5 text-xs text-slate-600 sm:text-sm">
@@ -353,20 +387,44 @@
         </div>
       </div>
 
-      <!-- Map: shorter on mobile, taller on desktop -->
-      <div class="relative mt-4 h-[320px] overflow-hidden rounded-lg border border-slate-200 shadow-sm sm:h-[500px] lg:h-[600px]">
-        {#if data.agencies.length === 0}
-          <div class="flex h-full items-center justify-center bg-slate-100 text-slate-500">
-            <div class="px-6 text-center">
-              <p class="font-medium text-slate-700">{m.home_map_empty_title()}</p>
-              <p class="mt-1 text-sm">{m.home_map_empty_subtitle()}</p>
-            </div>
-          </div>
-        {:else}
-          <NationalMap agencies={data.agencies} {selectedStates} />
+      <!-- Palette selector + zoom-to-detected-state shortcut -->
+      <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-500">
+        <MapPaletteSelector />
+        {#if detectedState && STATE_NAMES[detectedState] && data.stateMeta[detectedState]?.participating > 0 && !(selectedStates.size === 1 && selectedStates.has(detectedState))}
+          <button
+            type="button"
+            on:click={() => (selectedStates = new Set([detectedState]))}
+            class="text-xs text-slate-500 underline-offset-2 hover:text-slate-900 hover:underline"
+          >Zoom to {STATE_NAMES[detectedState]} →</button>
         {/if}
       </div>
     </div>
+
+    <!-- Map: full-bleed so the country breaks the column and reads at scale -->
+    <div class="relative mt-4 h-[360px] overflow-hidden border-y border-slate-200 shadow-sm sm:h-[560px] lg:h-[680px]">
+      {#if data.agencies.length === 0}
+        <div class="flex h-full items-center justify-center bg-slate-100 text-slate-500">
+          <div class="px-6 text-center">
+            <p class="font-medium text-slate-700">{m.home_map_empty_title()}</p>
+            <p class="mt-1 text-sm">{m.home_map_empty_subtitle()}</p>
+          </div>
+        </div>
+      {:else}
+        <NationalMap
+          agencies={data.agencies}
+          {selectedStates}
+          palette={$mapPalette}
+          {cursorIdx}
+        />
+      {/if}
+    </div>
+    {#if data.agencies.length > 0 && signedIndices.length > 0 && Number.isFinite(maxIdx)}
+      <div class="bg-white">
+        <div class="mx-auto max-w-6xl">
+          <MapTimelineScrubber {minIdx} {maxIdx} labelMaxIdx={todayIdx} bind:cursorIdx {countAtCursor} />
+        </div>
+      </div>
+    {/if}
   </section>
 
   <!-- ── Support callout ──────────────────────────────────────────────────── -->

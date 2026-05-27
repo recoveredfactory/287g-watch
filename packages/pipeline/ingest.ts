@@ -896,6 +896,15 @@ interface StateCoverage {
   pct: number                     // participating / local_le_agencies
   population_served: number       // sum of population for participating local agencies
   state_local_population: number  // sum of FBI LEE population across all local agencies
+  has_state_patrol: boolean       // a literal state police / highway patrol is participating
+}
+
+// Narrow match: only literal state-level traffic/patrol enforcement, not other
+// state agencies (corrections, wildlife, AG offices, etc.).
+const STATE_PATROL_RE = /state police|highway patrol|state patrol|state troopers/i
+const statePatrolByState = new Map<string, boolean>()
+for (const a of agencies) {
+  if (STATE_PATROL_RE.test(a.name)) statePatrolByState.set(a.state, true)
 }
 
 const fbiLocalByState = new Map<string, number>()
@@ -933,8 +942,13 @@ for (const state of allStates) {
     pct: num / denom,
     population_served: popServedByState.get(state) ?? 0,
     state_local_population: fbiLocalPopByState.get(state) ?? 0,
+    has_state_patrol: statePatrolByState.get(state) ?? false,
   })
 }
+
+const flaggedStates = stateCoverage.filter((s) => s.has_state_patrol).map((s) => s.state).sort()
+console.log(`\nStates with literal state police / highway patrol participating (${flaggedStates.length}):`)
+console.log(`  ${flaggedStates.join(', ')}`)
 stateCoverage.sort((a, b) => b.pct - a.pct)
 
 console.log('\nState 287(g) coverage of local LE (agency_count_pct | pop_served / state_local_pop):')
