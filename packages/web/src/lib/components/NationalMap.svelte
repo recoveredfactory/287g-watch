@@ -61,7 +61,7 @@
   //     extends to ~18° below the bbox south of 21°) has room on wide
   //     aspect ratios where fitBounds otherwise pins 21° to the edge.
   const FIT_PADDING: any = isMobile
-    ? { top: 110, bottom: 8, left: 6, right: 6 }
+    ? { top: 80, bottom: 8, left: 6, right: 6 }
     : { top: 14, bottom: 70, left: 14, right: 14 };
 
   function fitToSelection() {

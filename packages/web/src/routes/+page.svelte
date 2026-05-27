@@ -754,13 +754,12 @@
     width: 13rem;
     padding: 0.5rem 0.75rem 0.55rem;
     border-radius: 0.55rem;
-    /* Glassy — readable over the dark map, doesn't cover what's below. */
-    background: rgba(255, 255, 255, 0.55);
-    backdrop-filter: blur(12px) saturate(1.2);
-    -webkit-backdrop-filter: blur(12px) saturate(1.2);
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
     box-shadow:
-      0 1px 3px rgba(0, 0, 0, 0.15),
-      0 8px 22px rgba(0, 0, 0, 0.18);
+      0 1px 3px rgba(15, 23, 42, 0.08),
+      0 8px 22px rgba(15, 23, 42, 0.10);
   }
   @media (min-width: 640px) {
     .count-card { width: 15rem; padding: 0.6rem 1rem 0.65rem; }
@@ -820,6 +819,7 @@
     letter-spacing: 0.14em;
     color: #64748b;
     text-align: center;
+    white-space: nowrap;
   }
   @media (min-width: 640px) {
     .count-label { font-size: 0.62rem; }
