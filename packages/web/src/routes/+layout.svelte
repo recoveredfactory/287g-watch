@@ -327,7 +327,7 @@
     role="complementary"
     aria-label="Support Recovered Factory"
   >
-    <div class="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-4">
+    <div class="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-2">
       <p class="text-sm font-semibold text-white">{bannerHook}</p>
       <p class="text-sm text-white/80 sm:truncate">
         {bannerFollow}
