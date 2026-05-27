@@ -16,8 +16,8 @@
 
   const siteUrl = import.meta.env.PUBLIC_SITE_URL ?? "https://287g.recoveredfactory.net";
   const title = m.home_meta_title();
-  $: description = data.agencyCount > 0
-    ? m.home_meta_description_with_count({ count: intFmt.format(data.agencyCount) })
+  $: description = data.agencyCountUnique > 0
+    ? m.home_meta_description_with_count({ count: intFmt.format(data.agencyCountUnique) })
     : m.home_meta_description_no_data();
 
   const intFmt = new Intl.NumberFormat();
@@ -43,6 +43,31 @@
   };
   $: signedIndices = data.agencies.map((a) => signedIdx(a.signed_date));
   $: agencyPops = data.agencies.map((a) => a.population ?? 0);
+
+  // ORI-deduped views for the topline counters (hero stat + map overlay).
+  // Shared-ORI agency rows (sheriff + corrections under one FBI identifier)
+  // collapse to a single entry whose effective signed_date is the earliest of
+  // the group and whose population is taken once (same LEE row). Null-ORI rows
+  // pass through as singletons. See #92. The map continues to render every
+  // row as its own dot — only counters dedupe.
+  $: uniqueAgencyData = (() => {
+    const byOri = new Map<string, { idx: number; pop: number }>();
+    const nullOri: { idx: number; pop: number }[] = [];
+    for (const a of data.agencies) {
+      const idx = signedIdx(a.signed_date);
+      const pop = a.population ?? 0;
+      if (a.ori) {
+        const prev = byOri.get(a.ori);
+        if (!prev) byOri.set(a.ori, { idx, pop });
+        else if (idx < prev.idx) byOri.set(a.ori, { idx, pop: prev.pop });
+      } else {
+        nullOri.push({ idx, pop });
+      }
+    }
+    return [...byOri.values(), ...nullOri];
+  })();
+  $: uniqueSignedIndices = uniqueAgencyData.map((d) => d.idx);
+  $: uniqueAgencyPops = uniqueAgencyData.map((d) => d.pop);
   const today = new Date();
   const todayIdx =
     (today.getUTCFullYear() - TIMELINE_EPOCH_YEAR) * 12 +
@@ -55,9 +80,9 @@
   ) + 0.5;
   let cursorIdx = NaN;
   $: if (Number.isNaN(cursorIdx) && Number.isFinite(maxIdx)) cursorIdx = maxIdx;
-  $: countAtCursor = signedIndices.filter((i) => i <= cursorIdx).length;
-  $: popAtCursor = signedIndices.reduce(
-    (sum, idx, i) => (idx <= cursorIdx ? sum + agencyPops[i] : sum),
+  $: countAtCursor = uniqueSignedIndices.filter((i) => i <= cursorIdx).length;
+  $: popAtCursor = uniqueSignedIndices.reduce(
+    (sum, idx, i) => (idx <= cursorIdx ? sum + uniqueAgencyPops[i] : sum),
     0,
   );
 
@@ -323,11 +348,11 @@
         </p>
       {/if}
 
-      {#if data.agencyCount > 0}
+      {#if data.agencyCountUnique > 0}
         <div class="mt-6 flex flex-wrap gap-6 sm:mt-8 sm:gap-8">
           <div>
             <p class="font-mono text-2xl font-semibold tabular-nums text-slate-900 sm:text-3xl">
-              {intFmt.format(data.agencyCount)}
+              {intFmt.format(data.agencyCountUnique)}<sup class="text-base text-slate-400">*</sup>
             </p>
             <p class="mt-0.5 text-xs text-slate-500 sm:text-sm">{m.home_stat_agencies()}</p>
           </div>
@@ -337,18 +362,22 @@
             </p>
             <p class="mt-0.5 text-xs text-slate-500 sm:text-sm">{m.home_stat_states()}</p>
           </div>
-          {#if data.populationCovered > 0}
+          {#if data.populationCoveredUnique > 0}
             <div>
               <p class="font-mono text-2xl font-semibold tabular-nums text-slate-900 sm:text-3xl">
-                {popFmt.format(data.populationCovered)}
+                {popFmt.format(data.populationCoveredUnique)}
               </p>
               <p class="mt-0.5 text-xs text-slate-500 sm:text-sm">{m.home_stat_population()}</p>
             </div>
           {/if}
         </div>
 
+        <p class="mt-3 text-xs text-slate-400">
+          {m.home_stat_agencies_footnote()}
+        </p>
+
         {#if data.snapshotDate}
-          <p class="mt-4 text-xs italic text-slate-400">
+          <p class="mt-1 text-xs italic text-slate-400">
             As of {new Intl.DateTimeFormat("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" }).format(new Date(data.snapshotDate))}
           </p>
         {/if}
