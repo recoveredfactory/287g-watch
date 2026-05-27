@@ -192,6 +192,7 @@
             <a href={localizeHref("/")} class="no-underline hover:text-white/70">{m.nav_map()}</a>
             <a href={localizeHref("/about")} class="no-underline hover:text-white/70">{m.nav_about()}</a>
             <a href={localizeHref("/glossary")} class="no-underline hover:text-white/70">{m.nav_glossary()}</a>
+            <a href={localizeHref("/methodology")} class="no-underline hover:text-white/70">{m.nav_methodology()}</a>
           </nav>
           <!-- Lang switcher — hidden on mobile; visible on desktop -->
           <div class="ml-auto hidden items-center gap-2 border-l border-white/20 pl-5 text-xs uppercase tracking-wider sm:flex" aria-label={m.lang_toggle_aria()}>
@@ -233,6 +234,10 @@
         {m.footer_tagline_after_name()}
       </p>
       <p>
+        <a href={localizeHref("/")} class="text-white/60 hover:text-white">{m.nav_map()}</a>
+        <span class="mx-1.5 text-white/30">·</span>
+        <a href={localizeHref("/glossary")} class="text-white/60 hover:text-white">{m.nav_glossary()}</a>
+        <span class="mx-1.5 text-white/30">·</span>
         <a href={localizeHref("/methodology")} class="text-white/60 hover:text-white">{m.footer_methodology()}</a>
         <span class="mx-1.5 text-white/30">·</span>
         <a href={localizeHref("/about")} class="text-white/60 hover:text-white">{m.footer_about()}</a>
