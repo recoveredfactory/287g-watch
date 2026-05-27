@@ -632,6 +632,13 @@
         if (feats.length === 0) dismissPopup();
       });
 
+      // Snapshot signal for the OG bake (scripts/bake-og.mjs). Set after
+      // the first idle fires past initial render so a Playwright snapshot
+      // waits for tiles + dots to settle before capturing.
+      map.once("idle", () => {
+        (window as any).__mapReady = true;
+      });
+
     });
   });
 
