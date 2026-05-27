@@ -66,8 +66,16 @@ export type StateMeta = {
 export type PageData = {
   agencies: Agency[];
   agencyCount: number;
+  // Headline count deduplicated by FBI ORI. Several "agencies" in the upstream
+  // sheet share an ORI (a sheriff's office and the same county's corrections
+  // department, etc.) — we count distinct ORIs and treat each null-ORI row as
+  // its own singleton. See #92.
+  agencyCountUnique: number;
   stateCount: number;
   populationCovered: number;
+  // Same dedupe applied to population: shared-ORI rows resolve to the same LEE
+  // population row, so summing the raw list double-counts them. See #92.
+  populationCoveredUnique: number;
   snapshotDate: string | null;
   modelCounts: Record<string, number>;
   stateMeta: Record<string, StateMeta>;
@@ -89,6 +97,21 @@ export const load = async ({ fetch }): Promise<PageData> => {
 
     const states = new Set(agencies.map((a) => a.state));
     const populationCovered = agencies.reduce((sum, a) => sum + (a.population ?? 0), 0);
+    const popByOri = new Map<string, number>();
+    let nullOriRows = 0;
+    let nullOriPop = 0;
+    for (const a of agencies) {
+      const pop = a.population ?? 0;
+      if (a.ori) {
+        if (!popByOri.has(a.ori)) popByOri.set(a.ori, pop);
+      } else {
+        nullOriRows++;
+        nullOriPop += pop;
+      }
+    }
+    const agencyCountUnique = popByOri.size + nullOriRows;
+    const populationCoveredUnique =
+      [...popByOri.values()].reduce((s, p) => s + p, 0) + nullOriPop;
     const snapshotDate = agencies
       .map((a) => (a as any).snapshot_date as string | undefined)
       .filter(Boolean)
@@ -105,8 +128,10 @@ export const load = async ({ fetch }): Promise<PageData> => {
     return {
       agencies,
       agencyCount: agencies.length,
+      agencyCountUnique,
       stateCount: states.size,
       populationCovered,
+      populationCoveredUnique,
       snapshotDate,
       modelCounts,
       stateMeta,
@@ -115,8 +140,10 @@ export const load = async ({ fetch }): Promise<PageData> => {
     return {
       agencies: [],
       agencyCount: 0,
+      agencyCountUnique: 0,
       stateCount: 0,
       populationCovered: 0,
+      populationCoveredUnique: 0,
       snapshotDate: null,
       modelCounts: {},
       stateMeta: {},
