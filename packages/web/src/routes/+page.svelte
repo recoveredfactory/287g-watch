@@ -27,10 +27,6 @@
   // flicker. Whole-million steps still feel like a counter ticking up.
   const popFmtOverlay = new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 0 });
 
-  // ── Map palette (user-toggleable, persisted across pages) ──────────────────
-  import { mapPalette } from "$lib/map/paletteStore";
-  import MapPaletteSelector from "$lib/components/MapPaletteSelector.svelte";
-
   // ── Timeline cursor (experimental, #76) ────────────────────────────────────
   // Continuous fractional-month index relative to Jan 2025. The map fades and
   // pops each dot in as the cursor passes its signing date; pre-2025 signings
@@ -429,17 +425,15 @@
         </div>
       </div>
 
-      <!-- Palette selector + zoom-to-detected-state shortcut -->
-      <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-500">
-        <MapPaletteSelector />
-        {#if detectedState && STATE_NAMES[detectedState] && data.stateMeta[detectedState]?.participating > 0 && !(selectedStates.size === 1 && selectedStates.has(detectedState))}
+      {#if detectedState && STATE_NAMES[detectedState] && data.stateMeta[detectedState]?.participating > 0 && !(selectedStates.size === 1 && selectedStates.has(detectedState))}
+        <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-500">
           <button
             type="button"
             on:click={() => (selectedStates = new Set([detectedState!]))}
             class="text-xs text-slate-500 underline-offset-2 hover:text-slate-900 hover:underline"
           >Zoom to {STATE_NAMES[detectedState]} →</button>
-        {/if}
-      </div>
+        </div>
+      {/if}
     </div>
 
     <!-- Map: full-bleed so the country breaks the column and reads at scale -->
@@ -455,7 +449,6 @@
         <NationalMap
           agencies={data.agencies}
           {selectedStates}
-          palette={$mapPalette}
           {cursorIdx}
         />
         <div

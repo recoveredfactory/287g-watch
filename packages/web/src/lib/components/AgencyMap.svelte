@@ -7,64 +7,29 @@
   import { toInsetCoords } from "$lib/insetTransforms";
   import { STATE_NAMES } from "$lib/states";
   import { ensurePmtilesProtocol, pmtilesBaseSource, PMTILES_GLYPHS } from "$lib/map/pmtiles";
-  import { mapPalette, type PaletteKey } from "$lib/map/paletteStore";
 
   // Inset territories sit at shifted coords; loading PMTiles over them
   // would draw foreign tiles. Affects 5 agencies total (AK, GU, MP).
   const INSET_STATES = new Set(["AK", "HI", "PR", "VI", "GU", "MP", "AS"]);
 
-  // Two palettes mirrored from NationalMap. AgencyMap has its own spec
-  // because it draws non-current states distinctly (so the current state
-  // pops without dimming neighbors as harshly).
-  type AgencyPalette = {
-    bg: string;
-    stateBg: string;
-    stateHighlight: string;
-    stateLines: string;
-    stateLineWidth: number;
-    county: string;
-    roadCasing: string;
-    roadFill: string;
-    roadMedium: string;
-    haloFill: string;
-    dotStroke: string;
-    dotStrokeWidth: number;
-    text: string;
-    textHalo: string;
-  };
-  const AGENCY_PALETTES: Record<PaletteKey, AgencyPalette> = {
-    slate: {
-      bg: "#dde4eb",
-      stateBg: "#eef0f2",
-      stateHighlight: "#fafaf8",
-      stateLines: "#b8c4cf",
-      stateLineWidth: 0.75,
-      county: "#c8d4dc",
-      roadCasing: "#a0b0bc",
-      roadFill: "#eef2f5",
-      roadMedium: "#cdd6dc",
-      haloFill: "#ffffff",
-      dotStroke: "#dde4eb",
-      dotStrokeWidth: 0.6,
-      text: "#334155",
-      textHalo: "rgba(255,255,255,0.85)",
-    },
-    dark: {
-      bg: "#0c1117",
-      stateBg: "#161e27",
-      stateHighlight: "#1f2a36",
-      stateLines: "#3a4552",
-      stateLineWidth: 0.5,
-      county: "#1c242e",
-      roadCasing: "#252d38",
-      roadFill: "#525f6c",
-      roadMedium: "#252d38",
-      haloFill: "#e8ecf2",
-      dotStroke: "rgba(255,255,255,0.18)",
-      dotStrokeWidth: 0.25,
-      text: "#c2cad4",
-      textHalo: "rgba(8,12,18,0.9)",
-    },
+  // Dark is the only palette — keeps map tone consistent with the homepage.
+  // The agency view has its own spec because it draws non-current states
+  // distinctly (so the current state pops without dimming neighbors as harshly).
+  const p = {
+    bg: "#0c1117",
+    stateBg: "#161e27",
+    stateHighlight: "#1f2a36",
+    stateLines: "#3a4552",
+    stateLineWidth: 0.5,
+    county: "#1c242e",
+    roadCasing: "#252d38",
+    roadFill: "#525f6c",
+    roadMedium: "#252d38",
+    haloFill: "#e8ecf2",
+    dotStroke: "rgba(255,255,255,0.18)",
+    dotStrokeWidth: 0.25,
+    text: "#c2cad4",
+    textHalo: "rgba(8,12,18,0.9)",
   };
 
   export let lat: number | null | undefined = undefined;
@@ -97,7 +62,6 @@
 
   let container: HTMLDivElement;
   let map: any = null;
-  let unsubscribePalette: (() => void) | null = null;
 
   onMount(async () => {
     if (!browser || !container) return;
@@ -108,38 +72,6 @@
     const showPmtilesRoads = !INSET_STATES.has(state);
     const dotCoords: [number, number] | null =
       lat != null && lng != null ? toInsetCoords(lng, lat, state) : null;
-    // Read the persisted palette on mount; we'll also subscribe below so
-    // a toggle from another tab/page applies live.
-    let p: AgencyPalette = AGENCY_PALETTES.slate;
-    unsubscribePalette = mapPalette.subscribe((v) => {
-      p = AGENCY_PALETTES[v] ?? AGENCY_PALETTES.slate;
-      // After the map is created and styled, re-paint the changed layers.
-      if (map && map.isStyleLoaded()) repaintPalette();
-    });
-
-    const repaintPalette = () => {
-      if (!map) return;
-      map.setPaintProperty("background", "background-color", p.bg);
-      if (map.getLayer("states-bg")) map.setPaintProperty("states-bg", "fill-color", p.stateBg);
-      if (map.getLayer("state-highlight")) map.setPaintProperty("state-highlight", "fill-color", p.stateHighlight);
-      if (map.getLayer("state-lines")) {
-        map.setPaintProperty("state-lines", "line-color", p.stateLines);
-        map.setPaintProperty("state-lines", "line-width", p.stateLineWidth);
-      }
-      if (map.getLayer("county-lines")) map.setPaintProperty("county-lines", "line-color", p.county);
-      if (map.getLayer("road-casing")) map.setPaintProperty("road-casing", "line-color", p.roadCasing);
-      if (map.getLayer("road-fill")) map.setPaintProperty("road-fill", "line-color", p.roadFill);
-      if (map.getLayer("road-medium")) map.setPaintProperty("road-medium", "line-color", p.roadMedium);
-      if (map.getLayer("context-agencies")) {
-        map.setPaintProperty("context-agencies", "circle-stroke-color", p.dotStroke);
-        map.setPaintProperty("context-agencies", "circle-stroke-width", p.dotStrokeWidth);
-      }
-      if (map.getLayer("agency-halo")) map.setPaintProperty("agency-halo", "circle-color", p.haloFill);
-      if (map.getLayer("places-major")) {
-        map.setPaintProperty("places-major", "text-color", p.text);
-        map.setPaintProperty("places-major", "text-halo-color", p.textHalo);
-      }
-    };
 
     map = new ml.Map({
       container,
@@ -474,7 +406,6 @@
   });
 
   onDestroy(() => {
-    if (unsubscribePalette) { unsubscribePalette(); unsubscribePalette = null; }
     if (map) { map.remove(); map = null; }
   });
 </script>

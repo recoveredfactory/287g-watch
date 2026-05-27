@@ -32,72 +32,24 @@
   let container: HTMLDivElement;
   let map: any = null;
   const isMobile = browser && window.matchMedia("(max-width: 640px)").matches;
-  // Debug-only: ?scale=officers|population|flat lets us A/B sizing schemes
-  // without redeploying. Falls back to officers in prod.
-  const scaleMode: "officers" | "population" | "flat" =
-    browser && import.meta.env.DEV
-      ? ((new URLSearchParams(window.location.search).get("scale") as any) ?? "officers")
-      : "officers";
-  // Debug-only: ?roads=off hides the highway/road overlays so we can A/B
-  // map clarity without them. Default is on.
-  const roadsOn =
-    !(browser && import.meta.env.DEV) ||
-    new URLSearchParams(window.location.search).get("roads") !== "off";
-  import type { PaletteKey } from "$lib/map/paletteStore";
-  export let palette: PaletteKey = "slate";
 
-  type PaletteSpec = {
-    bg: string;
-    state: string;
-    line: string;
-    lineWidth: number;
-    county: string;
-    roadCasing: string;
-    roadFill: string;
-    roadMajorCasing: string;
-    roadMajorFill: string;
-    roadMedium: string;
-    dotStroke: string;
-    dotStrokeWidth: number;
-    text: string;
-    textHalo: string;
-  };
-
-  // Two picks: slate is the cool blue-grey default (matches the agency
-  // page baseline); dark is a steely analytical mode for presentation.
-  const PALETTES: Record<PaletteKey, PaletteSpec> = {
-    slate: {
-      bg: "#dde4eb",
-      state: "#f5f4f5",
-      line: "#94a3b8",
-      lineWidth: isMobile ? 0.9 : 1.5,
-      county: "#c8d4dc",
-      roadCasing: "#a0b0bc",
-      roadFill: "#eef2f5",
-      roadMajorCasing: "#b0bcc7",
-      roadMajorFill: "#f3f5f7",
-      roadMedium: "#cdd6dc",
-      dotStroke: "#dde4eb",
-      dotStrokeWidth: 0.6,
-      text: "#334155",
-      textHalo: "rgba(255,255,255,0.85)",
-    },
-    dark: {
-      bg: "#0c1117",
-      state: "#18202a",
-      line: "#3a4552",
-      lineWidth: 0.6,
-      county: "#1c242e",
-      roadCasing: "#252d38",
-      roadFill: "#525f6c",
-      roadMajorCasing: "#222933",
-      roadMajorFill: "#3d4754",
-      roadMedium: "#252d38",
-      dotStroke: "rgba(255,255,255,0.18)",
-      dotStrokeWidth: 0.25,
-      text: "#c2cad4",
-      textHalo: "rgba(8,12,18,0.9)",
-    },
+  // Dark is the only palette — steely analytical mode, replaces the prior
+  // slate/dark toggle so map tone reads consistently across the site.
+  const C = {
+    bg: "#0c1117",
+    state: "#18202a",
+    line: "#3a4552",
+    lineWidth: 0.6,
+    county: "#1c242e",
+    roadCasing: "#252d38",
+    roadFill: "#525f6c",
+    roadMajorCasing: "#222933",
+    roadMajorFill: "#3d4754",
+    roadMedium: "#252d38",
+    dotStroke: "rgba(255,255,255,0.18)",
+    dotStrokeWidth: 0.25,
+    text: "#c2cad4",
+    textHalo: "rgba(8,12,18,0.9)",
   };
 
   const MODEL_FALLBACK = "#94a3b8";
@@ -224,44 +176,6 @@
     }
   }
 
-  // Re-paint when the user toggles the palette via the selector. Covers
-  // every layer that has a palette-driven color so the switch updates
-  // basemap, labels, and roads in one pass without remount.
-  $: if (map && map.isStyleLoaded()) {
-    const c = PALETTES[palette];
-    map.setPaintProperty("background", "background-color", c.bg);
-    if (map.getLayer("state-fills"))
-      map.setPaintProperty("state-fills", "fill-color", c.state);
-    if (map.getLayer("state-lines")) {
-      map.setPaintProperty("state-lines", "line-color", c.line);
-      map.setPaintProperty("state-lines", "line-width", c.lineWidth);
-    }
-    if (map.getLayer("county-lines"))
-      map.setPaintProperty("county-lines", "line-color", c.county);
-    if (map.getLayer("highway-static-casing"))
-      map.setPaintProperty("highway-static-casing", "line-color", c.roadCasing);
-    if (map.getLayer("highway-static-fill"))
-      map.setPaintProperty("highway-static-fill", "line-color", c.roadFill);
-    if (map.getLayer("road-highway-casing"))
-      map.setPaintProperty("road-highway-casing", "line-color", c.roadCasing);
-    if (map.getLayer("road-highway-fill"))
-      map.setPaintProperty("road-highway-fill", "line-color", c.roadFill);
-    if (map.getLayer("agencies"))
-      map.setPaintProperty("agencies", "circle-stroke-color", c.dotStroke);
-      map.setPaintProperty("agencies", "circle-stroke-width", c.dotStrokeWidth);
-    if (map.getLayer("road-major-casing"))
-      map.setPaintProperty("road-major-casing", "line-color", c.roadMajorCasing);
-    if (map.getLayer("road-major-fill"))
-      map.setPaintProperty("road-major-fill", "line-color", c.roadMajorFill);
-    if (map.getLayer("road-medium"))
-      map.setPaintProperty("road-medium", "line-color", c.roadMedium);
-    for (const id of ["places-major", "places-minor", "places-all"]) {
-      if (!map.getLayer(id)) continue;
-      map.setPaintProperty(id, "text-color", c.text);
-      map.setPaintProperty(id, "text-halo-color", c.textHalo);
-    }
-  }
-
   onMount(async () => {
     if (!browser) return;
 
@@ -291,7 +205,7 @@
         glyphs: PMTILES_GLYPHS,
         projection: { type: "mercator" },
         layers: [
-          { id: "background", type: "background", paint: { "background-color": PALETTES[palette].bg } },
+          { id: "background", type: "background", paint: { "background-color": C.bg } },
         ],
       } as any,
       // Inset layout: continental US + territory insets all fit in this window
@@ -330,7 +244,7 @@
         id: "state-fills",
         type: "fill",
         source: "states",
-        paint: { "fill-color": PALETTES[palette].state, "fill-opacity": 1 },
+        paint: { "fill-color": C.state, "fill-opacity": 1 },
       });
 
       map.addLayer({
@@ -338,8 +252,8 @@
         type: "line",
         source: "states",
         paint: {
-          "line-color": PALETTES[palette].line,
-          "line-width": PALETTES[palette].lineWidth,
+          "line-color": C.line,
+          "line-width": C.lineWidth,
           // Fainter at the locked-floor national view (zoom ~1) so the country
           // doesn't read as a cage of borders. Ramps to full visibility once
           // individual states fill the screen.
@@ -359,7 +273,7 @@
         source: "counties",
         minzoom: 5,
         paint: {
-          "line-color": PALETTES[palette].county,
+          "line-color": C.county,
           "line-width": 0.4,
           "line-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0, 5.5, 0.7],
         },
@@ -383,9 +297,8 @@
         type: "line",
         source: "highways-static",
         maxzoom: 4.5,
-        layout: { visibility: roadsOn ? "visible" : "none" },
         paint: {
-          "line-color": PALETTES[palette].roadCasing,
+          "line-color": C.roadCasing,
           "line-width": ["interpolate", ["linear"], ["zoom"], 1, 1.2, 4, 2.2],
           "line-opacity": ["interpolate", ["linear"], ["zoom"], 1, 0.35, 3.5, 0.35, 4.5, 0],
         },
@@ -395,9 +308,8 @@
         type: "line",
         source: "highways-static",
         maxzoom: 4.5,
-        layout: { visibility: roadsOn ? "visible" : "none" },
         paint: {
-          "line-color": PALETTES[palette].roadFill,
+          "line-color": C.roadFill,
           "line-width": ["interpolate", ["linear"], ["zoom"], 1, 0.5, 4, 1.0],
           "line-opacity": ["interpolate", ["linear"], ["zoom"], 1, 0.5, 3.5, 0.5, 4.5, 0],
         },
@@ -418,9 +330,9 @@
         source: "base",
         "source-layer": "roads",
         filter: ["==", ["get", "kind"], "highway"],
-        layout: { "line-cap": "round", "line-join": "round", visibility: roadsOn ? "visible" : "none" },
+        layout: { "line-cap": "round", "line-join": "round" },
         paint: {
-          "line-color": PALETTES[palette].roadCasing,
+          "line-color": C.roadCasing,
           "line-width": ["interpolate", ["linear"], ["zoom"], 2, 1.8, 5, 2.5, 9, 4, 12, 5.5],
           // Fades in 3.5→4.5 as the static overlay fades out — single highway at every zoom.
           "line-opacity": ["interpolate", ["linear"], ["zoom"], 3.5, 0, 4.5, 0.8],
@@ -433,9 +345,9 @@
         source: "base",
         "source-layer": "roads",
         filter: ["==", ["get", "kind"], "highway"],
-        layout: { "line-cap": "round", "line-join": "round", visibility: roadsOn ? "visible" : "none" },
+        layout: { "line-cap": "round", "line-join": "round" },
         paint: {
-          "line-color": PALETTES[palette].roadFill,
+          "line-color": C.roadFill,
           "line-width": ["interpolate", ["linear"], ["zoom"], 2, 0.8, 5, 1.2, 9, 2, 12, 3],
           "line-opacity": ["interpolate", ["linear"], ["zoom"], 3.5, 0, 4.5, 0.95],
         },
@@ -450,9 +362,9 @@
         "source-layer": "roads",
         minzoom: 5,
         filter: ["==", ["get", "kind"], "major_road"],
-        layout: { "line-cap": "round", "line-join": "round", visibility: roadsOn ? "visible" : "none" },
+        layout: { "line-cap": "round", "line-join": "round" },
         paint: {
-          "line-color": PALETTES[palette].roadMajorCasing,
+          "line-color": C.roadMajorCasing,
           "line-width": ["interpolate", ["linear"], ["zoom"], 5, 0.8, 9, 2, 12, 3.5],
           "line-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0, 5.5, 0.65],
         },
@@ -465,9 +377,9 @@
         "source-layer": "roads",
         minzoom: 5,
         filter: ["==", ["get", "kind"], "major_road"],
-        layout: { "line-cap": "round", "line-join": "round", visibility: roadsOn ? "visible" : "none" },
+        layout: { "line-cap": "round", "line-join": "round" },
         paint: {
-          "line-color": PALETTES[palette].roadMajorFill,
+          "line-color": C.roadMajorFill,
           "line-width": ["interpolate", ["linear"], ["zoom"], 5, 0.4, 9, 1.1, 12, 2],
           "line-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0, 5.5, 0.9],
         },
@@ -481,9 +393,8 @@
         "source-layer": "roads",
         minzoom: 8,
         filter: ["==", ["get", "kind"], "medium_road"],
-        layout: { visibility: roadsOn ? "visible" : "none" },
         paint: {
-          "line-color": PALETTES[palette].roadMedium,
+          "line-color": C.roadMedium,
           "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.4, 12, 1.5],
           "line-opacity": 0.8,
         },
@@ -512,8 +423,8 @@
           "text-allow-overlap": false,
         },
         paint: {
-          "text-color": PALETTES[palette].text,
-          "text-halo-color": PALETTES[palette].textHalo,
+          "text-color": C.text,
+          "text-halo-color": C.textHalo,
           "text-halo-width": 1.5,
           "text-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0, 4.5, 1],
         },
@@ -539,8 +450,8 @@
           "text-allow-overlap": false,
         },
         paint: {
-          "text-color": PALETTES[palette].text,
-          "text-halo-color": PALETTES[palette].textHalo,
+          "text-color": C.text,
+          "text-halo-color": C.textHalo,
           "text-halo-width": 1.5,
           "text-opacity": ["interpolate", ["linear"], ["zoom"], 6, 0, 6.5, 1],
         },
@@ -562,8 +473,8 @@
           "text-allow-overlap": false,
         },
         paint: {
-          "text-color": PALETTES[palette].text,
-          "text-halo-color": PALETTES[palette].textHalo,
+          "text-color": C.text,
+          "text-halo-color": C.textHalo,
           "text-halo-width": 1.5,
           "text-opacity": ["interpolate", ["linear"], ["zoom"], 8, 0, 8.5, 1],
         },
@@ -575,21 +486,14 @@
       });
 
       // Agency dots — on top of city labels. Radius scales by sqrt of the
-      // chosen metric so big departments read visibly heavier than rural
+      // officer count so big departments read visibly heavier than rural
       // sheriff's offices, without erasing the small ones. Mobile gets a
-      // tighter scale; ?scale=population|flat swaps the metric in dev for
-      // visual tuning.
+      // tighter scale. Domain ceiling = officer p95 (~307) → sqrt ≈ 17.5.
       const SCALE = isMobile ? 0.7 : 1;
-      const sizeExpr =
-        scaleMode === "flat"
-          ? 20
-          : ["sqrt", ["coalesce", ["get", scaleMode === "population" ? "population" : "officer_ct"], 0]];
-      // Domain ceiling matched to each metric's 95th percentile:
-      //   officers p95 = 307 → sqrt ≈ 17.5
-      //   population p95 = 255k → sqrt ≈ 505
-      const sizeDomainMax = scaleMode === "population" ? 600 : 18;
+      const sizeExpr: any = ["sqrt", ["coalesce", ["get", "officer_ct"], 0]];
+      const sizeDomainMax = 18;
       const radius = (low: number, high: number) => [
-        "interpolate", ["linear"], sizeExpr as any,
+        "interpolate", ["linear"], sizeExpr,
         0, low * SCALE,
         sizeDomainMax, high * SCALE,
       ];
@@ -616,8 +520,8 @@
           // touching dots without reading as a halo. The reduced fill
           // opacity lets dense clusters (FL, TX) read as "many overlapping"
           // rather than a solid blob.
-          "circle-stroke-width": PALETTES[palette].dotStrokeWidth,
-          "circle-stroke-color": PALETTES[palette].dotStroke,
+          "circle-stroke-width": C.dotStrokeWidth,
+          "circle-stroke-color": C.dotStroke,
           "circle-stroke-opacity": 1,
           "circle-radius": initialRadius,
           "circle-opacity": initialOpacity,
