@@ -6,7 +6,7 @@
   import { localizeHref } from "$lib/paraglide/runtime";
   import { toInsetCoords } from "$lib/insetTransforms";
   import { STATE_NAMES } from "$lib/states";
-  import { ensurePmtilesProtocol, pmtilesBaseSource } from "$lib/map/pmtiles";
+  import { ensurePmtilesProtocol, pmtilesBaseSource, PMTILES_GLYPHS } from "$lib/map/pmtiles";
   import { mapPalette, type PaletteKey } from "$lib/map/paletteStore";
 
   // Inset territories sit at shifted coords; loading PMTiles over them
@@ -27,6 +27,8 @@
     roadFill: string;
     roadMedium: string;
     haloFill: string;
+    text: string;
+    textHalo: string;
   };
   const AGENCY_PALETTES: Record<PaletteKey, AgencyPalette> = {
     slate: {
@@ -40,6 +42,8 @@
       roadFill: "#eef2f5",
       roadMedium: "#cdd6dc",
       haloFill: "#ffffff",
+      text: "#334155",
+      textHalo: "rgba(255,255,255,0.85)",
     },
     dark: {
       bg: "#0c1117",
@@ -52,6 +56,8 @@
       roadFill: "#525f6c",
       roadMedium: "#252d38",
       haloFill: "#e8ecf2",
+      text: "#c2cad4",
+      textHalo: "rgba(8,12,18,0.9)",
     },
   };
 
@@ -121,6 +127,10 @@
       if (map.getLayer("context-agencies"))
         map.setPaintProperty("context-agencies", "circle-stroke-color", p.bg);
       if (map.getLayer("agency-halo")) map.setPaintProperty("agency-halo", "circle-color", p.haloFill);
+      if (map.getLayer("places-major")) {
+        map.setPaintProperty("places-major", "text-color", p.text);
+        map.setPaintProperty("places-major", "text-halo-color", p.textHalo);
+      }
     };
 
     map = new ml.Map({
@@ -128,7 +138,7 @@
       style: {
         version: 8,
         sources: {},
-        glyphs: "https://fonts.basemaps.cartocdn.com/gl/fonts/{fontstack}/{range}.pbf",
+        glyphs: PMTILES_GLYPHS,
         projection: { type: "mercator" },
         layers: [
           { id: "background", type: "background", paint: { "background-color": p.bg } },
@@ -366,6 +376,34 @@
         const slug = e.features[0].properties.slug;
         if (slug) goto(localizeHref(`/agency/${slug}`));
       });
+
+      // Place labels — added LAST so they sit on top of dots. Looser
+      // filters than the homepage map because the state-fit zoom (~5-7)
+      // needs mid-sized cities to show without further zooming.
+      if (showPmtilesRoads) {
+        map.addLayer({
+          id: "places-major",
+          type: "symbol",
+          source: "base",
+          "source-layer": "places",
+          minzoom: 3,
+          filter: ["==", ["get", "kind"], "locality"],
+          layout: {
+            "text-field": ["coalesce", ["get", "name:en"], ["get", "name"]],
+            "text-font": ["Noto Sans Regular"],
+            "text-size": ["interpolate", ["linear"], ["zoom"], 4, 10, 8, 13],
+            "text-anchor": "top",
+            "text-offset": [0, 0.4],
+            "text-allow-overlap": true,
+            "text-ignore-placement": true,
+          },
+          paint: {
+            "text-color": p.text,
+            "text-halo-color": p.textHalo,
+            "text-halo-width": 1.5,
+          },
+        });
+      }
 
       // Fit to the state's bounding box. Tight padding so the state fills
       // the canvas — readers can pan/zoom out to see neighbors thanks to

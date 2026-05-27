@@ -8,6 +8,13 @@ import type { Map as MapLibreMap } from "maplibre-gl";
 
 export const PMTILES_URL = "https://pmtiles.grupovisual.org/latest.pmtiles";
 
+// Font glyphs for symbol layers (city/place labels). Protomaps' fonts CDN
+// is CORS-friendly and pairs with the Protomaps PMTiles schema we use.
+// Could be migrated to our own infrastructure (e.g. fonts.grupovisual.org)
+// in the future for zero third-party deps.
+export const PMTILES_GLYPHS =
+  "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf";
+
 let registered = false;
 
 export async function ensurePmtilesProtocol(

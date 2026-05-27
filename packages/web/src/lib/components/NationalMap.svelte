@@ -5,7 +5,7 @@
   import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_SHORT } from "$lib/colors";
   import { toInsetCoords } from "$lib/insetTransforms";
   import { STATE_NAMES } from "$lib/states";
-  import { ensurePmtilesProtocol, pmtilesBaseSource } from "$lib/map/pmtiles";
+  import { ensurePmtilesProtocol, pmtilesBaseSource, PMTILES_GLYPHS } from "$lib/map/pmtiles";
 
   export let selectedStates: Set<string> = new Set();
 
@@ -216,8 +216,7 @@
       style: {
         version: 8,
         sources: {},
-        // Carto's glyph CDN for cluster count labels — fonts only, no basemap tiles
-        glyphs: "https://fonts.basemaps.cartocdn.com/gl/fonts/{fontstack}/{range}.pbf",
+        glyphs: PMTILES_GLYPHS,
         projection: { type: "mercator" },
         layers: [
           { id: "background", type: "background", paint: { "background-color": PALETTES[palette].bg } },
@@ -426,7 +425,7 @@
         ],
         layout: {
           "text-field": ["coalesce", ["get", "name:en"], ["get", "name"]],
-          "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
+          "text-font": ["Noto Sans Regular"],
           "text-size": ["interpolate", ["linear"], ["zoom"], 4, 10, 8, 13],
           "text-anchor": "top",
           "text-offset": [0, 0.4],
@@ -453,7 +452,7 @@
         ],
         layout: {
           "text-field": ["coalesce", ["get", "name:en"], ["get", "name"]],
-          "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
+          "text-font": ["Noto Sans Regular"],
           "text-size": ["interpolate", ["linear"], ["zoom"], 6, 9, 10, 12],
           "text-anchor": "top",
           "text-offset": [0, 0.4],
@@ -476,7 +475,7 @@
         filter: ["==", ["get", "kind"], "locality"],
         layout: {
           "text-field": ["coalesce", ["get", "name:en"], ["get", "name"]],
-          "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
+          "text-font": ["Noto Sans Regular"],
           "text-size": 10,
           "text-anchor": "top",
           "text-offset": [0, 0.4],
