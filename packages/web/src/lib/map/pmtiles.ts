@@ -38,3 +38,15 @@ export function pmtilesBaseSource() {
 
 export type MapLibreModule = typeof import("maplibre-gl");
 export type { MapLibreMap };
+
+/**
+ * Build a "world minus the supplied states" polygon, suitable for masking
+ * foreign land underneath the PMTiles base layer. Render as a fill in the
+ * background color, layered above PMTiles roads/places but below dots, and
+ * PMTiles content outside the US disappears.
+ *
+ * Pass the inset state polygons in (us-inset.geojson) so the mask hides
+ * foreign tiles at real-world coords but doesn't punch holes at the inset
+ * positions of AK/HI/territories (which is where the inset state polygons
+ * actually sit on the map).
+ */

@@ -125,17 +125,15 @@
 
     map.addControl(new ml.NavigationControl({ showCompass: false }), "top-right");
 
-    map.on("load", () => {
+    map.on("load", async () => {
       // Resize first so MapLibre knows the true container dimensions on mobile,
       // then re-fit so the full map fills the container, then lock the floor zoom.
       map.resize();
       map.fitBounds(FIT_BOUNDS, FIT_OPTIONS);
       map.setMinZoom(map.getZoom());
 
-      map.addSource("states", {
-        type: "geojson",
-        data: "/us-inset.geojson",
-      });
+      const statesGj = await fetch("/us-inset.geojson").then((r) => r.json());
+      map.addSource("states", { type: "geojson", data: statesGj });
 
       // State fills — white land against the blue-grey water background
       map.addLayer({
@@ -181,35 +179,65 @@
       // intentionally left without road/city detail in this iteration.
       map.addSource("base", pmtilesBaseSource());
 
-      // Highway casing (kind: highway/major_road) — wider darker line under
-      // the fill, matching the look of the previous hand-baked layer.
+      // Interstates (kind: highway) — always visible, even at the national
+      // view. They're the connective tissue readers expect to see.
       map.addLayer({
-        id: "road-casing",
+        id: "road-highway-casing",
         type: "line",
         source: "base",
         "source-layer": "roads",
-        minzoom: 4,
-        filter: ["in", ["get", "kind"], ["literal", ["highway", "major_road"]]],
+        filter: ["==", ["get", "kind"], "highway"],
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
           "line-color": "#a0b0bc",
-          "line-width": ["interpolate", ["linear"], ["zoom"], 4, 1.5, 8, 3, 12, 5],
-          "line-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0, 4.5, 0.7],
+          "line-width": ["interpolate", ["linear"], ["zoom"], 2, 0.8, 5, 1.8, 9, 3.5, 12, 5],
+          "line-opacity": 0.7,
         },
       });
 
       map.addLayer({
-        id: "road-fill",
+        id: "road-highway-fill",
         type: "line",
         source: "base",
         "source-layer": "roads",
-        minzoom: 4,
-        filter: ["in", ["get", "kind"], ["literal", ["highway", "major_road"]]],
+        filter: ["==", ["get", "kind"], "highway"],
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
           "line-color": "#eef2f5",
-          "line-width": ["interpolate", ["linear"], ["zoom"], 4, 0.6, 8, 1.5, 12, 3],
-          "line-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0, 4.5, 0.9],
+          "line-width": ["interpolate", ["linear"], ["zoom"], 2, 0.35, 5, 0.9, 9, 1.8, 12, 3],
+          "line-opacity": 0.95,
+        },
+      });
+
+      // US/state highways — visible from zoom 5+ once the viewport is
+      // narrow enough that they don't read as visual noise.
+      map.addLayer({
+        id: "road-major-casing",
+        type: "line",
+        source: "base",
+        "source-layer": "roads",
+        minzoom: 5,
+        filter: ["==", ["get", "kind"], "major_road"],
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": "#b0bcc7",
+          "line-width": ["interpolate", ["linear"], ["zoom"], 5, 0.8, 9, 2, 12, 3.5],
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0, 5.5, 0.65],
+        },
+      });
+
+      map.addLayer({
+        id: "road-major-fill",
+        type: "line",
+        source: "base",
+        "source-layer": "roads",
+        minzoom: 5,
+        filter: ["==", ["get", "kind"], "major_road"],
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": "#f3f5f7",
+          "line-width": ["interpolate", ["linear"], ["zoom"], 5, 0.4, 9, 1.1, 12, 2],
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0, 5.5, 0.9],
         },
       });
 
