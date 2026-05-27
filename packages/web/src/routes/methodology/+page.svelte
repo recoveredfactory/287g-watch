@@ -26,11 +26,7 @@
         <strong><a href="https://github.com/appelson/Tracking_287g" target="_blank" rel="noreferrer">appelson/Tracking_287g</a></strong> {m.methodology_source_appelson_body()}
       </li>
       <li>
-        <strong><a href="https://bjs.ojp.gov/data-collection/census-state-and-local-law-enforcement-agencies-csllea" target="_blank" rel="noreferrer">FBI Census of State and Local Law Enforcement Agencies (CSLLEA) 2018</a></strong>
-        {m.methodology_source_fbi_body()}
-      </li>
-      <li>
-        <strong><a href="https://cde.ucr.cjis.gov/LATEST/webapp/#/pages/explorer/crime/crime-trend" target="_blank" rel="noreferrer">FBI Law Enforcement Explorer (LEE) 2025</a></strong>
+        <strong><a href="https://cde.ucr.cjis.gov/LATEST/webapp/#/pages/explorer/crime/crime-trend" target="_blank" rel="noreferrer">FBI Law Enforcement Explorer (LEE)</a></strong>
         {m.methodology_source_lee_body()}
       </li>
       <li>

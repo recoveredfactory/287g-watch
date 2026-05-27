@@ -23,7 +23,7 @@
     return document.cookie.split(";").some((c) => c.trim().startsWith(`${localeCookieName}=`));
   }
 
-  const siteName = "287(g) Explorer";
+  const siteName = "287(g) Watch";
 
   const stage = (import.meta.env.PUBLIC_STAGE || "local").toString();
   const isProdStage = stage === "prod" || stage === "production";
