@@ -101,6 +101,8 @@
   let selectedYear = "";
   let currentPage = 1;
   const PAGE_SIZE = 25;
+  let filterBarHeight = 0;
+  $: thTop = `calc(var(--site-header-height) + var(--staging-banner-height) + ${filterBarHeight}px)`;
 
   const ALL_MODELS = MODEL_ORDER;
 
@@ -433,7 +435,7 @@
         {#if detectedState && STATE_NAMES[detectedState] && data.stateMeta[detectedState]?.participating > 0 && !(selectedStates.size === 1 && selectedStates.has(detectedState))}
           <button
             type="button"
-            on:click={() => (selectedStates = new Set([detectedState]))}
+            on:click={() => (selectedStates = new Set([detectedState!]))}
             class="text-xs text-slate-500 underline-offset-2 hover:text-slate-900 hover:underline"
           >Zoom to {STATE_NAMES[detectedState]} →</button>
         {/if}
@@ -510,6 +512,7 @@
 
       <!-- Filter controls — sticky once scrolled into view -->
       <div
+        bind:clientHeight={filterBarHeight}
         class="sticky z-40 -mx-4 border-b border-slate-200 bg-stone-50/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6"
         style="top: calc(var(--site-header-height) + var(--staging-banner-height));"
       >
@@ -629,11 +632,12 @@
           <table class="w-full text-sm">
             <thead>
               <tr class="border-b border-slate-200 bg-slate-50 text-left">
-                <th class="sticky z-10 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500 sm:px-4 sm:py-3" style="top: var(--site-header-height)">Agency</th>
-                <th class="sticky z-10 bg-slate-50 px-2 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500 sm:px-3 sm:py-3" style="top: var(--site-header-height)">Type</th>
-                <th class="sticky z-10 bg-slate-50 px-2 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500 sm:px-3 sm:py-3" style="top: var(--site-header-height)">Signed</th>
-                <th class="sticky z-10 bg-slate-50 px-2 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500 sm:px-3 sm:py-3" style="top: var(--site-header-height)">MOA</th>
-                <th class="sticky z-10 hidden bg-slate-50 px-2 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500 sm:table-cell sm:px-3 sm:py-3" style="top: var(--site-header-height)">FOIA</th>
+                <th class="sticky z-10 bg-slate-50 px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 sm:px-4 sm:py-3" style="top: {thTop}">Agency</th>
+                <th class="sticky z-10 bg-slate-50 px-2 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 sm:px-3 sm:py-3" style="top: {thTop}">Type</th>
+                <th class="sticky z-10 bg-slate-50 px-2 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 sm:px-3 sm:py-3" style="top: {thTop}">Signed</th>
+                <th class="sticky z-10 hidden bg-slate-50 px-2 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 sm:table-cell sm:px-3 sm:py-3" style="top: {thTop}">Population</th>
+                <th class="sticky z-10 bg-slate-50 px-2 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 sm:px-3 sm:py-3" style="top: {thTop}">MOA</th>
+                <th class="sticky z-10 hidden bg-slate-50 px-2 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 sm:table-cell sm:px-3 sm:py-3" style="top: {thTop}">FOIA</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
@@ -644,7 +648,7 @@
                       href={localizeHref(`/agency/${agency.slug}`)}
                       class="font-semibold leading-snug text-slate-900 no-underline hover:underline"
                     >{agency.name}</a>
-                    <p class="text-xs text-slate-500">
+                    <p class="text-xs text-slate-600">
                       {[agency.city, agency.state].filter(Boolean).join(", ")}
                     </p>
                   </td>
@@ -660,8 +664,11 @@
                       {/each}
                     </div>
                   </td>
-                  <td class="px-2 py-2 tabular-nums text-slate-500 sm:px-3 sm:py-3">
+                  <td class="px-2 py-2 tabular-nums text-slate-600 sm:px-3 sm:py-3">
                     {agency.signed_date ? agency.signed_date.slice(0, 4) : "—"}
+                  </td>
+                  <td class="hidden px-2 py-2 tabular-nums text-slate-600 sm:table-cell sm:px-3 sm:py-3">
+                    {agency.population ? popFmt.format(agency.population) : "—"}
                   </td>
                   <td class="px-2 py-2 text-xs font-semibold sm:px-3 sm:py-3">
                     {#if agency.moa_url}
