@@ -298,7 +298,7 @@
     description,
     url: siteUrl,
     license: "https://creativecommons.org/licenses/by/4.0/",
-    creator: { "@type": "Organization", name: "287(g) Explorer" },
+    creator: { "@type": "Organization", name: "287(g) Watch" },
   })}</` + `script>`}
 </svelte:head>
 

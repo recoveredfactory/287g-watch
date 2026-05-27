@@ -886,43 +886,7 @@ if (oriUnmatchedByType.size) {
   )
 }
 
-// ── 6. CSLLEA 2018 — fill missing operating budgets via ORI ──────────────────
-
-const CSLLEA_TSV = resolve(__dirname, 'data/csllea_2018.tsv')
-if (existsSync(CSLLEA_TSV)) {
-  const cslleaText = readFileSync(CSLLEA_TSV, 'utf8')
-  const cslleaRows = parseCSV(cslleaText.replace(/\t/g, ','))
-  const cslleaHeaders = cslleaRows[0]
-  const cc = Object.fromEntries(cslleaHeaders.map((h, i) => [h.trim(), i])) as Record<string, number>
-  const cslleaByOri = new Map<string, string[]>()
-  for (let i = 1; i < cslleaRows.length; i++) {
-    const r = cslleaRows[i]
-    const ori = r[cc.ORI9]?.trim()
-    if (ori) cslleaByOri.set(ori, r)
-  }
-
-  const MISSING_CODES = new Set(['-9', '-8', '-7', '0', ''])
-  let budgetFilled = 0
-  for (const a of agencies) {
-    if (!a.ori) continue
-    const existing = a.agreement?.operating_budget
-    if (existing != null) continue
-    const row = cslleaByOri.get(a.ori)
-    if (!row) continue
-    const raw = row[cc.OPBUDGET]?.trim()
-    if (!raw || MISSING_CODES.has(raw)) continue
-    const budget = Number(raw)
-    if (!Number.isFinite(budget) || budget <= 0) continue
-    if (!a.agreement) a.agreement = { population_policed: null, operating_budget: null, agency_type: null }
-    a.agreement.operating_budget = budget
-    budgetFilled++
-  }
-  console.log(`\nCSLLEA 2018: filled operating budget for ${budgetFilled} agencies`)
-} else {
-  console.log('\nCSLLEA 2018 not found — skipping budget fill')
-}
-
-// ── 7. Per-state coverage: % of local LE agencies with a 287(g) agreement ─────
+// ── 6. Per-state coverage: % of local LE agencies with a 287(g) agreement ─────
 //
 // Denominator: FBI LEE County + City agencies per state (these are the agencies
 // that could plausibly sign a 287(g) agreement). State DOCs, federal agencies,

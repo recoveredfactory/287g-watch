@@ -2,6 +2,7 @@
   import { onDestroy } from "svelte";
   import { browser } from "$app/environment";
   import { getLocale } from "$lib/paraglide/runtime";
+  import { m } from "$lib/paraglide/messages.js";
 
   // Range is fractional months relative to Jan 2025 (idx 0). minIdx is usually
   // 0; maxIdx includes a small headroom past today so the last batch of
@@ -125,7 +126,7 @@
   </div>
 
   <p class="text-[11px] italic leading-snug text-slate-500 sm:text-xs">
-    This map shows agencies that were active as of the most recent data. Agreements signed before January 2025 are shown throughout as a baseline; later signings appear by their signing month. It doesn't reflect agreements that were later terminated, paused, or earlier signings of agreements that were re-signed.
+    {m.home_map_caveat()}
   </p>
 </div>
 

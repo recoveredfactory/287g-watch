@@ -15,7 +15,7 @@
   const { modelName, slug, definition, seeAlso, agencies, snapshotDate, stateCount, allModelCounts } = data;
 
   const siteUrl = import.meta.env.PUBLIC_SITE_URL ?? "https://287g.recoveredfactory.net";
-  const title = `${modelName} — 287(g) Explorer`;
+  const title = `${modelName} — 287(g) Watch`;
   const canonicalUrl = `${siteUrl}/model/${slug}`;
 
   const intFmt = new Intl.NumberFormat();
