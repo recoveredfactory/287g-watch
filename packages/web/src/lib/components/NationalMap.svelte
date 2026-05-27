@@ -243,11 +243,19 @@
 
       // Same idea for drag-pan: at the locked floor the map already fills the
       // inset frame, so dragging would just slide the country into empty
-      // space. Re-enable once the user zooms in.
+      // space. But once a user has actively zoomed in even once, they're
+      // driving the map — keep dragPan enabled from then on so returning to
+      // floor doesn't strand them with a dead gesture. The original bug only
+      // hits fresh viewers; this still protects them.
+      let everZoomedIn = false;
       const syncDragPan = () => {
         if (!map) return;
-        if (map.getZoom() > map.getMinZoom() + 0.05) map.dragPan.enable();
-        else map.dragPan.disable();
+        if (map.getZoom() > map.getMinZoom() + 0.05) {
+          everZoomedIn = true;
+          map.dragPan.enable();
+        } else if (!everZoomedIn) {
+          map.dragPan.disable();
+        }
       };
       map.dragPan.disable();
       map.on("zoomend", syncDragPan);
