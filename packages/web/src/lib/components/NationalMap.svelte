@@ -162,10 +162,16 @@
       map.setPaintProperty("state-lines", "line-color", c.line);
     if (map.getLayer("county-lines"))
       map.setPaintProperty("county-lines", "line-color", c.county);
+    if (map.getLayer("highway-static-casing"))
+      map.setPaintProperty("highway-static-casing", "line-color", c.roadCasing);
+    if (map.getLayer("highway-static-fill"))
+      map.setPaintProperty("highway-static-fill", "line-color", c.roadFill);
     if (map.getLayer("road-highway-casing"))
       map.setPaintProperty("road-highway-casing", "line-color", c.roadCasing);
     if (map.getLayer("road-highway-fill"))
       map.setPaintProperty("road-highway-fill", "line-color", c.roadFill);
+    if (map.getLayer("agencies"))
+      map.setPaintProperty("agencies", "circle-stroke-color", c.bg);
     if (map.getLayer("road-major-casing"))
       map.setPaintProperty("road-major-casing", "line-color", c.roadMajorCasing);
     if (map.getLayer("road-major-fill"))
@@ -278,6 +284,37 @@
           "line-color": PALETTES[palette].county,
           "line-width": 0.4,
           "line-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0, 5.5, 0.7],
+        },
+      });
+
+      // Static inset highways for the lowest zoom levels — PMTiles' roads
+      // source starts at zoom 3, but mobile's locked-floor view sits below
+      // that. The hand-baked geojson covers the inset layout (incl. AK/HI)
+      // and fades out by ~zoom 4.5 as PMTiles takes over.
+      map.addSource("highways-static", {
+        type: "geojson",
+        data: "/us-highways.geojson",
+      });
+      map.addLayer({
+        id: "highway-static-casing",
+        type: "line",
+        source: "highways-static",
+        maxzoom: 4.5,
+        paint: {
+          "line-color": PALETTES[palette].roadCasing,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 1, 1.5, 4, 2.5],
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 1, 0.7, 4, 0.7, 4.5, 0],
+        },
+      });
+      map.addLayer({
+        id: "highway-static-fill",
+        type: "line",
+        source: "highways-static",
+        maxzoom: 4.5,
+        paint: {
+          "line-color": PALETTES[palette].roadFill,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 1, 0.6, 4, 1.2],
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 1, 0.9, 4, 0.9, 4.5, 0],
         },
       });
 
@@ -475,18 +512,20 @@
         source: "agencies",
         paint: {
           "circle-color": ["get", "color"],
-          // No stroke — the white outline was reading as a halo, especially
-          // in the dark palette. Without it, dots feel like saturated marks
-          // rather than outlined targets; overlap is handled by partial
-          // opacity instead.
-          "circle-stroke-width": 0,
+          // Slight stroke = bg color: knocks out a thin gap between
+          // touching dots without reading as a halo. The reduced fill
+          // opacity lets dense clusters (FL, TX) read as "many overlapping"
+          // rather than a solid blob.
+          "circle-stroke-width": 0.6,
+          "circle-stroke-color": PALETTES[palette].bg,
+          "circle-stroke-opacity": 1,
           "circle-radius": [
             "interpolate", ["linear"], ["zoom"],
             3, radius(0.8, 7),
             6, radius(2.2, 12),
             10, radius(4, 20),
           ],
-          "circle-opacity": 0.82,
+          "circle-opacity": 0.7,
         },
       });
 

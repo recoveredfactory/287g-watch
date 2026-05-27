@@ -204,14 +204,18 @@
           source: "context-agencies",
           paint: {
             "circle-color": ["get", "color"],
-            "circle-stroke-width": 0,
+            // Slight bg-colored stroke for cluster separation, lower fill
+            // opacity for overlap readability — matches the homepage map.
+            "circle-stroke-width": 0.6,
+            "circle-stroke-color": "#dde4eb",
+            "circle-stroke-opacity": 1,
             "circle-radius": [
               "interpolate", ["linear"], ["zoom"],
               4, ["interpolate", ["linear"], sqrtOfficers, 0, 1.2 * SCALE, 18, 5 * SCALE],
               7, ["interpolate", ["linear"], sqrtOfficers, 0, 2.2 * SCALE, 18, 8 * SCALE],
               10, ["interpolate", ["linear"], sqrtOfficers, 0, 3.5 * SCALE, 18, 12 * SCALE],
             ],
-            "circle-opacity": 0.6,
+            "circle-opacity": 0.55,
           },
         });
       }
