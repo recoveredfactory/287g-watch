@@ -47,6 +47,11 @@
     return localizeHref(basePath, { locale: targetLocale });
   }
 
+  // Active-tab matcher for the header nav. "/" only matches the home page
+  // exactly; other paths match the page itself plus any nested route.
+  const isNavActive = (href: string, current: string): boolean =>
+    href === "/" ? current === "/" : current === href || current.startsWith(href + "/");
+
   const BANNER_KEY = "rf-banner-dismissed";
   let bannerVisible = false;
 
@@ -188,11 +193,27 @@
 
         <!-- Row 2 on mobile / middle+right on desktop -->
         <div class="mt-2.5 flex items-center sm:mt-0 sm:flex-1">
-          <nav class="flex items-center gap-5 text-sm font-semibold text-white sm:ml-8">
-            <a href={localizeHref("/")} class="no-underline hover:text-white/70">{m.nav_map()}</a>
-            <a href={localizeHref("/about")} class="no-underline hover:text-white/70">{m.nav_about()}</a>
-            <a href={localizeHref("/glossary")} class="no-underline hover:text-white/70">{m.nav_glossary()}</a>
-            <a href={localizeHref("/methodology")} class="no-underline hover:text-white/70">{m.nav_methodology()}</a>
+          <nav class="flex items-center gap-5 text-sm font-semibold sm:ml-8">
+            <a
+              href={localizeHref("/")}
+              class="no-underline {isNavActive('/', basePath) ? 'text-white underline underline-offset-4 decoration-2' : 'text-white/60 hover:text-white'}"
+              aria-current={isNavActive('/', basePath) ? 'page' : undefined}
+            >{m.nav_map()}</a>
+            <a
+              href={localizeHref("/about")}
+              class="no-underline {isNavActive('/about', basePath) ? 'text-white underline underline-offset-4 decoration-2' : 'text-white/60 hover:text-white'}"
+              aria-current={isNavActive('/about', basePath) ? 'page' : undefined}
+            >{m.nav_about()}</a>
+            <a
+              href={localizeHref("/glossary")}
+              class="no-underline {isNavActive('/glossary', basePath) ? 'text-white underline underline-offset-4 decoration-2' : 'text-white/60 hover:text-white'}"
+              aria-current={isNavActive('/glossary', basePath) ? 'page' : undefined}
+            >{m.nav_glossary()}</a>
+            <a
+              href={localizeHref("/methodology")}
+              class="no-underline {isNavActive('/methodology', basePath) ? 'text-white underline underline-offset-4 decoration-2' : 'text-white/60 hover:text-white'}"
+              aria-current={isNavActive('/methodology', basePath) ? 'page' : undefined}
+            >{m.nav_methodology()}</a>
           </nav>
           <!-- Lang switcher — hidden on mobile; visible on desktop -->
           <div class="ml-auto hidden items-center gap-2 border-l border-white/20 pl-5 text-xs uppercase tracking-wider sm:flex" aria-label={m.lang_toggle_aria()}>
