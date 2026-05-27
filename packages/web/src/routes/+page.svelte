@@ -636,7 +636,8 @@
           >{m.home_search_clear_filters()}</button>
         {:else}
           {m.home_search_baseline({
-            count: intFmt.format(data.agencies.length),
+            rows: intFmt.format(data.agencies.length),
+            agencies: intFmt.format(data.agencyCountUnique),
             states: String(data.stateCount),
           })}
         {/if}

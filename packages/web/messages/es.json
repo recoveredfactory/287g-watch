@@ -66,7 +66,7 @@
   "home_search_all_states": "Todos los estados",
   "home_search_match_count": "{matched} de {total} agencias coinciden",
   "home_search_clear_filters": "Limpiar filtros",
-  "home_search_baseline": "{count} agencias en {states} estados",
+  "home_search_baseline": "{rows} filas de {agencies} agencias en {states} estados",
   "home_search_no_match": "Ninguna agencia coincide con tu búsqueda.",
   "home_search_use_detected_state": "Usar mi estado ({state})",
   "home_search_year_signed": "Año de firma",
