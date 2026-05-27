@@ -7,6 +7,8 @@ dist
 packages/web/src/lib/paraglide
 packages/web/project.inlang/cache
 packages/web/static/data
+packages/web/static/og
+packages/web/static/og-bg-map.png
 packages/pipeline/__pycache__
 packages/pipeline/.venv
 packages/pipeline/data/scraped_contacts.json

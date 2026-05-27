@@ -4,6 +4,7 @@
   import Gloss from "$lib/components/Gloss.svelte";
   $: title = m.about_meta_title();
   $: description = m.about_meta_description();
+  const siteUrl = import.meta.env.PUBLIC_SITE_URL ?? "https://287g.recoveredfactory.net";
   // Page-wide first-mention tracker: gloss the first time each term appears
   // anywhere on the page, not once per paragraph.
   const seen = new Set<string>();
@@ -12,6 +13,13 @@
 <svelte:head>
   <title>{title}</title>
   <meta name="description" content={description} />
+  <meta property="og:title" content={title} />
+  <meta property="og:description" content={description} />
+  <meta property="og:image" content="{siteUrl}/og/about.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="twitter:card" content="summary_large_image" />
+  <meta property="twitter:image" content="{siteUrl}/og/about.png" />
 </svelte:head>
 
 <main id="main-content" class="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
