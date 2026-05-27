@@ -339,9 +339,13 @@
   <meta property="og:title" content={title} />
   <meta property="og:description" content={description} />
   <meta property="og:url" content={siteUrl} />
+  <meta property="og:image" content="{siteUrl}/og/home.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
   <meta property="twitter:card" content="summary_large_image" />
   <meta property="twitter:title" content={title} />
   <meta property="twitter:description" content={description} />
+  <meta property="twitter:image" content="{siteUrl}/og/home.png" />
   {@html `<script type="application/ld+json">${JSON.stringify({
     "@context": "https://schema.org",
     "@type": "Dataset",

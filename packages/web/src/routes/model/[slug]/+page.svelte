@@ -48,6 +48,11 @@
   <meta property="og:title" content={title} />
   <meta property="og:description" content={definition} />
   <meta property="og:url" content={canonicalUrl} />
+  <meta property="og:image" content="{siteUrl}/og/model/{slug}.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="twitter:card" content="summary_large_image" />
+  <meta property="twitter:image" content="{siteUrl}/og/model/{slug}.png" />
 </svelte:head>
 
 <main id="main-content" class="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">

@@ -90,9 +90,13 @@
   <meta property="og:title" content={title} />
   <meta property="og:description" content={description} />
   <meta property="og:url" content={canonicalUrl} />
-  <meta property="twitter:card" content="summary" />
+  <meta property="og:image" content="{siteUrl}/og/agency/{agency.slug}.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="twitter:card" content="summary_large_image" />
   <meta property="twitter:title" content={title} />
   <meta property="twitter:description" content={description} />
+  <meta property="twitter:image" content="{siteUrl}/og/agency/{agency.slug}.png" />
   {@html `<script type="application/ld+json">${jsonLd}</script>`}
 </svelte:head>
 
