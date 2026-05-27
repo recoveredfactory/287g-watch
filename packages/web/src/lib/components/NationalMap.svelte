@@ -36,16 +36,55 @@
     browser && import.meta.env.DEV
       ? ((new URLSearchParams(window.location.search).get("scale") as any) ?? "officers")
       : "officers";
-  export type PaletteKey = "cream" | "sand" | "invert";
+  export type PaletteKey = "cream" | "dark";
   export let palette: PaletteKey = "cream";
 
-  // Palettes drafted off the brand colors (muted rose, sky, sage) so the
-  // model dots stay coherent against the basemap. Three picks the user
-  // can toggle between via the selector above the map.
-  const PALETTES: Record<PaletteKey, { bg: string; state: string; tint: string; line: string }> = {
-    cream:  { bg: "#f0e9d8", state: "#fcfaf2", tint: "#d8c8a8", line: "#b9ad8e" },
-    sand:   { bg: "#e6dcc4", state: "#faf6e8", tint: "#c8b58a", line: "#a89b7e" },
-    invert: { bg: "#fafaf9", state: "#e8e2d4", tint: "#c8b58a", line: "#a89b7e" },
+  type PaletteSpec = {
+    bg: string;
+    state: string;
+    tint: string;
+    line: string;
+    county: string;
+    roadCasing: string;
+    roadFill: string;
+    roadMajorCasing: string;
+    roadMajorFill: string;
+    roadMedium: string;
+    text: string;
+    textHalo: string;
+  };
+
+  // Two picks drafted off the brand colors. Cream is the warm editorial-
+  // atlas default; dark gives the same map an analytical, presentation feel.
+  const PALETTES: Record<PaletteKey, PaletteSpec> = {
+    cream: {
+      bg: "#f0e9d8",
+      state: "#fcfaf2",
+      tint: "#d8c8a8",
+      line: "#b9ad8e",
+      county: "#c8d4dc",
+      roadCasing: "#a0b0bc",
+      roadFill: "#eef2f5",
+      roadMajorCasing: "#b0bcc7",
+      roadMajorFill: "#f3f5f7",
+      roadMedium: "#cdd6dc",
+      text: "#3d3424",
+      textHalo: "rgba(252,250,242,0.9)",
+    },
+    dark: {
+      bg: "#1f1a14",
+      state: "#2a2520",
+      tint: "#4a3f2a",
+      line: "#5a4f3f",
+      county: "#3a322a",
+      roadCasing: "#5a4f3f",
+      roadFill: "#c8b89c",
+      roadMajorCasing: "#4a4035",
+      roadMajorFill: "#8a7d68",
+      roadMedium: "#544a3d",
+      text: "#e8dccc",
+      textHalo: "rgba(20,16,12,0.85)",
+    },
   };
 
   const MODEL_FALLBACK = "#94a3b8";
@@ -109,7 +148,9 @@
 
   $: if (map) updateSource();
 
-  // Re-paint when the user toggles the palette via the selector
+  // Re-paint when the user toggles the palette via the selector. Covers
+  // every layer that has a palette-driven color so the switch updates
+  // basemap, labels, and roads in one pass without remount.
   $: if (map && map.isStyleLoaded()) {
     const c = PALETTES[palette];
     map.setPaintProperty("background", "background-color", c.bg);
@@ -119,6 +160,23 @@
       map.setPaintProperty("state-patrol-tint", "fill-color", c.tint);
     if (map.getLayer("state-lines"))
       map.setPaintProperty("state-lines", "line-color", c.line);
+    if (map.getLayer("county-lines"))
+      map.setPaintProperty("county-lines", "line-color", c.county);
+    if (map.getLayer("road-highway-casing"))
+      map.setPaintProperty("road-highway-casing", "line-color", c.roadCasing);
+    if (map.getLayer("road-highway-fill"))
+      map.setPaintProperty("road-highway-fill", "line-color", c.roadFill);
+    if (map.getLayer("road-major-casing"))
+      map.setPaintProperty("road-major-casing", "line-color", c.roadMajorCasing);
+    if (map.getLayer("road-major-fill"))
+      map.setPaintProperty("road-major-fill", "line-color", c.roadMajorFill);
+    if (map.getLayer("road-medium"))
+      map.setPaintProperty("road-medium", "line-color", c.roadMedium);
+    for (const id of ["places-major", "places-minor", "places-all"]) {
+      if (!map.getLayer(id)) continue;
+      map.setPaintProperty(id, "text-color", c.text);
+      map.setPaintProperty(id, "text-halo-color", c.textHalo);
+    }
   }
 
   onMount(async () => {
@@ -217,7 +275,7 @@
         source: "counties",
         minzoom: 5,
         paint: {
-          "line-color": "#c8d4dc",
+          "line-color": PALETTES[palette].county,
           "line-width": 0.4,
           "line-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0, 5.5, 0.7],
         },
@@ -228,8 +286,10 @@
       // intentionally left without road/city detail in this iteration.
       map.addSource("base", pmtilesBaseSource());
 
-      // Interstates (kind: highway) — always visible, even at the national
-      // view. They're the connective tissue readers expect to see.
+      // Interstates (kind: highway) — visible at every zoom, including the
+      // national view. They're the connective tissue readers expect to see.
+      // Min line-widths are bumped so the network reads as a network at
+      // the locked-floor zoom, not just a hint.
       map.addLayer({
         id: "road-highway-casing",
         type: "line",
@@ -238,9 +298,9 @@
         filter: ["==", ["get", "kind"], "highway"],
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
-          "line-color": "#a0b0bc",
-          "line-width": ["interpolate", ["linear"], ["zoom"], 2, 0.8, 5, 1.8, 9, 3.5, 12, 5],
-          "line-opacity": 0.7,
+          "line-color": PALETTES[palette].roadCasing,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 2, 1.8, 5, 2.5, 9, 4, 12, 5.5],
+          "line-opacity": 0.8,
         },
       });
 
@@ -252,8 +312,8 @@
         filter: ["==", ["get", "kind"], "highway"],
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
-          "line-color": "#eef2f5",
-          "line-width": ["interpolate", ["linear"], ["zoom"], 2, 0.35, 5, 0.9, 9, 1.8, 12, 3],
+          "line-color": PALETTES[palette].roadFill,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 2, 0.8, 5, 1.2, 9, 2, 12, 3],
           "line-opacity": 0.95,
         },
       });
@@ -269,7 +329,7 @@
         filter: ["==", ["get", "kind"], "major_road"],
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
-          "line-color": "#b0bcc7",
+          "line-color": PALETTES[palette].roadMajorCasing,
           "line-width": ["interpolate", ["linear"], ["zoom"], 5, 0.8, 9, 2, 12, 3.5],
           "line-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0, 5.5, 0.65],
         },
@@ -284,7 +344,7 @@
         filter: ["==", ["get", "kind"], "major_road"],
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
-          "line-color": "#f3f5f7",
+          "line-color": PALETTES[palette].roadMajorFill,
           "line-width": ["interpolate", ["linear"], ["zoom"], 5, 0.4, 9, 1.1, 12, 2],
           "line-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0, 5.5, 0.9],
         },
@@ -299,7 +359,7 @@
         minzoom: 8,
         filter: ["==", ["get", "kind"], "medium_road"],
         paint: {
-          "line-color": "#cdd6dc",
+          "line-color": PALETTES[palette].roadMedium,
           "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.4, 12, 1.5],
           "line-opacity": 0.8,
         },
@@ -328,8 +388,8 @@
           "text-allow-overlap": false,
         },
         paint: {
-          "text-color": "#334155",
-          "text-halo-color": "rgba(255,255,255,0.85)",
+          "text-color": PALETTES[palette].text,
+          "text-halo-color": PALETTES[palette].textHalo,
           "text-halo-width": 1.5,
           "text-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0, 4.5, 1],
         },
@@ -355,8 +415,8 @@
           "text-allow-overlap": false,
         },
         paint: {
-          "text-color": "#475569",
-          "text-halo-color": "rgba(255,255,255,0.85)",
+          "text-color": PALETTES[palette].text,
+          "text-halo-color": PALETTES[palette].textHalo,
           "text-halo-width": 1.5,
           "text-opacity": ["interpolate", ["linear"], ["zoom"], 6, 0, 6.5, 1],
         },
@@ -378,8 +438,8 @@
           "text-allow-overlap": false,
         },
         paint: {
-          "text-color": "#64748b",
-          "text-halo-color": "rgba(255,255,255,0.85)",
+          "text-color": PALETTES[palette].text,
+          "text-halo-color": PALETTES[palette].textHalo,
           "text-halo-width": 1.5,
           "text-opacity": ["interpolate", ["linear"], ["zoom"], 8, 0, 8.5, 1],
         },

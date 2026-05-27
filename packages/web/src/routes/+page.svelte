@@ -21,18 +21,16 @@
   const popFmt = new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 });
 
   // ── Map palette (user-toggleable) ──────────────────────────────────────────
-  type PaletteKey = "cream" | "sand" | "invert";
+  type PaletteKey = "cream" | "dark";
   let mapPalette: PaletteKey = "cream";
   const PALETTE_OPTIONS: Array<{ key: PaletteKey; label: string }> = [
-    { key: "cream",  label: "Cream" },
-    { key: "sand",   label: "Sand" },
-    { key: "invert", label: "Invert" },
+    { key: "cream", label: "Cream" },
+    { key: "dark",  label: "Dark" },
   ];
   // Tint swatch in the legend should match whatever palette is active
   const PALETTE_TINT: Record<PaletteKey, string> = {
     cream: "#d8c8a8",
-    sand: "#c8b58a",
-    invert: "#c8b58a",
+    dark:  "#4a3f2a",
   };
 
   // ── Search + filter ────────────────────────────────────────────────────────
@@ -372,19 +370,28 @@
         </div>
       </div>
 
-      <!-- Palette selector -->
-      <div class="mt-3 flex items-center gap-2 text-xs text-slate-500">
-        <span class="hidden sm:inline">Map tone:</span>
-        <div class="inline-flex rounded-md border border-slate-300 bg-white p-0.5 shadow-sm">
-          {#each PALETTE_OPTIONS as opt}
-            <button
-              type="button"
-              class="rounded px-2.5 py-1 text-xs font-medium transition-colors {mapPalette === opt.key ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'}"
-              on:click={() => (mapPalette = opt.key)}
-              aria-pressed={mapPalette === opt.key}
-            >{opt.label}</button>
-          {/each}
+      <!-- Palette selector + zoom-to-detected-state shortcut -->
+      <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-500">
+        <div class="flex items-center gap-2">
+          <span class="hidden sm:inline">Map tone:</span>
+          <div class="inline-flex rounded-md border border-slate-300 bg-white p-0.5 shadow-sm">
+            {#each PALETTE_OPTIONS as opt}
+              <button
+                type="button"
+                class="rounded px-2.5 py-1 text-xs font-medium transition-colors {mapPalette === opt.key ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'}"
+                on:click={() => (mapPalette = opt.key)}
+                aria-pressed={mapPalette === opt.key}
+              >{opt.label}</button>
+            {/each}
+          </div>
         </div>
+        {#if detectedState && STATE_NAMES[detectedState] && data.stateMeta[detectedState]?.participating > 0 && !(selectedStates.size === 1 && selectedStates.has(detectedState))}
+          <button
+            type="button"
+            on:click={() => (selectedStates = new Set([detectedState]))}
+            class="text-xs text-slate-500 underline-offset-2 hover:text-slate-900 hover:underline"
+          >Zoom to {STATE_NAMES[detectedState]} →</button>
+        {/if}
       </div>
     </div>
 
