@@ -246,6 +246,20 @@
         <dd class="text-xs text-slate-500">FBI LEE {agency.lee.data_year}</dd>
       </div>
     {/if}
+    {#if agency.lee?.pe_ct_per_1000 != null}
+      <div>
+        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-500">Officers per 1,000</dt>
+        <dd class="mt-1 font-semibold text-slate-900">{agency.lee.pe_ct_per_1000.toFixed(2)}</dd>
+        <dd class="text-xs text-slate-500">FBI LEE {agency.lee.data_year}</dd>
+      </div>
+    {/if}
+    {#if agency.agreement?.population_policed != null}
+      <div>
+        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-500">Population policed</dt>
+        <dd class="mt-1 font-semibold text-slate-900">{intFmt.format(agency.agreement.population_policed)}</dd>
+        <dd class="text-xs text-slate-500">As reported in MOA</dd>
+      </div>
+    {/if}
     {#if agency.agreement?.operating_budget != null}
       <div>
         <dt class="text-xs font-semibold uppercase tracking-wider text-slate-500">{m.agency_operating_budget()}</dt>
@@ -320,6 +334,12 @@
       <p class="mt-3 text-sm italic text-slate-600">{m.agency_contact_none()}</p>
     {/if}
   </section>
+
+  <!-- Data provenance -->
+  <p class="mt-6 text-xs text-slate-400">
+    {#if agency.snapshot_date}Data last updated {dateFmt(agency.snapshot_date)}.{/if}
+    {#if agency.ori} ORI: <span class="font-mono">{agency.ori}</span>.{/if}
+  </p>
 
   <!-- Agreement history -->
   {#if agency.history && agency.history.length > 0}
