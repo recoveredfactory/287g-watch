@@ -60,6 +60,17 @@
     cursorIdx = Number((e.target as HTMLInputElement).value);
   };
 
+  // Restart from the beginning. Exposed so the parent can wire this to the
+  // map's counter card (tap-to-replay).
+  export const restart = () => {
+    if (rafId != null) { cancelAnimationFrame(rafId); rafId = null; }
+    cursorIdx = minIdx;
+    if (!browser) return;
+    playing = true;
+    lastTimestamp = 0;
+    rafId = requestAnimationFrame(tick);
+  };
+
   onDestroy(stop);
 
   const monthLabel = (idx: number): string => {

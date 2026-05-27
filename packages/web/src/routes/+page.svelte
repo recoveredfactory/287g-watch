@@ -8,7 +8,7 @@
   import { onMount } from "svelte";
   import { tweened } from "svelte/motion";
   import { cubicOut } from "svelte/easing";
-  import { localizeHref } from "$lib/paraglide/runtime";
+  import { localizeHref, getLocale } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
   import Gloss from "$lib/components/Gloss.svelte";
 
@@ -61,34 +61,33 @@
     0,
   );
 
-  // Big number overlay on the map. Visible while the scrubber is playing or
-  // while the cursor is held away from "today" so the user always sees the
-  // live count change. Smooth tween catches up with easing — gives the digits
-  // that "ticking up" feel without per-keystroke jank.
+  // Big number overlay on the map. Always visible — readers always see the
+  // live count. Smooth tween catches up with easing so the digits feel like
+  // they're ticking up rather than slamming on each keystroke.
   let timelinePlaying = false;
   const displayedCount = tweened(0, { duration: 280, easing: cubicOut });
   const displayedPop = tweened(0, { duration: 280, easing: cubicOut });
   $: displayedCount.set(countAtCursor);
   $: displayedPop.set(popAtCursor);
 
-  // Linger logic: when playback ends (or the user releases at the end), keep
-  // the overlay visible for 2s so the final tally has presence before it fades.
-  const LINGER_MS = 2000;
-  let lingerActive = false;
-  let lingerTimer: ReturnType<typeof setTimeout> | null = null;
-  let wasTimelinePlaying = false;
-  $: if (wasTimelinePlaying !== timelinePlaying) {
-    if (wasTimelinePlaying && !timelinePlaying) {
-      lingerActive = true;
-      if (lingerTimer) clearTimeout(lingerTimer);
-      lingerTimer = setTimeout(() => { lingerActive = false; }, LINGER_MS);
-    }
-    wasTimelinePlaying = timelinePlaying;
-  }
-  $: showCountOverlay =
-    timelinePlaying ||
-    lingerActive ||
-    (Number.isFinite(maxIdx) && cursorIdx < maxIdx - 0.05);
+  // Card is a tap target: clicking it restarts the timeline animation from
+  // Jan 2025 so readers can replay the sweep without scrolling to the
+  // scrubber.
+  let scrubberRef: { restart: () => void } | null = null;
+  const restartTimeline = () => scrubberRef?.restart();
+
+  // Month label for the overlay's date ticker. Clamped to today so the label
+  // doesn't read "Jun 2026" during the small headroom past maxIdx.
+  const overlayMonthLabel = (idx: number): string => {
+    const clamped = Math.min(Math.max(0, idx), todayIdx);
+    const month = Math.floor(clamped);
+    const y = TIMELINE_EPOCH_YEAR + Math.floor(month / 12);
+    const mm = (month % 12) + 1;
+    const localeTag = getLocale() === "es" ? "es-MX" : "en-US";
+    return new Intl.DateTimeFormat(localeTag, { month: "short", year: "numeric", timeZone: "UTC" })
+      .format(new Date(Date.UTC(y, mm - 1, 1)));
+  };
+  $: overlayDateLabel = overlayMonthLabel(cursorIdx);
 
   // ── Search + filter ────────────────────────────────────────────────────────
   let searchQuery = "";
@@ -452,29 +451,35 @@
           {cursorIdx}
         />
         <div
-          class="count-overlay pointer-events-none absolute inset-x-0 top-2 flex justify-center sm:top-4"
-          class:visible={showCountOverlay}
-          class:playing={timelinePlaying}
-          aria-hidden="true"
+          class="count-overlay pointer-events-none absolute inset-x-0 top-2 flex flex-col items-center sm:top-auto sm:bottom-4"
         >
-          <div class="count-card">
-            <div class="count-stat">
-              <div class="count-number">{intFmt.format(Math.round($displayedCount))}</div>
-              <div class="count-label">agencies</div>
+          <button
+            type="button"
+            on:click={restartTimeline}
+            class="count-card pointer-events-auto"
+            aria-label="Replay the 287(g) growth animation from January 2025"
+            title="Replay from January 2025"
+          >
+            <div class="count-stats">
+              <div class="count-stat">
+                <div class="count-number">{intFmt.format(Math.round($displayedCount))}</div>
+                <div class="count-label">agencies</div>
+              </div>
+              <div class="count-divider" aria-hidden="true"></div>
+              <div class="count-stat">
+                <div class="count-number">{popFmtOverlay.format(Math.max(0, $displayedPop))}</div>
+                <div class="count-label">Pop. covered</div>
+              </div>
             </div>
-            <div class="count-divider" aria-hidden="true"></div>
-            <div class="count-stat">
-              <div class="count-number">{popFmtOverlay.format(Math.max(0, $displayedPop))}</div>
-              <div class="count-label">Pop. covered</div>
-            </div>
-          </div>
+          </button>
+          <div class="count-date">{overlayDateLabel}</div>
         </div>
       {/if}
     </div>
     {#if data.agencies.length > 0 && signedIndices.length > 0 && Number.isFinite(maxIdx)}
       <div class="bg-white">
         <div class="mx-auto max-w-6xl">
-          <MapTimelineScrubber {minIdx} {maxIdx} labelMaxIdx={todayIdx} bind:cursorIdx bind:playing={timelinePlaying} {countAtCursor} />
+          <MapTimelineScrubber bind:this={scrubberRef} {minIdx} {maxIdx} labelMaxIdx={todayIdx} bind:cursorIdx bind:playing={timelinePlaying} {countAtCursor} />
         </div>
       </div>
     {/if}
@@ -719,43 +724,72 @@
 </main>
 
 <style>
-  /* Big-number overlay on the map during timeline playback. Sits over the
-     empty space below the inset territories. Fades in/out gently; the inner
-     card gets a soft scale-pop while the timeline is actively playing. */
+  /* Big-number overlay on the map. Always visible. The card itself is a
+     button — tapping it replays the growth animation from Jan 2025. */
   .count-overlay {
-    opacity: 0;
-    transition: opacity 380ms ease-out;
     transform: translateZ(0);
   }
-  .count-overlay.visible {
-    opacity: 1;
-  }
-  .count-card {
+  button.count-card {
+    /* Reset native button chrome so the card looks like a card. */
+    border: 0;
+    font: inherit;
+    color: inherit;
+    text-align: inherit;
+    cursor: pointer;
     display: inline-flex;
+    flex-direction: column;
     align-items: stretch;
-    gap: 0.9rem;
-    padding: 0.45rem 1rem;
+    /* Fixed width so the box doesn't widen as the count crosses
+       thousands or the population step-jumps to a wider compact label. */
+    width: 13rem;
+    padding: 0.5rem 0.75rem 0.55rem;
     border-radius: 0.55rem;
-    background: rgba(255, 255, 255, 0.85);
+    background: rgba(255, 255, 255, 0.92);
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
     box-shadow:
       0 1px 3px rgba(15, 23, 42, 0.08),
-      0 8px 22px rgba(15, 23, 42, 0.06);
-    transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
-    will-change: transform;
+      0 8px 22px rgba(15, 23, 42, 0.10);
+    transition: background-color 180ms ease-out, transform 180ms ease-out;
   }
   @media (min-width: 640px) {
-    .count-card { padding: 0.55rem 1.4rem; gap: 1.25rem; }
+    button.count-card { width: 15rem; padding: 0.6rem 1rem 0.65rem; }
   }
-  .count-overlay.playing .count-card {
-    animation: count-breathe 1.6s ease-in-out infinite;
+  button.count-card:hover {
+    background: #ffffff;
   }
-  @keyframes count-breathe {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.025); }
+  button.count-card:active {
+    transform: scale(0.98);
+  }
+  button.count-card:focus-visible {
+    outline: 2px solid rgba(15, 23, 42, 0.4);
+    outline-offset: 2px;
+  }
+  .count-date {
+    margin-top: 0.4rem;
+    text-align: center;
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: #ffffff;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+  }
+  @media (min-width: 640px) {
+    .count-date { font-size: 0.72rem; }
+  }
+  .count-stats {
+    display: flex;
+    gap: 0.75rem;
+    align-items: stretch;
+  }
+  @media (min-width: 640px) {
+    .count-stats { gap: 1rem; }
   }
   .count-stat {
+    flex: 1 1 0;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -770,23 +804,25 @@
     font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
     font-variant-numeric: tabular-nums;
     font-weight: 800;
-    font-size: 1.4rem;
+    font-size: 1.35rem;
     line-height: 1;
     color: #0f172a;
     letter-spacing: -0.02em;
   }
   @media (min-width: 640px) {
-    .count-number { font-size: 2rem; }
+    .count-number { font-size: 1.7rem; }
   }
   .count-label {
     margin-top: 0.25rem;
-    font-size: 0.58rem;
+    font-size: 0.55rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.16em;
+    letter-spacing: 0.14em;
     color: #64748b;
+    text-align: center;
+    white-space: nowrap;
   }
   @media (min-width: 640px) {
-    .count-label { font-size: 0.66rem; }
+    .count-label { font-size: 0.62rem; }
   }
 </style>
