@@ -57,6 +57,8 @@
     roadMajorCasing: string;
     roadMajorFill: string;
     roadMedium: string;
+    dotStroke: string;
+    dotStrokeWidth: number;
     text: string;
     textHalo: string;
   };
@@ -75,6 +77,8 @@
       roadMajorCasing: "#b0bcc7",
       roadMajorFill: "#f3f5f7",
       roadMedium: "#cdd6dc",
+      dotStroke: "#dde4eb",
+      dotStrokeWidth: 0.6,
       text: "#334155",
       textHalo: "rgba(255,255,255,0.85)",
     },
@@ -89,6 +93,8 @@
       roadMajorCasing: "#222933",
       roadMajorFill: "#3d4754",
       roadMedium: "#252d38",
+      dotStroke: "rgba(255,255,255,0.18)",
+      dotStrokeWidth: 0.25,
       text: "#c2cad4",
       textHalo: "rgba(8,12,18,0.9)",
     },
@@ -241,7 +247,8 @@
     if (map.getLayer("road-highway-fill"))
       map.setPaintProperty("road-highway-fill", "line-color", c.roadFill);
     if (map.getLayer("agencies"))
-      map.setPaintProperty("agencies", "circle-stroke-color", c.bg);
+      map.setPaintProperty("agencies", "circle-stroke-color", c.dotStroke);
+      map.setPaintProperty("agencies", "circle-stroke-width", c.dotStrokeWidth);
     if (map.getLayer("road-major-casing"))
       map.setPaintProperty("road-major-casing", "line-color", c.roadMajorCasing);
     if (map.getLayer("road-major-fill"))
@@ -609,8 +616,8 @@
           // touching dots without reading as a halo. The reduced fill
           // opacity lets dense clusters (FL, TX) read as "many overlapping"
           // rather than a solid blob.
-          "circle-stroke-width": 0.6,
-          "circle-stroke-color": PALETTES[palette].bg,
+          "circle-stroke-width": PALETTES[palette].dotStrokeWidth,
+          "circle-stroke-color": PALETTES[palette].dotStroke,
           "circle-stroke-opacity": 1,
           "circle-radius": initialRadius,
           "circle-opacity": initialOpacity,
