@@ -31,7 +31,7 @@
   "home_hero_lead": "Bajo la Sección 287(g) de la Ley de Inmigración y Nacionalidad, las agencias locales de policía pueden firmar acuerdos con ICE que autorizan a sus oficiales a realizar funciones de inmigración. El programa se ha expandido drásticamente desde 2025.",
   "home_stat_agencies": "agencias participantes",
   "home_stat_states": "estados",
-  "home_stat_population": "personas en jurisdicciones participantes",
+  "home_stat_population": "residentes de jurisdicciones participantes",
   "home_stat_agencies_footnote": "*Identificadores FBI únicos; algunos identificadores agrupan varios nombres de agencia.",
 
   "home_hero_state_callout_standard": "En {state}, {agency_pct}% de las agencias participan, cubriendo {pop_pct}% de la población del estado.",
@@ -101,7 +101,7 @@
   "methodology_matching_heading": "Coincidencia de agencias",
   "methodology_matching_body": "Los nombres de las agencias varían entre fuentes. Normalizamos los nombres y usamos coincidencia difusa de cadenas para vincular registros entre conjuntos de datos, luego revisamos manualmente las coincidencias ambiguas. Cada agencia en nuestro índice incluye un puntaje de confianza para sus coincidencias entre fuentes.",
   "methodology_limitations_heading": "Limitaciones",
-  "methodology_limitations_li_1": "Los datos de población provienen del programa LEE del FBI y reflejan el tamaño de la jurisdicción, no la población directamente afectada por el cumplimiento 287(g).",
+  "methodology_limitations_li_1": "Los datos de población provienen del programa LEE del FBI y reflejan la población residencial jurisdiccional de cada agencia — los residentes del área que la agencia atiende, no las personas que probablemente se encuentren con el cumplimiento 287(g). El tamaño jurisdiccional y el alcance del cumplimiento divergen marcadamente por tipo de agencia y modelo del programa: la jurisdicción de una patrulla estatal de carreteras abarca todo el estado, pero su trabajo no se parece en nada al de un pequeño departamento de policía local, y un sheriff de condado que opera bajo el modelo de cumplimiento en cárceles solo toca a las personas que ingresan a la cárcel.",
   "methodology_limitations_li_2": "Algunas agencias han tenido acuerdos que caducaron y luego se reincorporaron. Las fechas históricas de participación pueden estar incompletas.",
   "methodology_limitations_li_3": "Los PDFs de MOA no están disponibles para todas las agencias. Enlazamos al archivo de appelson cuando es posible.",
   "methodology_updates_heading": "Actualizaciones",
