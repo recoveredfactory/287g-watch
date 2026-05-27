@@ -566,7 +566,7 @@
               bind:value={selectedYear}
               class="rounded-md border border-slate-300 bg-white py-2 pl-3 pr-7 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
-              <option value="">Year signed</option>
+              <option value="">{m.home_search_year_signed()}</option>
               {#each allYears as year}
                 <option value={year}>{year}</option>
               {/each}
