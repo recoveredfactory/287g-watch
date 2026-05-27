@@ -61,34 +61,20 @@
     0,
   );
 
-  // Big number overlay on the map. Visible while the scrubber is playing or
-  // while the cursor is held away from "today" so the user always sees the
-  // live count change. Smooth tween catches up with easing — gives the digits
-  // that "ticking up" feel without per-keystroke jank.
+  // Big number overlay on the map. Always visible — readers always see the
+  // live count. Smooth tween catches up with easing so the digits feel like
+  // they're ticking up rather than slamming on each keystroke.
   let timelinePlaying = false;
   const displayedCount = tweened(0, { duration: 280, easing: cubicOut });
   const displayedPop = tweened(0, { duration: 280, easing: cubicOut });
   $: displayedCount.set(countAtCursor);
   $: displayedPop.set(popAtCursor);
 
-  // Linger logic: when playback ends (or the user releases at the end), keep
-  // the overlay visible for 2s so the final tally has presence before it fades.
-  const LINGER_MS = 2000;
-  let lingerActive = false;
-  let lingerTimer: ReturnType<typeof setTimeout> | null = null;
-  let wasTimelinePlaying = false;
-  $: if (wasTimelinePlaying !== timelinePlaying) {
-    if (wasTimelinePlaying && !timelinePlaying) {
-      lingerActive = true;
-      if (lingerTimer) clearTimeout(lingerTimer);
-      lingerTimer = setTimeout(() => { lingerActive = false; }, LINGER_MS);
-    }
-    wasTimelinePlaying = timelinePlaying;
-  }
-  $: showCountOverlay =
-    timelinePlaying ||
-    lingerActive ||
-    (Number.isFinite(maxIdx) && cursorIdx < maxIdx - 0.05);
+  // Card is a tap target: clicking it restarts the timeline animation from
+  // Jan 2025 so readers can replay the sweep without scrolling to the
+  // scrubber.
+  let scrubberRef: { restart: () => void } | null = null;
+  const restartTimeline = () => scrubberRef?.restart();
 
   // Month label for the overlay's date ticker. Clamped to today so the label
   // doesn't read "Jun 2026" during the small headroom past maxIdx.
@@ -466,10 +452,14 @@
         />
         <div
           class="count-overlay pointer-events-none absolute inset-x-0 top-2 flex flex-col items-center sm:top-auto sm:bottom-4"
-          class:visible={showCountOverlay}
-          aria-hidden="true"
         >
-          <div class="count-card">
+          <button
+            type="button"
+            on:click={restartTimeline}
+            class="count-card pointer-events-auto"
+            aria-label="Replay the 287(g) growth animation from January 2025"
+            title="Replay from January 2025"
+          >
             <div class="count-stats">
               <div class="count-stat">
                 <div class="count-number">{intFmt.format(Math.round($displayedCount))}</div>
@@ -481,7 +471,7 @@
                 <div class="count-label">Pop. covered</div>
               </div>
             </div>
-          </div>
+          </button>
           <div class="count-date">{overlayDateLabel}</div>
         </div>
       {/if}
@@ -489,7 +479,7 @@
     {#if data.agencies.length > 0 && signedIndices.length > 0 && Number.isFinite(maxIdx)}
       <div class="bg-white">
         <div class="mx-auto max-w-6xl">
-          <MapTimelineScrubber {minIdx} {maxIdx} labelMaxIdx={todayIdx} bind:cursorIdx bind:playing={timelinePlaying} {countAtCursor} />
+          <MapTimelineScrubber bind:this={scrubberRef} {minIdx} {maxIdx} labelMaxIdx={todayIdx} bind:cursorIdx bind:playing={timelinePlaying} {countAtCursor} />
         </div>
       </div>
     {/if}
@@ -734,18 +724,18 @@
 </main>
 
 <style>
-  /* Big-number overlay on the map during timeline playback. Sits over the
-     empty space below the inset territories. Fades in/out gently; the inner
-     card gets a soft scale-pop while the timeline is actively playing. */
+  /* Big-number overlay on the map. Always visible. The card itself is a
+     button — tapping it replays the growth animation from Jan 2025. */
   .count-overlay {
-    opacity: 0;
-    transition: opacity 380ms ease-out;
     transform: translateZ(0);
   }
-  .count-overlay.visible {
-    opacity: 1;
-  }
-  .count-card {
+  button.count-card {
+    /* Reset native button chrome so the card looks like a card. */
+    border: 0;
+    font: inherit;
+    color: inherit;
+    text-align: inherit;
+    cursor: pointer;
     display: inline-flex;
     flex-direction: column;
     align-items: stretch;
@@ -760,9 +750,20 @@
     box-shadow:
       0 1px 3px rgba(15, 23, 42, 0.08),
       0 8px 22px rgba(15, 23, 42, 0.10);
+    transition: background-color 180ms ease-out, transform 180ms ease-out;
   }
   @media (min-width: 640px) {
-    .count-card { width: 15rem; padding: 0.6rem 1rem 0.65rem; }
+    button.count-card { width: 15rem; padding: 0.6rem 1rem 0.65rem; }
+  }
+  button.count-card:hover {
+    background: #ffffff;
+  }
+  button.count-card:active {
+    transform: scale(0.98);
+  }
+  button.count-card:focus-visible {
+    outline: 2px solid rgba(15, 23, 42, 0.4);
+    outline-offset: 2px;
   }
   .count-date {
     margin-top: 0.4rem;
