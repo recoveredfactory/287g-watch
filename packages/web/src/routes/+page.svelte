@@ -422,19 +422,40 @@
           <p class="mt-1 text-xs text-slate-500 sm:text-sm">
             {m.home_map_subhead()}
           </p>
+          <p class="mt-1 text-xs text-slate-500 sm:text-sm">
+            {m.home_map_size_note()}
+          </p>
         </div>
         <!-- Legend -->
-        <div class="flex flex-wrap items-center gap-x-4 gap-y-2 sm:gap-x-6">
-          {#each MODEL_ORDER as full}
-            {@const short = MODEL_SHORT[full]}
-            <span class="flex items-center gap-1.5 text-xs text-slate-600 sm:text-sm">
+        <div class="flex flex-col items-start gap-2 sm:items-end">
+          <div class="flex flex-wrap items-center gap-x-4 gap-y-2 sm:gap-x-6">
+            {#each MODEL_ORDER as full}
+              {@const short = MODEL_SHORT[full]}
+              <span class="flex items-center gap-1.5 text-xs text-slate-600 sm:text-sm">
+                <span
+                  class="inline-block h-2.5 w-2.5 rounded-full border border-white shadow-sm sm:h-3 sm:w-3"
+                  style="background: {MODEL_COLORS[full]};"
+                ></span>
+                {short}
+              </span>
+            {/each}
+          </div>
+          <div class="flex items-center gap-3 text-xs text-slate-600 sm:text-sm">
+            <span class="flex items-center gap-1.5">
               <span
-                class="inline-block h-2.5 w-2.5 rounded-full border border-white shadow-sm sm:h-3 sm:w-3"
-                style="background: {MODEL_COLORS[full]};"
+                class="inline-block h-[6px] w-[6px] rounded-full border border-white bg-slate-400 shadow-sm"
+                aria-hidden="true"
               ></span>
-              {short}
+              10
             </span>
-          {/each}
+            <span class="flex items-center gap-1.5">
+              <span
+                class="inline-block h-[20px] w-[20px] rounded-full border border-white bg-slate-400 shadow-sm"
+                aria-hidden="true"
+              ></span>
+              1,000+ {m.home_map_size_legend_label()}
+            </span>
+          </div>
         </div>
       </div>
 
