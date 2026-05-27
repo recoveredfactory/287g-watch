@@ -337,19 +337,19 @@
 
       // Hover popup + click-to-navigate on the context dots — same UX as
       // the homepage map so the agency page feels like a focused subset
-      // of the same dataset.
+      // of the same dataset. Touch devices use a two-tap pattern (first
+      // tap shows the popup, second tap navigates) since they fire
+      // mouseenter and click in the same gesture.
       const popup = new ml.Popup({
         closeButton: false,
         closeOnClick: false,
         offset: 10,
         className: "map-popup",
       });
-      map.on("mouseenter", "context-agencies", (e: any) => {
-        if (!e.features?.length) return;
-        map.getCanvas().style.cursor = "pointer";
-        const f = e.features[0];
-        const p = f.properties;
-        const coords = f.geometry.coordinates.slice();
+      const hasHoverPointer = window.matchMedia("(hover: hover)").matches;
+      let popupSlug: string | null = null;
+
+      const buildPopupHtml = (p: any): string => {
         const modelBadges = p.models
           ? p.models.split(", ").map((model: string) => {
               const bg = MODEL_COLORS[model] ?? "#e2e8f0";
@@ -358,23 +358,61 @@
               return `<span style="display:inline-block;background:${bg};color:${fg};border-radius:3px;padding:1px 7px;font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;">${label}</span>`;
             }).join(" ")
           : "";
+        return `<div class="popup-name">${p.name}</div>` +
+          `<div class="popup-sub">${[p.city, p.state].filter(Boolean).join(", ")}</div>` +
+          (modelBadges ? `<div class="popup-badges">${modelBadges}</div>` : "");
+      };
+
+      const showPopupForFeature = (f: any) => {
+        const props = f.properties;
         popup
-          .setLngLat(coords)
-          .setHTML(
-            `<div class="popup-name">${p.name}</div>` +
-            `<div class="popup-sub">${[p.city, p.state].filter(Boolean).join(", ")}</div>` +
-            (modelBadges ? `<div class="popup-badges">${modelBadges}</div>` : ""),
-          )
+          .setLngLat(f.geometry.coordinates.slice())
+          .setHTML(buildPopupHtml(props))
           .addTo(map);
+        popupSlug = props.slug;
+        if (!hasHoverPointer && props.slug) {
+          const el = popup.getElement();
+          if (el) {
+            el.style.cursor = "pointer";
+            el.addEventListener(
+              "click",
+              (ev) => { ev.stopPropagation(); goto(localizeHref(`/agency/${props.slug}`)); },
+              { once: true },
+            );
+          }
+        }
+      };
+
+      const dismissPopup = () => {
+        popup.remove();
+        popupSlug = null;
+      };
+
+      map.on("mouseenter", "context-agencies", (e: any) => {
+        if (!hasHoverPointer) return;
+        if (!e.features?.length) return;
+        map.getCanvas().style.cursor = "pointer";
+        showPopupForFeature(e.features[0]);
       });
       map.on("mouseleave", "context-agencies", () => {
+        if (!hasHoverPointer) return;
         map.getCanvas().style.cursor = "";
-        popup.remove();
+        dismissPopup();
       });
       map.on("click", "context-agencies", (e: any) => {
         if (!e.features?.length) return;
-        const slug = e.features[0].properties.slug;
+        const f = e.features[0];
+        const slug = f.properties.slug;
+        if (!hasHoverPointer && popupSlug !== slug) {
+          showPopupForFeature(f);
+          return;
+        }
         if (slug) goto(localizeHref(`/agency/${slug}`));
+      });
+      map.on("click", (e: any) => {
+        if (hasHoverPointer || !popupSlug) return;
+        const feats = map.queryRenderedFeatures(e.point, { layers: ["context-agencies"] });
+        if (feats.length === 0) dismissPopup();
       });
 
       // Place labels — added LAST so they sit on top of dots. Looser
