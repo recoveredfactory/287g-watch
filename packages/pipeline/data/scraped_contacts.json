@@ -3918,5 +3918,464 @@
   },
   "WY|lincoln county sheriffs office": {
     "website": "https://www.lincolnsheriff.org/"
+  },
+  "AL|elberta police department": {
+    "website": "https://elbertapd.com/"
+  },
+  "AL|cherokee police department": {
+    "website": "https://cherokeepolice.com/"
+  },
+  "AL|camp hill police department": {
+    "website": "https://camphillpolice.org/"
+  },
+  "AL|leesburg police department": {
+    "website": "https://leesburgpolice.com/"
+  },
+  "AR|bay police department": {
+    "website": "https://baypolice.com/"
+  },
+  "AR|des arc police department": {
+    "website": "https://desarcpd.com/"
+  },
+  "AR|manila police department": {
+    "website": "https://manilapd.org/"
+  },
+  "AR|hampton police department": {
+    "website": "https://hamptonpd.com/"
+  },
+  "AR|monette police department": {
+    "website": "https://monettepolice.org/"
+  },
+  "FL|alachua police department": {
+    "website": "https://alachuapd.com/"
+  },
+  "AR|trumann police department": {
+    "website": "https://trumannpd.org/"
+  },
+  "AR|tuckerman police department": {
+    "website": "https://www.tuckermanpd.org/"
+  },
+  "FL|apopka police department": {
+    "website": "https://apopkapolice.com/"
+  },
+  "FL|blountstown police department": {
+    "website": "https://blountstownpd.com/"
+  },
+  "FL|boynton beach police department": {
+    "website": "https://boyntonbeachpolice.com/"
+  },
+  "FL|bradenton police department": {
+    "website": "https://bradentonpd.com/"
+  },
+  "FL|clermont police department": {
+    "website": "https://clermontpd.com/"
+  },
+  "FL|clearwater police department": {
+    "website": "https://clearwaterpolice.org/"
+  },
+  "FL|cocoa police department": {
+    "website": "https://www.cocoapolice.com/"
+  },
+  "FL|daytona beach police department": {
+    "website": "https://daytonabeachpd.com/"
+  },
+  "FL|delray beach police department": {
+    "website": "https://delraybeachpolice.com/"
+  },
+  "FL|doral police department": {
+    "website": "https://doralpd.com/"
+  },
+  "FL|davie police department": {
+    "website": "https://daviepolice.com/"
+  },
+  "FL|eustis police department": {
+    "website": "https://eustispolice.org/"
+  },
+  "FL|edgewater police department": {
+    "website": "https://edgewaterpolice.org/"
+  },
+  "FL|gulf breeze police department": {
+    "website": "https://gulfbreezepd.com/"
+  },
+  "FL|gretna police department": {
+    "website": "https://gretnapolice.com/"
+  },
+  "FL|gulfport police department": {
+    "website": "https://www.gulfportpolice.com/"
+  },
+  "FL|holly hill police department": {
+    "website": "https://hollyhillpd.com/"
+  },
+  "FL|highland beach police department": {
+    "website": "https://highlandbeachpolice.com/"
+  },
+  "FL|key colony beach police department": {
+    "website": "https://keycolonybeachpd.com/"
+  },
+  "FL|jupiter police department": {
+    "website": "https://jupiterpd.com/"
+  },
+  "FL|juno beach police department": {
+    "website": "https://junobeachpd.com/"
+  },
+  "FL|kenneth city police department": {
+    "website": "https://kennethcitypolice.org/"
+  },
+  "FL|kissimmee police department": {
+    "website": "https://kissimmeepolice.com/"
+  },
+  "FL|lake mary police department": {
+    "website": "https://lakemarypolicedepartment.com/"
+  },
+  "FL|lake city police department": {
+    "website": "https://lakecitypolice.org/"
+  },
+  "FL|lake placid police department": {
+    "website": "https://lakeplacidpd.com/"
+  },
+  "FL|live oak police department": {
+    "website": "https://liveoakpd.com/"
+  },
+  "FL|lakeland police department": {
+    "website": "https://lakelandpd.org/"
+  },
+  "FL|marianna police department": {
+    "website": "https://mariannapd.org/"
+  },
+  "FL|melbourne police department": {
+    "website": "https://melbournepolice.org/"
+  },
+  "FL|new smyrna beach police department": {
+    "website": "https://newsmyrnabeachpolice.com/"
+  },
+  "FL|milton police department": {
+    "website": "https://miltonpolice.org/"
+  },
+  "FL|north port police department": {
+    "website": "https://northportpolice.com/"
+  },
+  "FL|ocala police department": {
+    "website": "https://ocalapolice.com/"
+  },
+  "FL|palmetto police department": {
+    "website": "https://palmettopd.com/"
+  },
+  "FL|ormond beach police department": {
+    "website": "https://ormondbeachpolice.com/"
+  },
+  "FL|orange park police department": {
+    "website": "https://orangeparkpolice.com/"
+  },
+  "FL|palm bay police department": {
+    "website": "https://palmbaypd.com/"
+  },
+  "FL|ponce inlet police department": {
+    "website": "https://ponceinletpd.com/"
+  },
+  "FL|port orange police department": {
+    "website": "https://portorangepolice.com/"
+  },
+  "FL|port richey police department": {
+    "website": "https://portricheypd.com/"
+  },
+  "FL|quincy police department": {
+    "website": "https://quincypolice.com/"
+  },
+  "FL|sanford police department": {
+    "website": "https://sanfordpolicedepartment.com/"
+  },
+  "FL|shalimar police department": {
+    "website": "https://shalimarpd.com/"
+  },
+  "FL|sebring police department": {
+    "website": "https://sebringpolice.org/"
+  },
+  "FL|sebastian police department": {
+    "website": "https://sebastianpd.org/"
+  },
+  "FL|south daytona police department": {
+    "website": "https://southdaytonapolice.com/"
+  },
+  "FL|treasure island police department": {
+    "website": "https://treasureislandpolice.com/"
+  },
+  "FL|vero beach police department": {
+    "website": "https://verobeachpd.com/"
+  },
+  "FL|west palm beach police department": {
+    "website": "https://westpalmbeachpolice.com/"
+  },
+  "FL|west miami police department": {
+    "website": "https://westmiamipolice.com/"
+  },
+  "GA|cairo police department": {
+    "website": "https://cairopolice.com/"
+  },
+  "GA|marietta police department": {
+    "website": "https://mariettapd.com/"
+  },
+  "GA|monroe police department": {
+    "website": "https://monroepolice.com/"
+  },
+  "IN|cadiz police department": {
+    "website": "https://cadizpolice.com/"
+  },
+  "GA|statesboro police department": {
+    "website": "https://statesboropd.com/"
+  },
+  "IN|marengo police department": {
+    "website": "https://marengopd.com/"
+  },
+  "IN|lagrange police department": {
+    "website": "https://lagrangepolice.com/"
+  },
+  "IN|holland police department": {
+    "website": "https://hollandpolice.org/"
+  },
+  "IN|wolcott police department": {
+    "website": "https://wolcottpd.org/"
+  },
+  "IN|worthington police department": {
+    "website": "https://www.worthingtonpolice.com/"
+  },
+  "KY|falmouth police department": {
+    "website": "https://falmouthpolice.com/"
+  },
+  "LA|columbia police department": {
+    "website": "https://columbiapd.com/"
+  },
+  "LA|arnaudville police department": {
+    "website": "https://arnaudvillepolice.com/"
+  },
+  "LA|grayson police department": {
+    "website": "https://graysonpolicedept.org/"
+  },
+  "KY|winchester police department": {
+    "website": "https://winchesterpolice.org/"
+  },
+  "LA|greenwood police department": {
+    "website": "https://greenwoodpd.com/"
+  },
+  "LA|kenner police department": {
+    "website": "https://kennerpd.com/"
+  },
+  "LA|gretna police department": {
+    "website": "https://gretnapolice.com/"
+  },
+  "LA|hammond police department": {
+    "website": "https://hammondpolice.com/"
+  },
+  "LA|pearl river police department": {
+    "website": "https://pearlriverpolice.com/"
+  },
+  "MS|louisville police department": {
+    "website": "https://louisvillepolice.com/"
+  },
+  "MS|pearl police department": {
+    "website": "https://pearlpd.com/"
+  },
+  "MS|wiggins police department": {
+    "website": "https://wigginspolice.com/"
+  },
+  "MO|bismarck police department": {
+    "website": "https://bismarckpolice.com/"
+  },
+  "MS|union police department": {
+    "website": "https://unionpd.com/"
+  },
+  "MO|bowling green police department": {
+    "website": "https://bowlinggreenpolice.org/"
+  },
+  "MO|hillsdale police department": {
+    "website": "https://hillsdalepolice.com/"
+  },
+  "MO|kennett police department": {
+    "website": "https://kennettpd.org/"
+  },
+  "MO|mansfield police department": {
+    "website": "https://mansfieldpolice.com/"
+  },
+  "MO|pineville police department": {
+    "website": "https://pinevillepd.com/"
+  },
+  "MO|seligman police department": {
+    "website": "https://seligmanpolice.com/"
+  },
+  "MO|seymour police department": {
+    "website": "https://seymourpd.com/"
+  },
+  "MO|sparta police department": {
+    "website": "https://spartapolice.org/"
+  },
+  "NH|pittsburgh police department": {
+    "website": "https://pittsburghpolice.com/"
+  },
+  "NH|milton police department": {
+    "website": "https://miltonpolice.org/"
+  },
+  "NH|newton police department": {
+    "website": "https://newtonpolice.org/"
+  },
+  "NH|kingston police department": {
+    "website": "https://kingstonnhpd.com/"
+  },
+  "NH|pittsfield police department": {
+    "website": "https://pittsfieldpd.org/"
+  },
+  "OH|jamestown police department": {
+    "website": "https://jamestownpd.org/"
+  },
+  "OH|pleasantville police department": {
+    "website": "https://pleasantvillepd.com/"
+  },
+  "OH|dalton police department": {
+    "website": "https://daltonpolice.com/"
+  },
+  "NC|robbins police department": {
+    "website": "https://robbinspolice.org/"
+  },
+  "OH|gratis police department": {
+    "website": "https://gratispolice.com/"
+  },
+  "OH|russellville police department": {
+    "website": "https://www.russellvillepd.com/"
+  },
+  "OK|chelsea police department": {
+    "website": "https://chelseapolice.com/"
+  },
+  "OK|cherokee police department": {
+    "website": "https://cherokeepolice.com/"
+  },
+  "OK|caddo police department": {
+    "website": "https://caddopd.org/"
+  },
+  "OK|collinsville police department": {
+    "website": "https://collinsvillepolice.org/"
+  },
+  "OK|mounds police department": {
+    "website": "https://moundspolice.com/"
+  },
+  "OK|salina police department": {
+    "website": "https://salinapd.org/"
+  },
+  "OK|stratford police department": {
+    "website": "https://stratfordpolice.com/"
+  },
+  "OK|vinita police department": {
+    "website": "https://vinitapd.com/"
+  },
+  "PA|hazleton police department": {
+    "website": "https://hazletonpd.com/"
+  },
+  "PA|manor township police department": {
+    "website": "https://manortownshippd.org/"
+  },
+  "SC|clinton police department": {
+    "website": "https://clintonpd.com/"
+  },
+  "PA|york county regional police department": {
+    "website": "https://yorkcountyregionalpd.org/"
+  },
+  "SC|holly hill police department": {
+    "website": "https://hollyhillpd.com/"
+  },
+  "SC|scranton police department": {
+    "website": "https://scrantonpd.org/"
+  },
+  "SD|viborg police department": {
+    "website": "https://viborgpd.com/"
+  },
+  "TN|hendersonville police department": {
+    "website": "https://hendersonvillepolice.com/"
+  },
+  "TN|sparta police department": {
+    "website": "https://spartapolice.org/"
+  },
+  "TX|corrigan police department": {
+    "website": "https://corriganpd.com/"
+  },
+  "TX|commerce police department": {
+    "website": "https://commercepolice.com/"
+  },
+  "TX|clifton police department": {
+    "website": "https://cliftonpolice.org/"
+  },
+  "TX|early police department": {
+    "website": "https://earlypd.com/"
+  },
+  "TX|freer police department": {
+    "website": "https://freerpd.com/"
+  },
+  "TX|ingram police department": {
+    "website": "https://ingrampolice.org/"
+  },
+  "TX|holland police department": {
+    "website": "https://hollandpolice.org/"
+  },
+  "TX|huntington police department": {
+    "website": "https://huntingtonpolice.com/"
+  },
+  "TX|leonard police department": {
+    "website": "https://leonardpd.com/"
+  },
+  "TX|jefferson police department": {
+    "website": "https://jeffersonpd.com/"
+  },
+  "TX|kingsville police department": {
+    "website": "https://kingsvillepd.com/"
+  },
+  "TX|marion police department": {
+    "website": "https://marionpd.org/"
+  },
+  "TX|overton police department": {
+    "website": "https://overtonpd.com/"
+  },
+  "TX|paris police department": {
+    "website": "https://parispolice.org/"
+  },
+  "TX|robstown police department": {
+    "website": "https://robstownpd.com/"
+  },
+  "TX|splendora police department": {
+    "website": "https://splendorapd.com/"
+  },
+  "TX|sulphur springs police department": {
+    "website": "https://sulphurspringspolice.org/"
+  },
+  "UT|riverton police department": {
+    "website": "https://rivertonpolice.org/"
+  },
+  "WV|oak hill police department": {
+    "website": "https://oakhillpd.com/"
+  },
+  "AR|lonoke county sheriffs office": {
+    "website": "https://lonokeso.org/"
+  },
+  "KS|rice county sheriffs office": {
+    "website": "https://riceso.org/"
+  },
+  "OK|muskogee county sheriffs office": {
+    "website": "https://muskogeeso.org/"
+  },
+  "TX|cameron county sheriffs office": {
+    "website": "https://cameronso.org/"
+  },
+  "TX|denton county sheriffs office": {
+    "website": "https://sheriff.dentoncounty.gov/"
+  },
+  "TX|lamar county sheriffs office": {
+    "website": "https://lamarcountysheriff.com/"
+  },
+  "TX|lee county sheriffs office": {
+    "website": "https://leecountysheriff.net/"
+  },
+  "TX|oldham county sheriffs office": {
+    "website": "https://oldhamsheriff.com/"
+  },
+  "TX|parker county sheriffs office": {
+    "website": "https://parkercountysheriff.net/"
+  },
+  "TX|orange county sheriffs office": {
+    "website": "https://orangecountysheriff.net/"
   }
 }
