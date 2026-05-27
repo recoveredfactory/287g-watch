@@ -568,7 +568,7 @@
               bind:value={selectedYear}
               class="rounded-md border border-slate-300 bg-white py-2 pl-3 pr-7 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
-              <option value="">All years</option>
+              <option value="">Year signed</option>
               {#each allYears as year}
                 <option value={year}>{year}</option>
               {/each}
@@ -579,15 +579,11 @@
               <button
                 type="button"
                 on:click={() => toggleModel(model)}
-                class="flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs font-semibold transition-colors"
+                class="rounded border px-3 py-1.5 text-xs font-semibold transition-colors"
                 style={active
                   ? `background: ${MODEL_COLORS[model]}; border-color: ${MODEL_COLORS[model]}; color: ${MODEL_TEXT_COLORS[model] ?? '#fff'};`
-                  : "background: white; border-color: #cbd5e1; color: #475569;"}
+                  : `background: ${MODEL_COLORS[model]}22; border-color: ${MODEL_COLORS[model]}88; color: ${MODEL_DARK_COLORS[model] ?? '#334155'};`}
               >
-                <span
-                  class="inline-block h-2 w-2 rounded-full"
-                  style="background: {active ? 'rgba(255,255,255,0.45)' : MODEL_COLORS[model]};"
-                ></span>
                 {MODEL_SHORT[model]}
               </button>
             {/each}
