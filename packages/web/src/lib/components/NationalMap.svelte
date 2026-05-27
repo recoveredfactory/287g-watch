@@ -96,7 +96,11 @@
 
   const MODEL_FALLBACK = "#94a3b8";
   const FULL_BOUNDS: [[number, number], [number, number]] = [[-127, 21], [-65, 50]];
-  const FIT_PADDING = isMobile ? 6 : 10;
+  // On wide desktops the container aspect can exceed the bbox aspect, which
+  // makes fitBounds size by latitude and pin the southern bound (21°) to the
+  // very bottom — clipping AK's inset (extends to ~18°). Asymmetric bottom
+  // padding gives AK breathing room without redoing the inset transform.
+  const FIT_PADDING: any = isMobile ? 6 : { top: 14, bottom: 70, left: 14, right: 14 };
 
   function fitToSelection() {
     if (!map) return;
@@ -299,6 +303,18 @@
       map.resize();
       map.fitBounds(FIT_BOUNDS, FIT_OPTIONS);
       map.setMinZoom(map.getZoom());
+
+      // Don't hijack page scroll at the locked-floor zoom — at full zoom-out
+      // there's nothing to scroll-zoom into anyway, and a wheel over the map
+      // would otherwise eat the page scroll. Re-enables once the user has
+      // zoomed in via the +/− buttons, double-click, or pinch.
+      const syncScrollZoom = () => {
+        if (!map) return;
+        if (map.getZoom() > map.getMinZoom() + 0.05) map.scrollZoom.enable();
+        else map.scrollZoom.disable();
+      };
+      map.scrollZoom.disable();
+      map.on("zoomend", syncScrollZoom);
 
       const statesGj = await fetch("/us-inset.geojson").then((r) => r.json());
       map.addSource("states", { type: "geojson", data: statesGj });
