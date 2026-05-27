@@ -363,7 +363,11 @@
             </div>
           </div>
         {:else}
-          <NationalMap agencies={data.agencies} {selectedStates} />
+          <NationalMap
+            agencies={data.agencies}
+            {selectedStates}
+            statePatrolStates={Object.values(data.stateMeta).filter((s) => s.has_state_patrol).map((s) => s.state)}
+          />
         {/if}
       </div>
     </div>

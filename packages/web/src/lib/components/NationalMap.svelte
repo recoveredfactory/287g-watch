@@ -4,6 +4,7 @@
   import { browser } from "$app/environment";
   import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_SHORT } from "$lib/colors";
   import { toInsetCoords } from "$lib/insetTransforms";
+  import { STATE_NAMES } from "$lib/states";
 
   export let selectedStates: Set<string> = new Set();
 
@@ -17,10 +18,17 @@
     population?: number | null;
     lat?: number | null;
     lng?: number | null;
+    lee?: { officer_ct?: number | null } | null;
   }> = [];
+
+  // States with a literal state police / highway patrol participating —
+  // rendered with a subtle warm tint so readers can see at a glance which
+  // states have road enforcement in the 287(g) mix.
+  export let statePatrolStates: string[] = [];
 
   let container: HTMLDivElement;
   let map: any = null;
+  const isMobile = browser && window.matchMedia("(max-width: 640px)").matches;
 
   const MODEL_FALLBACK = "#94a3b8";
   const FULL_BOUNDS: [[number, number], [number, number]] = [[-127, 21], [-65, 50]];
@@ -67,6 +75,7 @@
             primary_model: a.primary_model ?? "",
             models: a.models.join(", "),
             population: a.population ?? 0,
+            officer_ct: a.lee?.officer_ct ?? 0,
             color: MODEL_COLORS[a.primary_model ?? ""] ?? MODEL_FALLBACK,
           },
         };
@@ -145,6 +154,23 @@
           "fill-opacity": 1,
         },
       });
+
+      // Warm tint over states whose 287(g) participants include a literal
+      // state police / highway patrol. Subtle — it should read as "huh,
+      // something different about that state" without competing with the
+      // dot colors.
+      if (statePatrolStates.length) {
+        const patrolStateNames = statePatrolStates
+          .map((abbr) => STATE_NAMES[abbr])
+          .filter(Boolean);
+        map.addLayer({
+          id: "state-patrol-tint",
+          type: "fill",
+          source: "states",
+          filter: ["in", ["get", "name"], ["literal", patrolStateNames]],
+          paint: { "fill-color": "#efe7dc", "fill-opacity": 1 },
+        });
+      }
 
       map.addLayer({
         id: "state-lines",
@@ -281,14 +307,24 @@
         data: geojson,
       });
 
-      // Agency dots — on top of city labels
+      // Agency dots — on top of city labels. Radius scales with sqrt of
+      // sworn-officer count so a 3000-officer department reads as bigger
+      // than a 20-officer one without making the small ones disappear.
+      // Mobile gets a tighter scale so dots don't crowd the smaller canvas.
+      const SCALE = isMobile ? 0.7 : 1;
+      const sqrtOfficers = ["sqrt", ["coalesce", ["get", "officer_ct"], 0]];
       map.addLayer({
         id: "agencies",
         type: "circle",
         source: "agencies",
         paint: {
           "circle-color": ["get", "color"],
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 3, 2, 6, 4, 10, 7],
+          "circle-radius": [
+            "interpolate", ["linear"], ["zoom"],
+            3, ["interpolate", ["linear"], sqrtOfficers, 0, 1.2 * SCALE, 60, 4.5 * SCALE],
+            6, ["interpolate", ["linear"], sqrtOfficers, 0, 2.2 * SCALE, 60, 7 * SCALE],
+            10, ["interpolate", ["linear"], sqrtOfficers, 0, 3.5 * SCALE, 60, 10 * SCALE],
+          ],
           "circle-stroke-width": 1,
           "circle-stroke-color": ["get", "color"],
           "circle-stroke-opacity": 1,

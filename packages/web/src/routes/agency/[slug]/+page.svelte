@@ -165,6 +165,8 @@
         lng={agency.lng}
         state={agency.state}
         primaryModel={agency.primary_model}
+        {agencies}
+        currentSlug={agency.slug}
       />
     {/key}
   </div>

@@ -9,8 +9,20 @@
   export let lng: number | null | undefined = undefined;
   export let state: string;
   export let primaryModel: string | null | undefined = undefined;
+  // All agencies in the dataset — used to render the rest of this state's
+  // 287(g) participants as dimmed context dots behind the current one.
+  export let agencies: Array<{
+    slug: string;
+    state: string;
+    primary_model: string | null;
+    lat?: number | null;
+    lng?: number | null;
+    lee?: { officer_ct?: number | null } | null;
+  }> = [];
+  export let currentSlug: string;
 
   const MODEL_FALLBACK = "#94a3b8";
+  const isMobile = browser && window.matchMedia("(max-width: 640px)").matches;
 
   // us-atlas uses different names for these two territories
   const GJ_NAME_OVERRIDE: Record<string, string> = {
@@ -90,6 +102,54 @@
         source: "counties",
         paint: { "line-color": "#c8d4dc", "line-width": 0.4 },
       });
+
+      // Context dots — the rest of this state's participants, dimmed so the
+      // current agency stands out but the reader sees it in company. Sized
+      // the same way as homepage dots (sqrt of officer count) so the visual
+      // language stays consistent across views.
+      const contextFeatures = agencies
+        .filter((a) =>
+          a.state === state &&
+          a.slug !== currentSlug &&
+          a.lat != null &&
+          a.lng != null,
+        )
+        .map((a) => {
+          const [clng, clat] = toInsetCoords(a.lng!, a.lat!, a.state);
+          return {
+            type: "Feature" as const,
+            geometry: { type: "Point" as const, coordinates: [clng, clat] },
+            properties: {
+              color: MODEL_COLORS[a.primary_model ?? ""] ?? MODEL_FALLBACK,
+              officer_ct: a.lee?.officer_ct ?? 0,
+            },
+          };
+        });
+      if (contextFeatures.length) {
+        const SCALE = isMobile ? 0.7 : 1;
+        const sqrtOfficers = ["sqrt", ["coalesce", ["get", "officer_ct"], 0]];
+        map.addSource("context-agencies", {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: contextFeatures },
+        });
+        map.addLayer({
+          id: "context-agencies",
+          type: "circle",
+          source: "context-agencies",
+          paint: {
+            "circle-color": ["get", "color"],
+            "circle-radius": [
+              "interpolate", ["linear"], sqrtOfficers,
+              0, 1.5 * SCALE,
+              60, 5 * SCALE,
+            ],
+            "circle-opacity": 0.4,
+            "circle-stroke-width": 0.5,
+            "circle-stroke-color": "#ffffff",
+            "circle-stroke-opacity": 0.6,
+          },
+        });
+      }
 
       if (dotCoords) {
         const color = MODEL_COLORS[primaryModel ?? ""] ?? MODEL_FALLBACK;
