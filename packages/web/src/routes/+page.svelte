@@ -22,13 +22,8 @@
   const popFmt = new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 });
 
   // ── Map palette (user-toggleable, persisted across pages) ──────────────────
-  import { mapPalette, type PaletteKey } from "$lib/map/paletteStore";
+  import { mapPalette } from "$lib/map/paletteStore";
   import MapPaletteSelector from "$lib/components/MapPaletteSelector.svelte";
-  // Tint swatch in the legend should match whatever palette is active
-  const PALETTE_TINT: Record<PaletteKey, string> = {
-    slate: "#efe7dc",
-    dark:  "#2d3a4a",
-  };
 
   // ── Timeline cursor (experimental, #76) ────────────────────────────────────
   // Continuous fractional-month index relative to Jan 2025. The map fades and
@@ -389,10 +384,6 @@
               {short}
             </span>
           {/each}
-          <span class="flex items-center gap-1.5 text-xs text-slate-600 sm:text-sm">
-            <span class="inline-block h-2.5 w-3.5 rounded-sm border border-slate-300 sm:h-3 sm:w-4" style="background: {PALETTE_TINT[$mapPalette]};"></span>
-            State patrol participating
-          </span>
         </div>
       </div>
 
@@ -422,7 +413,6 @@
         <NationalMap
           agencies={data.agencies}
           {selectedStates}
-          statePatrolStates={Object.values(data.stateMeta).filter((s) => s.has_state_patrol).map((s) => s.state)}
           palette={$mapPalette}
           {cursorIdx}
         />

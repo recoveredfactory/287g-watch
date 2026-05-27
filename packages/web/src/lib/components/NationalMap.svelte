@@ -4,7 +4,6 @@
   import { browser } from "$app/environment";
   import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_SHORT } from "$lib/colors";
   import { toInsetCoords } from "$lib/insetTransforms";
-  import { STATE_NAMES } from "$lib/states";
   import { ensurePmtilesProtocol, pmtilesBaseSource, PMTILES_GLYPHS } from "$lib/map/pmtiles";
 
   export let selectedStates: Set<string> = new Set();
@@ -30,11 +29,6 @@
   // renders all dots at full opacity.
   export let cursorIdx: number | null = null;
 
-  // States with a literal state police / highway patrol participating —
-  // rendered with a subtle warm tint so readers can see at a glance which
-  // states have road enforcement in the 287(g) mix.
-  export let statePatrolStates: string[] = [];
-
   let container: HTMLDivElement;
   let map: any = null;
   const isMobile = browser && window.matchMedia("(max-width: 640px)").matches;
@@ -44,13 +38,17 @@
     browser && import.meta.env.DEV
       ? ((new URLSearchParams(window.location.search).get("scale") as any) ?? "officers")
       : "officers";
+  // Debug-only: ?roads=off hides the highway/road overlays so we can A/B
+  // map clarity without them. Default is on.
+  const roadsOn =
+    !(browser && import.meta.env.DEV) ||
+    new URLSearchParams(window.location.search).get("roads") !== "off";
   import type { PaletteKey } from "$lib/map/paletteStore";
   export let palette: PaletteKey = "slate";
 
   type PaletteSpec = {
     bg: string;
     state: string;
-    tint: string;
     line: string;
     lineWidth: number;
     county: string;
@@ -69,7 +67,6 @@
     slate: {
       bg: "#dde4eb",
       state: "#f5f4f5",
-      tint: "#efe7dc",
       line: "#94a3b8",
       lineWidth: isMobile ? 0.9 : 1.5,
       county: "#c8d4dc",
@@ -84,7 +81,6 @@
     dark: {
       bg: "#0c1117",
       state: "#18202a",
-      tint: "#2d3a4a",
       line: "#3a4552",
       lineWidth: 0.6,
       county: "#1c242e",
@@ -226,8 +222,6 @@
     map.setPaintProperty("background", "background-color", c.bg);
     if (map.getLayer("state-fills"))
       map.setPaintProperty("state-fills", "fill-color", c.state);
-    if (map.getLayer("state-patrol-tint"))
-      map.setPaintProperty("state-patrol-tint", "fill-color", c.tint);
     if (map.getLayer("state-lines")) {
       map.setPaintProperty("state-lines", "line-color", c.line);
       map.setPaintProperty("state-lines", "line-width", c.lineWidth);
@@ -316,23 +310,6 @@
         paint: { "fill-color": PALETTES[palette].state, "fill-opacity": 1 },
       });
 
-      // Warm tint over states whose 287(g) participants include a literal
-      // state police / highway patrol. Subtle — it should read as "huh,
-      // something different about that state" without competing with the
-      // dot colors.
-      if (statePatrolStates.length) {
-        const patrolStateNames = statePatrolStates
-          .map((abbr) => STATE_NAMES[abbr])
-          .filter(Boolean);
-        map.addLayer({
-          id: "state-patrol-tint",
-          type: "fill",
-          source: "states",
-          filter: ["in", ["get", "name"], ["literal", patrolStateNames]],
-          paint: { "fill-color": PALETTES[palette].tint, "fill-opacity": 1 },
-        });
-      }
-
       map.addLayer({
         id: "state-lines",
         type: "line",
@@ -340,6 +317,10 @@
         paint: {
           "line-color": PALETTES[palette].line,
           "line-width": PALETTES[palette].lineWidth,
+          // Fainter at the locked-floor national view (zoom ~1) so the country
+          // doesn't read as a cage of borders. Ramps to full visibility once
+          // individual states fill the screen.
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 1, 0.45, 3, 0.9],
         },
       });
 
@@ -369,15 +350,21 @@
         type: "geojson",
         data: "/us-highways.geojson",
       });
+      // Static and PMTiles highways used to both render at zoom 2–4.5, which
+      // double-stroked every interstate. Static now fades out 3.5→4.5 and
+      // PMTiles fades in over the same window — single highway at every zoom.
+      // Static opacity is kept low so the national view reads as "hint of road
+      // network" rather than a full road map.
       map.addLayer({
         id: "highway-static-casing",
         type: "line",
         source: "highways-static",
         maxzoom: 4.5,
+        layout: { visibility: roadsOn ? "visible" : "none" },
         paint: {
           "line-color": PALETTES[palette].roadCasing,
-          "line-width": ["interpolate", ["linear"], ["zoom"], 1, 1.5, 4, 2.5],
-          "line-opacity": ["interpolate", ["linear"], ["zoom"], 1, 0.7, 4, 0.7, 4.5, 0],
+          "line-width": ["interpolate", ["linear"], ["zoom"], 1, 1.2, 4, 2.2],
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 1, 0.35, 3.5, 0.35, 4.5, 0],
         },
       });
       map.addLayer({
@@ -385,10 +372,11 @@
         type: "line",
         source: "highways-static",
         maxzoom: 4.5,
+        layout: { visibility: roadsOn ? "visible" : "none" },
         paint: {
           "line-color": PALETTES[palette].roadFill,
-          "line-width": ["interpolate", ["linear"], ["zoom"], 1, 0.6, 4, 1.2],
-          "line-opacity": ["interpolate", ["linear"], ["zoom"], 1, 0.9, 4, 0.9, 4.5, 0],
+          "line-width": ["interpolate", ["linear"], ["zoom"], 1, 0.5, 4, 1.0],
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 1, 0.5, 3.5, 0.5, 4.5, 0],
         },
       });
 
@@ -407,11 +395,12 @@
         source: "base",
         "source-layer": "roads",
         filter: ["==", ["get", "kind"], "highway"],
-        layout: { "line-cap": "round", "line-join": "round" },
+        layout: { "line-cap": "round", "line-join": "round", visibility: roadsOn ? "visible" : "none" },
         paint: {
           "line-color": PALETTES[palette].roadCasing,
           "line-width": ["interpolate", ["linear"], ["zoom"], 2, 1.8, 5, 2.5, 9, 4, 12, 5.5],
-          "line-opacity": 0.8,
+          // Fades in 3.5→4.5 as the static overlay fades out — single highway at every zoom.
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 3.5, 0, 4.5, 0.8],
         },
       });
 
@@ -421,11 +410,11 @@
         source: "base",
         "source-layer": "roads",
         filter: ["==", ["get", "kind"], "highway"],
-        layout: { "line-cap": "round", "line-join": "round" },
+        layout: { "line-cap": "round", "line-join": "round", visibility: roadsOn ? "visible" : "none" },
         paint: {
           "line-color": PALETTES[palette].roadFill,
           "line-width": ["interpolate", ["linear"], ["zoom"], 2, 0.8, 5, 1.2, 9, 2, 12, 3],
-          "line-opacity": 0.95,
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 3.5, 0, 4.5, 0.95],
         },
       });
 
@@ -438,7 +427,7 @@
         "source-layer": "roads",
         minzoom: 5,
         filter: ["==", ["get", "kind"], "major_road"],
-        layout: { "line-cap": "round", "line-join": "round" },
+        layout: { "line-cap": "round", "line-join": "round", visibility: roadsOn ? "visible" : "none" },
         paint: {
           "line-color": PALETTES[palette].roadMajorCasing,
           "line-width": ["interpolate", ["linear"], ["zoom"], 5, 0.8, 9, 2, 12, 3.5],
@@ -453,7 +442,7 @@
         "source-layer": "roads",
         minzoom: 5,
         filter: ["==", ["get", "kind"], "major_road"],
-        layout: { "line-cap": "round", "line-join": "round" },
+        layout: { "line-cap": "round", "line-join": "round", visibility: roadsOn ? "visible" : "none" },
         paint: {
           "line-color": PALETTES[palette].roadMajorFill,
           "line-width": ["interpolate", ["linear"], ["zoom"], 5, 0.4, 9, 1.1, 12, 2],
@@ -469,6 +458,7 @@
         "source-layer": "roads",
         minzoom: 8,
         filter: ["==", ["get", "kind"], "medium_road"],
+        layout: { visibility: roadsOn ? "visible" : "none" },
         paint: {
           "line-color": PALETTES[palette].roadMedium,
           "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.4, 12, 1.5],
