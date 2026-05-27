@@ -216,11 +216,16 @@
         <dd class="mt-1 text-xl font-bold text-slate-900">{dateFmt(agency.signed_date)}</dd>
       </div>
     {/if}
-    {#if agency.population}
+    {#if agency.lee?.population != null}
+      <div>
+        <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_population()}</dt>
+        <dd class="mt-1 text-xl font-bold text-slate-900">{intFmt.format(agency.lee.population)}</dd>
+        <dd class="mt-0.5 text-xs text-slate-400">FBI LEE {agency.lee.data_year}</dd>
+      </div>
+    {:else if agency.population != null}
       <div>
         <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_population()}</dt>
         <dd class="mt-1 text-xl font-bold text-slate-900">{intFmt.format(agency.population)}</dd>
-        {#if agency.lee?.data_year}<dd class="mt-0.5 text-xs text-slate-400">FBI LEE {agency.lee.data_year}</dd>{/if}
       </div>
     {/if}
     {#if agency.lee?.officer_ct != null}
@@ -253,16 +258,16 @@
     {/if}
     {#if agency.agreement?.population_policed != null}
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">Population policed</dt>
+        <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_population_policed()}</dt>
         <dd class="mt-1 text-xl font-bold text-slate-900">{intFmt.format(agency.agreement.population_policed)}</dd>
-        <dd class="mt-0.5 text-xs text-slate-400">As reported in MOA</dd>
+        <dd class="mt-0.5 text-xs text-slate-400">{m.agency_source_moa()}</dd>
       </div>
     {/if}
     {#if agency.agreement?.operating_budget != null}
       <div>
         <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_operating_budget()}</dt>
         <dd class="mt-1 text-xl font-bold text-slate-900">${intFmt.format(agency.agreement.operating_budget)}</dd>
-        <dd class="mt-0.5 text-xs text-slate-400">As reported in MOA</dd>
+        <dd class="mt-0.5 text-xs text-slate-400">{m.agency_source_moa()}</dd>
       </div>
     {/if}
     {#if agency.moa_url}
