@@ -11,6 +11,7 @@
   import { localizeHref, getLocale } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
   import Gloss from "$lib/components/Gloss.svelte";
+  import ConversionBlock from "$lib/components/ConversionBlock.svelte";
 
   export let data: PageData;
 
@@ -561,22 +562,8 @@
     </div>
   </section>
 
-  <!-- ── Support callout ──────────────────────────────────────────────────── -->
-  <section class="border-b border-slate-200 bg-gray-100 px-4 py-5 sm:px-6">
-    <div class="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-      <p class="text-sm text-slate-700">
-        {m.home_support_prefix()} <a href="https://vsr.recoveredfactory.net/en" target="_blank" rel="noreferrer" class="font-semibold text-slate-900">Recovered Factory</a>{m.home_support_suffix()}
-      </p>
-      <a
-        href="https://vsr.recoveredfactory.net/en"
-        target="_blank"
-        rel="noreferrer"
-        class="self-start rounded border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 no-underline hover:border-slate-400 hover:text-slate-900 hover:no-underline sm:shrink-0 sm:self-auto"
-      >
-        {m.home_support_hire_us()}
-      </a>
-    </div>
-  </section>
+  <!-- ── Support callout (A/B test, #93) ──────────────────────────────────── -->
+  <ConversionBlock />
 
   <!-- ── Search + filter + browse ──────────────────────────────────────────── -->
   <section class="px-4 py-10 sm:px-6 sm:py-12">
