@@ -7,10 +7,53 @@
   import { toInsetCoords } from "$lib/insetTransforms";
   import { STATE_NAMES } from "$lib/states";
   import { ensurePmtilesProtocol, pmtilesBaseSource } from "$lib/map/pmtiles";
+  import { mapPalette, type PaletteKey } from "$lib/map/paletteStore";
 
   // Inset territories sit at shifted coords; loading PMTiles over them
   // would draw foreign tiles. Affects 5 agencies total (AK, GU, MP).
   const INSET_STATES = new Set(["AK", "HI", "PR", "VI", "GU", "MP", "AS"]);
+
+  // Two palettes mirrored from NationalMap. AgencyMap has its own spec
+  // because it draws non-current states distinctly (so the current state
+  // pops without dimming neighbors as harshly).
+  type AgencyPalette = {
+    bg: string;
+    stateBg: string;
+    stateHighlight: string;
+    stateLines: string;
+    stateLineWidth: number;
+    county: string;
+    roadCasing: string;
+    roadFill: string;
+    roadMedium: string;
+    haloFill: string;
+  };
+  const AGENCY_PALETTES: Record<PaletteKey, AgencyPalette> = {
+    cream: {
+      bg: "#dde4eb",
+      stateBg: "#eef0f2",
+      stateHighlight: "#fafaf8",
+      stateLines: "#b8c4cf",
+      stateLineWidth: 0.75,
+      county: "#c8d4dc",
+      roadCasing: "#a0b0bc",
+      roadFill: "#eef2f5",
+      roadMedium: "#cdd6dc",
+      haloFill: "#ffffff",
+    },
+    dark: {
+      bg: "#0c1117",
+      stateBg: "#161e27",
+      stateHighlight: "#1f2a36",
+      stateLines: "#3a4552",
+      stateLineWidth: 0.5,
+      county: "#1c242e",
+      roadCasing: "#252d38",
+      roadFill: "#525f6c",
+      roadMedium: "#252d38",
+      haloFill: "#e8ecf2",
+    },
+  };
 
   export let lat: number | null | undefined = undefined;
   export let lng: number | null | undefined = undefined;
@@ -42,6 +85,7 @@
 
   let container: HTMLDivElement;
   let map: any = null;
+  let unsubscribePalette: (() => void) | null = null;
 
   onMount(async () => {
     if (!browser || !container) return;
@@ -52,6 +96,32 @@
     const showPmtilesRoads = !INSET_STATES.has(state);
     const dotCoords: [number, number] | null =
       lat != null && lng != null ? toInsetCoords(lng, lat, state) : null;
+    // Read the persisted palette on mount; we'll also subscribe below so
+    // a toggle from another tab/page applies live.
+    let p: AgencyPalette = AGENCY_PALETTES.cream;
+    unsubscribePalette = mapPalette.subscribe((v) => {
+      p = AGENCY_PALETTES[v] ?? AGENCY_PALETTES.cream;
+      // After the map is created and styled, re-paint the changed layers.
+      if (map && map.isStyleLoaded()) repaintPalette();
+    });
+
+    const repaintPalette = () => {
+      if (!map) return;
+      map.setPaintProperty("background", "background-color", p.bg);
+      if (map.getLayer("states-bg")) map.setPaintProperty("states-bg", "fill-color", p.stateBg);
+      if (map.getLayer("state-highlight")) map.setPaintProperty("state-highlight", "fill-color", p.stateHighlight);
+      if (map.getLayer("state-lines")) {
+        map.setPaintProperty("state-lines", "line-color", p.stateLines);
+        map.setPaintProperty("state-lines", "line-width", p.stateLineWidth);
+      }
+      if (map.getLayer("county-lines")) map.setPaintProperty("county-lines", "line-color", p.county);
+      if (map.getLayer("road-casing")) map.setPaintProperty("road-casing", "line-color", p.roadCasing);
+      if (map.getLayer("road-fill")) map.setPaintProperty("road-fill", "line-color", p.roadFill);
+      if (map.getLayer("road-medium")) map.setPaintProperty("road-medium", "line-color", p.roadMedium);
+      if (map.getLayer("context-agencies"))
+        map.setPaintProperty("context-agencies", "circle-stroke-color", p.bg);
+      if (map.getLayer("agency-halo")) map.setPaintProperty("agency-halo", "circle-color", p.haloFill);
+    };
 
     map = new ml.Map({
       container,
@@ -61,7 +131,7 @@
         glyphs: "https://fonts.basemaps.cartocdn.com/gl/fonts/{fontstack}/{range}.pbf",
         projection: { type: "mercator" },
         layers: [
-          { id: "background", type: "background", paint: { "background-color": "#dde4eb" } },
+          { id: "background", type: "background", paint: { "background-color": p.bg } },
         ],
       } as any,
       center: dotCoords ?? [-98, 39],
@@ -83,31 +153,29 @@
 
       map.addSource("states", { type: "geojson", data: statesGj });
 
-      // Background states — almost the same off-white as the highlight so
-      // neighboring states still feel like part of the map (was a chillier
-      // grey before, which made other states feel "switched off").
+      // Background states — non-current. In cream this is almost the same
+      // off-white as the highlight (subtle differentiation); in dark it's
+      // a touch darker than the current state so focus reads clearly.
       map.addLayer({
         id: "states-bg",
         type: "fill",
         source: "states",
-        paint: { "fill-color": "#eef0f2", "fill-opacity": 1 },
+        paint: { "fill-color": p.stateBg, "fill-opacity": 1 },
       });
 
-      // This state — a touch warmer/brighter so it reads as the focus
-      // without dimming everyone else.
       map.addLayer({
         id: "state-highlight",
         type: "fill",
         source: "states",
         filter: ["==", ["get", "name"], stateGjName],
-        paint: { "fill-color": "#fafaf8", "fill-opacity": 1 },
+        paint: { "fill-color": p.stateHighlight, "fill-opacity": 1 },
       });
 
       map.addLayer({
         id: "state-lines",
         type: "line",
         source: "states",
-        paint: { "line-color": "#b8c4cf", "line-width": 0.75 },
+        paint: { "line-color": p.stateLines, "line-width": p.stateLineWidth },
       });
 
       map.addSource("counties", { type: "geojson", data: countiesGj });
@@ -115,7 +183,7 @@
         id: "county-lines",
         type: "line",
         source: "counties",
-        paint: { "line-color": "#c8d4dc", "line-width": 0.4 },
+        paint: { "line-color": p.county, "line-width": 0.4 },
       });
 
       // PMTiles roads — only safe over the lower-48 + DC. The inset
@@ -131,7 +199,7 @@
           filter: ["in", ["get", "kind"], ["literal", ["highway", "major_road"]]],
           layout: { "line-cap": "round", "line-join": "round" },
           paint: {
-            "line-color": "#a0b0bc",
+            "line-color": p.roadCasing,
             "line-width": ["interpolate", ["linear"], ["zoom"], 4, 1.5, 8, 3],
             "line-opacity": 0.75,
           },
@@ -144,7 +212,7 @@
           filter: ["in", ["get", "kind"], ["literal", ["highway", "major_road"]]],
           layout: { "line-cap": "round", "line-join": "round" },
           paint: {
-            "line-color": "#eef2f5",
+            "line-color": p.roadFill,
             "line-width": ["interpolate", ["linear"], ["zoom"], 4, 0.6, 8, 1.8],
             "line-opacity": 0.95,
           },
@@ -157,7 +225,7 @@
           minzoom: 6,
           filter: ["==", ["get", "kind"], "medium_road"],
           paint: {
-            "line-color": "#cdd6dc",
+            "line-color": p.roadMedium,
             "line-width": ["interpolate", ["linear"], ["zoom"], 6, 0.3, 9, 1],
             "line-opacity": 0.8,
           },
@@ -207,7 +275,7 @@
             // Slight bg-colored stroke for cluster separation, lower fill
             // opacity for overlap readability — matches the homepage map.
             "circle-stroke-width": 0.6,
-            "circle-stroke-color": "#dde4eb",
+            "circle-stroke-color": p.bg,
             "circle-stroke-opacity": 1,
             "circle-radius": [
               "interpolate", ["linear"], ["zoom"],
@@ -230,14 +298,15 @@
             properties: {},
           },
         });
-        // Outer ring (white halo) so the current dot pops against the
-        // context dots regardless of model color
+        // Outer ring (light halo) so the current dot pops against the
+        // context dots regardless of model color. White in cream, light
+        // slate in dark — picked from the palette.
         map.addLayer({
           id: "agency-halo",
           type: "circle",
           source: "agency",
           paint: {
-            "circle-color": "#ffffff",
+            "circle-color": p.haloFill,
             "circle-radius": 13,
             "circle-opacity": 0.85,
           },
@@ -250,7 +319,7 @@
             "circle-color": color,
             "circle-radius": 9,
             "circle-stroke-width": 2.5,
-            "circle-stroke-color": "#ffffff",
+            "circle-stroke-color": p.haloFill,
             "circle-opacity": 0.95,
           },
         });
@@ -320,6 +389,7 @@
   });
 
   onDestroy(() => {
+    if (unsubscribePalette) { unsubscribePalette(); unsubscribePalette = null; }
     if (map) { map.remove(); map = null; }
   });
 </script>
