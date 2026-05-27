@@ -6,6 +6,7 @@
   import { m } from "$lib/paraglide/messages.js";
   import AgencySearch from "$lib/components/AgencySearch.svelte";
   import AgencyMap from "$lib/components/AgencyMap.svelte";
+  import MapPaletteSelector from "$lib/components/MapPaletteSelector.svelte";
 
   export let data: PageData;
 
@@ -170,13 +171,18 @@
   {/if}
 
   <!-- Location map -->
-  <div class="mt-6 h-[260px] overflow-hidden rounded-lg border border-slate-200 shadow-sm sm:h-[320px]">
+  <div class="mt-6 flex items-center justify-end">
+    <MapPaletteSelector />
+  </div>
+  <div class="mt-2 h-[260px] overflow-hidden rounded-lg border border-slate-200 shadow-sm sm:h-[320px]">
     {#key agency.slug}
       <AgencyMap
         lat={agency.lat}
         lng={agency.lng}
         state={agency.state}
         primaryModel={agency.primary_model}
+        {agencies}
+        currentSlug={agency.slug}
       />
     {/key}
   </div>

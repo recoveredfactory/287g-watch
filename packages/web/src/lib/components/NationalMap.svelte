@@ -4,6 +4,7 @@
   import { browser } from "$app/environment";
   import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_SHORT } from "$lib/colors";
   import { toInsetCoords } from "$lib/insetTransforms";
+  import { ensurePmtilesProtocol, pmtilesBaseSource, PMTILES_GLYPHS } from "$lib/map/pmtiles";
 
   export let selectedStates: Set<string> = new Set();
 
@@ -17,25 +18,97 @@
     population?: number | null;
     lat?: number | null;
     lng?: number | null;
+    lee?: { officer_ct?: number | null } | null;
+    signed_date?: string | null;
   }> = [];
+
+  // Continuous timeline cursor for the smooth playback animation. The value is
+  // a fractional month index relative to Jan 2025 (idx 0 = Jan 2025, idx 16 =
+  // May 2026, etc.). Agencies signed before Jan 2025 carry a large negative
+  // signed_idx so they're shown unconditionally. null = no timeline; the layer
+  // renders all dots at full opacity.
+  export let cursorIdx: number | null = null;
 
   let container: HTMLDivElement;
   let map: any = null;
+  const isMobile = browser && window.matchMedia("(max-width: 640px)").matches;
+  // Debug-only: ?scale=officers|population|flat lets us A/B sizing schemes
+  // without redeploying. Falls back to officers in prod.
+  const scaleMode: "officers" | "population" | "flat" =
+    browser && import.meta.env.DEV
+      ? ((new URLSearchParams(window.location.search).get("scale") as any) ?? "officers")
+      : "officers";
+  // Debug-only: ?roads=off hides the highway/road overlays so we can A/B
+  // map clarity without them. Default is on.
+  const roadsOn =
+    !(browser && import.meta.env.DEV) ||
+    new URLSearchParams(window.location.search).get("roads") !== "off";
+  import type { PaletteKey } from "$lib/map/paletteStore";
+  export let palette: PaletteKey = "slate";
+
+  type PaletteSpec = {
+    bg: string;
+    state: string;
+    line: string;
+    lineWidth: number;
+    county: string;
+    roadCasing: string;
+    roadFill: string;
+    roadMajorCasing: string;
+    roadMajorFill: string;
+    roadMedium: string;
+    text: string;
+    textHalo: string;
+  };
+
+  // Two picks: slate is the cool blue-grey default (matches the agency
+  // page baseline); dark is a steely analytical mode for presentation.
+  const PALETTES: Record<PaletteKey, PaletteSpec> = {
+    slate: {
+      bg: "#dde4eb",
+      state: "#f5f4f5",
+      line: "#94a3b8",
+      lineWidth: isMobile ? 0.9 : 1.5,
+      county: "#c8d4dc",
+      roadCasing: "#a0b0bc",
+      roadFill: "#eef2f5",
+      roadMajorCasing: "#b0bcc7",
+      roadMajorFill: "#f3f5f7",
+      roadMedium: "#cdd6dc",
+      text: "#334155",
+      textHalo: "rgba(255,255,255,0.85)",
+    },
+    dark: {
+      bg: "#0c1117",
+      state: "#18202a",
+      line: "#3a4552",
+      lineWidth: 0.6,
+      county: "#1c242e",
+      roadCasing: "#252d38",
+      roadFill: "#525f6c",
+      roadMajorCasing: "#222933",
+      roadMajorFill: "#3d4754",
+      roadMedium: "#252d38",
+      text: "#c2cad4",
+      textHalo: "rgba(8,12,18,0.9)",
+    },
+  };
 
   const MODEL_FALLBACK = "#94a3b8";
   const FULL_BOUNDS: [[number, number], [number, number]] = [[-127, 21], [-65, 50]];
+  const FIT_PADDING = isMobile ? 6 : 10;
 
   function fitToSelection() {
     if (!map) return;
     if (selectedStates.size === 0) {
-      map.fitBounds(FULL_BOUNDS, { padding: 24, duration: 500 });
+      map.fitBounds(FULL_BOUNDS, { padding: FIT_PADDING, duration: 500 });
       return;
     }
     const points = agencies
       .filter((a) => selectedStates.has(a.state) && a.lat != null && a.lng != null)
       .map((a) => toInsetCoords(a.lng!, a.lat!, a.state));
     if (points.length === 0) {
-      map.fitBounds(FULL_BOUNDS, { padding: 24, duration: 500 });
+      map.fitBounds(FULL_BOUNDS, { padding: FIT_PADDING, duration: 500 });
       return;
     }
     let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
@@ -49,6 +122,20 @@
   }
 
   $: selectedStates, fitToSelection();
+
+  // Fractional month index from Jan 2025 (idx 0). Pre-2025 signings (and any
+  // missing dates) get a deeply negative value so they're always past the
+  // fade-in window — i.e. shown unconditionally as the baseline.
+  const BASELINE_IDX = -10000;
+  const TIMELINE_EPOCH_YEAR = 2025;
+  const signedDateIdx = (d?: string | null): number => {
+    if (!d || d.length < 10) return BASELINE_IDX;
+    const y = Number(d.slice(0, 4));
+    const m = Number(d.slice(5, 7));
+    const day = Number(d.slice(8, 10));
+    if (y < TIMELINE_EPOCH_YEAR) return BASELINE_IDX;
+    return (y - TIMELINE_EPOCH_YEAR) * 12 + (m - 1) + (day - 1) / 31;
+  };
 
   $: geojson = {
     type: "FeatureCollection",
@@ -67,7 +154,9 @@
             primary_model: a.primary_model ?? "",
             models: a.models.join(", "),
             population: a.population ?? 0,
+            officer_ct: a.lee?.officer_ct ?? 0,
             color: MODEL_COLORS[a.primary_model ?? ""] ?? MODEL_FALLBACK,
+            signed_idx: signedDateIdx(a.signed_date),
           },
         };
       }),
@@ -81,13 +170,95 @@
 
   $: if (map) updateSource();
 
+  // Smooth timeline transitions. Each dot fades + pops in over FADE_WINDOW
+  // months after its signing date, so a continuous cursor reveals the data as
+  // a gentle wave rather than monthly cliff. Baseline dots (negative
+  // signed_idx) clamp to full opacity at every cursor.
+  const FADE_WINDOW = 0.35;
+  const BASE_OPACITY = 0.7;
+  const fadeMultiplier = (cursor: number) => [
+    "interpolate", ["linear"],
+    ["-", cursor, ["get", "signed_idx"]],
+    -0.001, 0,
+    0, 0,
+    FADE_WINDOW, 1,
+  ];
+  const opacityWithFade = (cursor: number) => [
+    "*", BASE_OPACITY, fadeMultiplier(cursor),
+  ];
+
+  // MapLibre rule: ["zoom"] can only appear as the direct input of a top-level
+  // interpolate/step, never nested. So instead of wrapping the existing radius
+  // expression in ["*", fade, ...], we keep `interpolate(linear, [zoom], ...)`
+  // at the top and multiply fade INTO each per-zoom stop's output.
+  let radiusStops: Array<[number, any]> = [];
+  const baseRadiusExpression = (): any => {
+    if (!radiusStops.length) return 1;
+    return ["interpolate", ["linear"], ["zoom"], ...radiusStops.flat()];
+  };
+  const radiusWithFade = (cursor: number): any => {
+    if (!radiusStops.length) return 1;
+    const fm = fadeMultiplier(cursor);
+    const flat: any[] = [];
+    for (const [z, r] of radiusStops) flat.push(z, ["*", fm, r]);
+    return ["interpolate", ["linear"], ["zoom"], ...flat];
+  };
+
+  $: if (map && map.getLayer && map.getLayer("agencies")) {
+    if (cursorIdx == null) {
+      map.setPaintProperty("agencies", "circle-opacity", BASE_OPACITY);
+      map.setPaintProperty("agencies", "circle-radius", baseRadiusExpression());
+    } else {
+      map.setPaintProperty("agencies", "circle-opacity", opacityWithFade(cursorIdx));
+      map.setPaintProperty("agencies", "circle-radius", radiusWithFade(cursorIdx));
+    }
+  }
+
+  // Re-paint when the user toggles the palette via the selector. Covers
+  // every layer that has a palette-driven color so the switch updates
+  // basemap, labels, and roads in one pass without remount.
+  $: if (map && map.isStyleLoaded()) {
+    const c = PALETTES[palette];
+    map.setPaintProperty("background", "background-color", c.bg);
+    if (map.getLayer("state-fills"))
+      map.setPaintProperty("state-fills", "fill-color", c.state);
+    if (map.getLayer("state-lines")) {
+      map.setPaintProperty("state-lines", "line-color", c.line);
+      map.setPaintProperty("state-lines", "line-width", c.lineWidth);
+    }
+    if (map.getLayer("county-lines"))
+      map.setPaintProperty("county-lines", "line-color", c.county);
+    if (map.getLayer("highway-static-casing"))
+      map.setPaintProperty("highway-static-casing", "line-color", c.roadCasing);
+    if (map.getLayer("highway-static-fill"))
+      map.setPaintProperty("highway-static-fill", "line-color", c.roadFill);
+    if (map.getLayer("road-highway-casing"))
+      map.setPaintProperty("road-highway-casing", "line-color", c.roadCasing);
+    if (map.getLayer("road-highway-fill"))
+      map.setPaintProperty("road-highway-fill", "line-color", c.roadFill);
+    if (map.getLayer("agencies"))
+      map.setPaintProperty("agencies", "circle-stroke-color", c.bg);
+    if (map.getLayer("road-major-casing"))
+      map.setPaintProperty("road-major-casing", "line-color", c.roadMajorCasing);
+    if (map.getLayer("road-major-fill"))
+      map.setPaintProperty("road-major-fill", "line-color", c.roadMajorFill);
+    if (map.getLayer("road-medium"))
+      map.setPaintProperty("road-medium", "line-color", c.roadMedium);
+    for (const id of ["places-major", "places-minor", "places-all"]) {
+      if (!map.getLayer(id)) continue;
+      map.setPaintProperty(id, "text-color", c.text);
+      map.setPaintProperty(id, "text-halo-color", c.textHalo);
+    }
+  }
+
   onMount(async () => {
     if (!browser) return;
 
     const ml = await import("maplibre-gl");
+    await ensurePmtilesProtocol(ml);
 
     const FIT_BOUNDS = FULL_BOUNDS;
-    const FIT_OPTIONS = { padding: 24, animate: false };
+    const FIT_OPTIONS = { padding: FIT_PADDING, animate: false };
 
     const ro = new ResizeObserver(() => {
       if (!map) return;
@@ -106,11 +277,10 @@
       style: {
         version: 8,
         sources: {},
-        // Carto's glyph CDN for cluster count labels — fonts only, no basemap tiles
-        glyphs: "https://fonts.basemaps.cartocdn.com/gl/fonts/{fontstack}/{range}.pbf",
+        glyphs: PMTILES_GLYPHS,
         projection: { type: "mercator" },
         layers: [
-          { id: "background", type: "background", paint: { "background-color": "#dde4eb" } },
+          { id: "background", type: "background", paint: { "background-color": PALETTES[palette].bg } },
         ],
       } as any,
       // Inset layout: continental US + territory insets all fit in this window
@@ -118,32 +288,26 @@
       fitBoundsOptions: FIT_OPTIONS,
       minZoom: 1,   // overridden on load below
       maxZoom: 14,
-      attributionControl: false,
+      attributionControl: { compact: true },
     });
 
     map.addControl(new ml.NavigationControl({ showCompass: false }), "top-right");
 
-    map.on("load", () => {
+    map.on("load", async () => {
       // Resize first so MapLibre knows the true container dimensions on mobile,
       // then re-fit so the full map fills the container, then lock the floor zoom.
       map.resize();
       map.fitBounds(FIT_BOUNDS, FIT_OPTIONS);
       map.setMinZoom(map.getZoom());
 
-      map.addSource("states", {
-        type: "geojson",
-        data: "/us-inset.geojson",
-      });
+      const statesGj = await fetch("/us-inset.geojson").then((r) => r.json());
+      map.addSource("states", { type: "geojson", data: statesGj });
 
-      // State fills — white land against the blue-grey water background
       map.addLayer({
         id: "state-fills",
         type: "fill",
         source: "states",
-        paint: {
-          "fill-color": "#f5f4f5",
-          "fill-opacity": 1,
-        },
+        paint: { "fill-color": PALETTES[palette].state, "fill-opacity": 1 },
       });
 
       map.addLayer({
@@ -151,8 +315,12 @@
         type: "line",
         source: "states",
         paint: {
-          "line-color": "#94a3b8",
-          "line-width": 1.5,
+          "line-color": PALETTES[palette].line,
+          "line-width": PALETTES[palette].lineWidth,
+          // Fainter at the locked-floor national view (zoom ~1) so the country
+          // doesn't read as a cage of borders. Ramps to full visibility once
+          // individual states fill the screen.
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 1, 0.45, 3, 0.9],
         },
       });
 
@@ -168,109 +336,211 @@
         source: "counties",
         minzoom: 5,
         paint: {
-          "line-color": "#c8d4dc",
+          "line-color": PALETTES[palette].county,
           "line-width": 0.4,
           "line-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0, 5.5, 0.7],
         },
       });
 
-      // Highways — casing + fill for a clean road look
-      map.addSource("highways", {
+      // Static inset highways for the lowest zoom levels — PMTiles' roads
+      // source starts at zoom 3, but mobile's locked-floor view sits below
+      // that. The hand-baked geojson covers the inset layout (incl. AK/HI)
+      // and fades out by ~zoom 4.5 as PMTiles takes over.
+      map.addSource("highways-static", {
         type: "geojson",
         data: "/us-highways.geojson",
       });
-
-      // Casing (slightly wider, darker) drawn first so fill sits on top
+      // Static and PMTiles highways used to both render at zoom 2–4.5, which
+      // double-stroked every interstate. Static now fades out 3.5→4.5 and
+      // PMTiles fades in over the same window — single highway at every zoom.
+      // Static opacity is kept low so the national view reads as "hint of road
+      // network" rather than a full road map.
       map.addLayer({
-        id: "highway-casing",
+        id: "highway-static-casing",
         type: "line",
-        source: "highways",
-        minzoom: 4,
+        source: "highways-static",
+        maxzoom: 4.5,
+        layout: { visibility: roadsOn ? "visible" : "none" },
         paint: {
-          "line-color": "#a0b0bc",
-          "line-width": ["interpolate", ["linear"], ["zoom"], 4, 1.5, 8, 3, 12, 5],
-          "line-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0, 4.5, 0.7],
+          "line-color": PALETTES[palette].roadCasing,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 1, 1.2, 4, 2.2],
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 1, 0.35, 3.5, 0.35, 4.5, 0],
+        },
+      });
+      map.addLayer({
+        id: "highway-static-fill",
+        type: "line",
+        source: "highways-static",
+        maxzoom: 4.5,
+        layout: { visibility: roadsOn ? "visible" : "none" },
+        paint: {
+          "line-color": PALETTES[palette].roadFill,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 1, 0.5, 4, 1.0],
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 1, 0.5, 3.5, 0.5, 4.5, 0],
+        },
+      });
+
+      // Shared PMTiles base — roads + place labels. Standard web-mercator,
+      // so layers only align with the lower-48; AK/HI/territory insets are
+      // intentionally left without road/city detail in this iteration.
+      map.addSource("base", pmtilesBaseSource());
+
+      // Interstates (kind: highway) — visible at every zoom, including the
+      // national view. They're the connective tissue readers expect to see.
+      // Min line-widths are bumped so the network reads as a network at
+      // the locked-floor zoom, not just a hint.
+      map.addLayer({
+        id: "road-highway-casing",
+        type: "line",
+        source: "base",
+        "source-layer": "roads",
+        filter: ["==", ["get", "kind"], "highway"],
+        layout: { "line-cap": "round", "line-join": "round", visibility: roadsOn ? "visible" : "none" },
+        paint: {
+          "line-color": PALETTES[palette].roadCasing,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 2, 1.8, 5, 2.5, 9, 4, 12, 5.5],
+          // Fades in 3.5→4.5 as the static overlay fades out — single highway at every zoom.
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 3.5, 0, 4.5, 0.8],
         },
       });
 
       map.addLayer({
-        id: "highway-fill",
+        id: "road-highway-fill",
         type: "line",
-        source: "highways",
-        minzoom: 4,
+        source: "base",
+        "source-layer": "roads",
+        filter: ["==", ["get", "kind"], "highway"],
+        layout: { "line-cap": "round", "line-join": "round", visibility: roadsOn ? "visible" : "none" },
         paint: {
-          "line-color": "#eef2f5",
-          "line-width": ["interpolate", ["linear"], ["zoom"], 4, 0.6, 8, 1.5, 12, 3],
-          "line-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0, 4.5, 0.9],
+          "line-color": PALETTES[palette].roadFill,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 2, 0.8, 5, 1.2, 9, 2, 12, 3],
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 3.5, 0, 4.5, 0.95],
         },
       });
 
-      // Cities — major (pop ≥ 300k) from zoom 4, all from zoom 6
-      map.addSource("cities", {
-        type: "geojson",
-        data: "/us-cities.geojson",
+      // US/state highways — visible from zoom 5+ once the viewport is
+      // narrow enough that they don't read as visual noise.
+      map.addLayer({
+        id: "road-major-casing",
+        type: "line",
+        source: "base",
+        "source-layer": "roads",
+        minzoom: 5,
+        filter: ["==", ["get", "kind"], "major_road"],
+        layout: { "line-cap": "round", "line-join": "round", visibility: roadsOn ? "visible" : "none" },
+        paint: {
+          "line-color": PALETTES[palette].roadMajorCasing,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 5, 0.8, 9, 2, 12, 3.5],
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0, 5.5, 0.65],
+        },
       });
 
       map.addLayer({
-        id: "cities-major",
+        id: "road-major-fill",
+        type: "line",
+        source: "base",
+        "source-layer": "roads",
+        minzoom: 5,
+        filter: ["==", ["get", "kind"], "major_road"],
+        layout: { "line-cap": "round", "line-join": "round", visibility: roadsOn ? "visible" : "none" },
+        paint: {
+          "line-color": PALETTES[palette].roadMajorFill,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 5, 0.4, 9, 1.1, 12, 2],
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0, 5.5, 0.9],
+        },
+      });
+
+      // Medium roads fade in at city zoom for context
+      map.addLayer({
+        id: "road-medium",
+        type: "line",
+        source: "base",
+        "source-layer": "roads",
+        minzoom: 8,
+        filter: ["==", ["get", "kind"], "medium_road"],
+        layout: { visibility: roadsOn ? "visible" : "none" },
+        paint: {
+          "line-color": PALETTES[palette].roadMedium,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.4, 12, 1.5],
+          "line-opacity": 0.8,
+        },
+      });
+
+      // Place labels — Protomaps `population_rank`: lower = more populous.
+      // Tiered so the national view shows only the biggest cities and more
+      // appear as the user zooms in.
+      map.addLayer({
+        id: "places-major",
         type: "symbol",
-        source: "cities",
+        source: "base",
+        "source-layer": "places",
         minzoom: 4,
-        filter: ["<=", ["get", "rank"], 2],
+        filter: [
+          "all",
+          ["==", ["get", "kind"], "locality"],
+          ["<=", ["get", "population_rank"], 7],
+        ],
         layout: {
-          "text-field": ["get", "name"],
-          "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
+          "text-field": ["coalesce", ["get", "name:en"], ["get", "name"]],
+          "text-font": ["Noto Sans Regular"],
           "text-size": ["interpolate", ["linear"], ["zoom"], 4, 10, 8, 13],
           "text-anchor": "top",
           "text-offset": [0, 0.4],
           "text-allow-overlap": false,
         },
         paint: {
-          "text-color": "#334155",
-          "text-halo-color": "rgba(255,255,255,0.85)",
+          "text-color": PALETTES[palette].text,
+          "text-halo-color": PALETTES[palette].textHalo,
           "text-halo-width": 1.5,
           "text-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0, 4.5, 1],
         },
       });
 
       map.addLayer({
-        id: "cities-minor",
+        id: "places-minor",
         type: "symbol",
-        source: "cities",
+        source: "base",
+        "source-layer": "places",
         minzoom: 6,
-        filter: ["<=", ["get", "rank"], 3],
+        filter: [
+          "all",
+          ["==", ["get", "kind"], "locality"],
+          ["<=", ["get", "population_rank"], 9],
+        ],
         layout: {
-          "text-field": ["get", "name"],
-          "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
+          "text-field": ["coalesce", ["get", "name:en"], ["get", "name"]],
+          "text-font": ["Noto Sans Regular"],
           "text-size": ["interpolate", ["linear"], ["zoom"], 6, 9, 10, 12],
           "text-anchor": "top",
           "text-offset": [0, 0.4],
           "text-allow-overlap": false,
         },
         paint: {
-          "text-color": "#475569",
-          "text-halo-color": "rgba(255,255,255,0.85)",
+          "text-color": PALETTES[palette].text,
+          "text-halo-color": PALETTES[palette].textHalo,
           "text-halo-width": 1.5,
           "text-opacity": ["interpolate", ["linear"], ["zoom"], 6, 0, 6.5, 1],
         },
       });
 
       map.addLayer({
-        id: "cities-all",
+        id: "places-all",
         type: "symbol",
-        source: "cities",
+        source: "base",
+        "source-layer": "places",
         minzoom: 8,
+        filter: ["==", ["get", "kind"], "locality"],
         layout: {
-          "text-field": ["get", "name"],
-          "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
+          "text-field": ["coalesce", ["get", "name:en"], ["get", "name"]],
+          "text-font": ["Noto Sans Regular"],
           "text-size": 10,
           "text-anchor": "top",
           "text-offset": [0, 0.4],
           "text-allow-overlap": false,
         },
         paint: {
-          "text-color": "#64748b",
-          "text-halo-color": "rgba(255,255,255,0.85)",
+          "text-color": PALETTES[palette].text,
+          "text-halo-color": PALETTES[palette].textHalo,
           "text-halo-width": 1.5,
           "text-opacity": ["interpolate", ["linear"], ["zoom"], 8, 0, 8.5, 1],
         },
@@ -281,18 +551,53 @@
         data: geojson,
       });
 
-      // Agency dots — on top of city labels
+      // Agency dots — on top of city labels. Radius scales by sqrt of the
+      // chosen metric so big departments read visibly heavier than rural
+      // sheriff's offices, without erasing the small ones. Mobile gets a
+      // tighter scale; ?scale=population|flat swaps the metric in dev for
+      // visual tuning.
+      const SCALE = isMobile ? 0.7 : 1;
+      const sizeExpr =
+        scaleMode === "flat"
+          ? 20
+          : ["sqrt", ["coalesce", ["get", scaleMode === "population" ? "population" : "officer_ct"], 0]];
+      // Domain ceiling matched to each metric's 95th percentile:
+      //   officers p95 = 307 → sqrt ≈ 17.5
+      //   population p95 = 255k → sqrt ≈ 505
+      const sizeDomainMax = scaleMode === "population" ? 600 : 18;
+      const radius = (low: number, high: number) => [
+        "interpolate", ["linear"], sizeExpr as any,
+        0, low * SCALE,
+        sizeDomainMax, high * SCALE,
+      ];
+      // Captured so the timeline cursor's paint updates can rebuild the radius
+      // interpolation each frame with the fade multiplier applied per-stop.
+      radiusStops = [
+        [3, radius(0.8, 7)],
+        [6, radius(2.2, 12)],
+        [10, radius(4, 20)],
+      ];
+      const initialRadius = cursorIdx == null
+        ? baseRadiusExpression()
+        : radiusWithFade(cursorIdx);
+      const initialOpacity = cursorIdx == null
+        ? BASE_OPACITY
+        : opacityWithFade(cursorIdx);
       map.addLayer({
         id: "agencies",
         type: "circle",
         source: "agencies",
         paint: {
           "circle-color": ["get", "color"],
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 3, 2, 6, 4, 10, 7],
-          "circle-stroke-width": 1,
-          "circle-stroke-color": ["get", "color"],
+          // Slight stroke = bg color: knocks out a thin gap between
+          // touching dots without reading as a halo. The reduced fill
+          // opacity lets dense clusters (FL, TX) read as "many overlapping"
+          // rather than a solid blob.
+          "circle-stroke-width": 0.6,
+          "circle-stroke-color": PALETTES[palette].bg,
           "circle-stroke-opacity": 1,
-          "circle-opacity": 0.65,
+          "circle-radius": initialRadius,
+          "circle-opacity": initialOpacity,
         },
       });
 
@@ -304,11 +609,19 @@
         className: "map-popup",
       });
 
+      const isFeatureVisible = (p: any): boolean => {
+        if (cursorIdx == null) return true;
+        const idx = Number(p.signed_idx);
+        if (!Number.isFinite(idx)) return true;
+        return idx <= cursorIdx;
+      };
+
       map.on("mouseenter", "agencies", (e: any) => {
         if (!e.features?.length) return;
-        map.getCanvas().style.cursor = "pointer";
         const f = e.features[0];
         const p = f.properties;
+        if (!isFeatureVisible(p)) return;
+        map.getCanvas().style.cursor = "pointer";
         const coords = f.geometry.coordinates.slice();
         const modelBadges = p.models
           ? p.models.split(", ").map((model: string) => {
@@ -335,6 +648,7 @@
 
       map.on("click", "agencies", (e: any) => {
         if (!e.features?.length) return;
+        if (!isFeatureVisible(e.features[0].properties)) return;
         const slug = e.features[0].properties.slug;
         if (slug) goto(`/agency/${slug}`);
       });
