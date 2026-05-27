@@ -222,7 +222,7 @@
       <div>
         <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_population()}</dt>
         <dd class="mt-1 text-xl font-bold text-slate-900">
-          {intFmt.format(agency.lee.population)}<span class="ml-1.5 text-xs font-normal text-slate-400">FBI {agency.lee.data_year}</span>
+          {intFmt.format(agency.lee.population)}<a href="https://cde.ucr.cjis.gov/LATEST/webapp/#/pages/downloads" target="_blank" rel="noreferrer" title="FBI Law Enforcement Employees data, {agency.lee.data_year}" class="ml-1.5 text-xs font-normal text-slate-400 no-underline hover:text-slate-600 hover:underline">FBI {agency.lee.data_year}</a>
         </dd>
       </div>
     {:else if agency.population != null}
@@ -235,7 +235,7 @@
       <div>
         <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_officers()}</dt>
         <dd class="mt-1 text-xl font-bold text-slate-900">
-          {intFmt.format(agency.lee.officer_ct)}<span class="ml-1.5 text-xs font-normal text-slate-400">FBI {agency.lee.data_year}</span>
+          {intFmt.format(agency.lee.officer_ct)}<a href="https://cde.ucr.cjis.gov/LATEST/webapp/#/pages/downloads" target="_blank" rel="noreferrer" title="FBI Law Enforcement Employees data, {agency.lee.data_year}" class="ml-1.5 text-xs font-normal text-slate-400 no-underline hover:text-slate-600 hover:underline">FBI {agency.lee.data_year}</a>
         </dd>
       </div>
     {/if}
@@ -243,7 +243,7 @@
       <div>
         <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_civilian_staff()}</dt>
         <dd class="mt-1 text-xl font-bold text-slate-900">
-          {intFmt.format(agency.lee.civilian_ct)}<span class="ml-1.5 text-xs font-normal text-slate-400">FBI {agency.lee.data_year}</span>
+          {intFmt.format(agency.lee.civilian_ct)}<a href="https://cde.ucr.cjis.gov/LATEST/webapp/#/pages/downloads" target="_blank" rel="noreferrer" title="FBI Law Enforcement Employees data, {agency.lee.data_year}" class="ml-1.5 text-xs font-normal text-slate-400 no-underline hover:text-slate-600 hover:underline">FBI {agency.lee.data_year}</a>
         </dd>
       </div>
     {/if}
@@ -251,7 +251,7 @@
       <div>
         <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_total_personnel()}</dt>
         <dd class="mt-1 text-xl font-bold text-slate-900">
-          {intFmt.format(agency.lee.total_pe_ct)}<span class="ml-1.5 text-xs font-normal text-slate-400">FBI {agency.lee.data_year}</span>
+          {intFmt.format(agency.lee.total_pe_ct)}<a href="https://cde.ucr.cjis.gov/LATEST/webapp/#/pages/downloads" target="_blank" rel="noreferrer" title="FBI Law Enforcement Employees data, {agency.lee.data_year}" class="ml-1.5 text-xs font-normal text-slate-400 no-underline hover:text-slate-600 hover:underline">FBI {agency.lee.data_year}</a>
         </dd>
       </div>
     {/if}
@@ -259,7 +259,7 @@
       <div>
         <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">Officers per 1,000</dt>
         <dd class="mt-1 text-xl font-bold text-slate-900">
-          {agency.lee.pe_ct_per_1000.toFixed(2)}<span class="ml-1.5 text-xs font-normal text-slate-400">FBI {agency.lee.data_year}</span>
+          {agency.lee.pe_ct_per_1000.toFixed(2)}<a href="https://cde.ucr.cjis.gov/LATEST/webapp/#/pages/downloads" target="_blank" rel="noreferrer" title="FBI Law Enforcement Employees data, {agency.lee.data_year}" class="ml-1.5 text-xs font-normal text-slate-400 no-underline hover:text-slate-600 hover:underline">FBI {agency.lee.data_year}</a>
         </dd>
       </div>
     {/if}

@@ -28,7 +28,7 @@
         <strong><a href="https://github.com/appelson/Tracking_287g" target="_blank" rel="noreferrer">appelson/Tracking_287g</a></strong> <Gloss text={m.methodology_source_appelson_body()} {seen} />
       </li>
       <li>
-        <strong><a href="https://cde.ucr.cjis.gov/LATEST/webapp/#/pages/explorer/crime/crime-trend" target="_blank" rel="noreferrer">FBI Law Enforcement Explorer (LEE)</a></strong>
+        <strong><a href="https://cde.ucr.cjis.gov/LATEST/webapp/#/pages/downloads" target="_blank" rel="noreferrer">FBI Law Enforcement Employees (LEE)</a></strong>
         <Gloss text={m.methodology_source_lee_body()} {seen} />
       </li>
       <li>
