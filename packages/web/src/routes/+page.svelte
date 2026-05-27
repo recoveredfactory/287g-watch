@@ -389,47 +389,6 @@
     </div>
   </section>
 
-  <!-- ── What each model authorizes ───────────────────────────────────────── -->
-  <section class="border-b border-slate-200 bg-white px-4 py-10 sm:px-6 sm:py-12">
-    <div class="mx-auto max-w-6xl">
-      <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">
-        {m.home_models_heading()}
-      </h2>
-      <div class="mt-5 grid items-stretch gap-4 sm:grid-cols-3">
-        {#each ALL_MODELS as model}
-          {@const desc = modelDesc(model)}
-          <div
-            class="flex flex-col overflow-hidden rounded border shadow-sm"
-            style="border-color: {MODEL_COLORS[model]};"
-          >
-            <div class="px-4 py-3" style="background: {MODEL_COLORS[model]};">
-              <h3
-                class="font-sans text-sm font-bold uppercase tracking-widest"
-                style="color: {MODEL_TEXT_COLORS[model] ?? '#ffffff'};"
-              >{model.replace(/ Model$/, '')}</h3>
-            </div>
-            <div class="flex flex-1 flex-col gap-3 px-4 py-4" style="background: {MODEL_COLORS[model]}28;">
-              <p class="text-sm leading-relaxed text-slate-700">{@html desc.short}</p>
-              <div class="flex items-end justify-between gap-2">
-                <a
-                  href={localizeHref(`/model/${MODEL_SLUG[model]}`)}
-                  class="text-sm font-semibold no-underline hover:underline"
-                  style="color: {MODEL_DARK_COLORS[model] ?? '#334155'};"
-                >Learn more →</a>
-                {#if data.modelCounts[model]}
-                  <p
-                    class="text-right text-xs italic text-slate-500"
-                    title={data.snapshotDate ? `As of ${data.snapshotDate}` : undefined}
-                  >{intFmt.format(data.modelCounts[model])} agencies</p>
-                {/if}
-              </div>
-            </div>
-          </div>
-        {/each}
-      </div>
-    </div>
-  </section>
-
   <!-- ── Map ──────────────────────────────────────────────────────────────── -->
   <section class="border-b border-slate-200 bg-stone-50 pt-8 sm:pt-10">
     <div class="mx-auto max-w-6xl px-4 sm:px-6">
@@ -516,6 +475,47 @@
         </div>
       </div>
     {/if}
+  </section>
+
+  <!-- ── What each model authorizes ───────────────────────────────────────── -->
+  <section class="border-b border-slate-200 bg-white px-4 py-10 sm:px-6 sm:py-12">
+    <div class="mx-auto max-w-6xl">
+      <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">
+        {m.home_models_heading()}
+      </h2>
+      <div class="mt-5 grid items-stretch gap-4 sm:grid-cols-3">
+        {#each ALL_MODELS as model}
+          {@const desc = modelDesc(model)}
+          <div
+            class="flex flex-col overflow-hidden rounded border shadow-sm"
+            style="border-color: {MODEL_COLORS[model]};"
+          >
+            <div class="px-4 py-3" style="background: {MODEL_COLORS[model]};">
+              <h3
+                class="font-sans text-sm font-bold uppercase tracking-widest"
+                style="color: {MODEL_TEXT_COLORS[model] ?? '#ffffff'};"
+              >{model.replace(/ Model$/, '')}</h3>
+            </div>
+            <div class="flex flex-1 flex-col gap-3 px-4 py-4" style="background: {MODEL_COLORS[model]}28;">
+              <p class="text-sm leading-relaxed text-slate-700">{@html desc.short}</p>
+              <div class="flex items-end justify-between gap-2">
+                <a
+                  href={localizeHref(`/model/${MODEL_SLUG[model]}`)}
+                  class="text-sm font-semibold no-underline hover:underline"
+                  style="color: {MODEL_DARK_COLORS[model] ?? '#334155'};"
+                >Learn more →</a>
+                {#if data.modelCounts[model]}
+                  <p
+                    class="text-right text-xs italic text-slate-500"
+                    title={data.snapshotDate ? `As of ${data.snapshotDate}` : undefined}
+                  >{intFmt.format(data.modelCounts[model])} agencies</p>
+                {/if}
+              </div>
+            </div>
+          </div>
+        {/each}
+      </div>
+    </div>
   </section>
 
   <!-- ── Support callout ──────────────────────────────────────────────────── -->
