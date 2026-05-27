@@ -20,7 +20,8 @@
   // months breathing room without dragging.
   const PLAY_SPEED = 1.7;
 
-  let playing = false;
+  // Exported so the parent can drive a map overlay (visible while playing).
+  export let playing = false;
   let rafId: number | null = null;
   let lastTimestamp = 0;
 
