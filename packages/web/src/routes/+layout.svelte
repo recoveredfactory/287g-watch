@@ -60,17 +60,32 @@
   let bannerVisible = false;
 
   // RF banner A/B test (#93): random pick per page-view, equal weight,
-  // assigned client-side once the banner is about to render. Variant A
-  // sends people to a mailto, variant B to the studio's locale-aware
-  // support page. Fires conversion_impression_{variant} on mount + a
-  // conversion_click_{variant} when the CTA is tapped.
-  type ConversionVariant = "email" | "support";
-  const CONVERSION_VARIANTS: ConversionVariant[] = ["email", "support"];
-  let conversionVariant: ConversionVariant = "email";
+  // assigned client-side once the banner is about to render. Two complete
+  // pairs — different pitch + CTA + destination — testing which framing
+  // (commercial vs reader-support) converts better.
+  //   hire    → mailto, "Got messy data? / We'll turn the noise into signal."
+  //   support → /support, "This data belongs to you. / Help us keep it open."
+  // Fires conversion_impression_{variant} on mount + conversion_click_{variant}
+  // when the CTA is tapped.
+  type ConversionVariant = "hire" | "support";
+  const CONVERSION_VARIANTS: ConversionVariant[] = ["hire", "support"];
+  let conversionVariant: ConversionVariant = "hire";
   $: bannerHref =
-    conversionVariant === "email"
+    conversionVariant === "hire"
       ? "mailto:davideads@recoveredfactory.net"
       : `https://recoveredfactory.net/${locale}/support`;
+  $: bannerHook =
+    conversionVariant === "hire"
+      ? m.rf_banner_hire_hook()
+      : m.rf_banner_support_hook();
+  $: bannerFollow =
+    conversionVariant === "hire"
+      ? m.rf_banner_hire_follow()
+      : m.rf_banner_support_follow();
+  $: bannerCtaLabel =
+    conversionVariant === "hire"
+      ? m.rf_banner_hire_cta()
+      : m.rf_banner_support_cta();
   function trackConversion(event: string) {
     if (typeof window === "undefined") return;
     const w = window as unknown as { umami?: { track?: (e: string) => void } };
@@ -313,9 +328,9 @@
     aria-label="Support Recovered Factory"
   >
     <div class="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-4">
-      <p class="text-sm font-semibold text-white">{m.rf_banner_question()}</p>
+      <p class="text-sm font-semibold text-white">{bannerHook}</p>
       <p class="text-sm text-white/80 sm:truncate">
-        {m.rf_banner_pitch()}
+        {bannerFollow}
       </p>
     </div>
     <div class="flex shrink-0 items-center gap-3">
@@ -328,7 +343,7 @@
         class="rounded px-3 py-1.5 text-sm font-semibold no-underline hover:no-underline"
         style="background-color: #BE6079; color: #ffffff;"
       >
-        {m.rf_banner_cta()}
+        {bannerCtaLabel}
       </a>
       <button
         on:click={dismissBanner}
