@@ -450,10 +450,10 @@
             </span>
             <span class="flex items-center gap-1.5">
               <span
-                class="inline-block h-[22px] w-[22px] rounded-full border border-white bg-slate-400 shadow-sm"
+                class="inline-block h-[26px] w-[26px] rounded-full border border-white bg-slate-400 shadow-sm"
                 aria-hidden="true"
               ></span>
-              300 {m.home_map_size_legend_label()}
+              1,000+ {m.home_map_size_legend_label()}
             </span>
           </div>
         </div>

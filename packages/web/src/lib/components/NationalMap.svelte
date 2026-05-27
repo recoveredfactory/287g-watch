@@ -492,10 +492,11 @@
       // Agency dots — on top of city labels. Radius scales by sqrt of the
       // officer count so big departments read visibly heavier than rural
       // sheriff's offices, without erasing the small ones. Mobile gets a
-      // tighter scale. Domain ceiling = officer p95 (~307) → sqrt ≈ 17.5.
+      // tighter scale. Domain ceiling = ~1,000 officers (between p99 and the
+      // dozen-or-so 1k+ outliers like Las Vegas Metro) → sqrt ≈ 31.6.
       const SCALE = isMobile ? 0.7 : 1;
       const sizeExpr: any = ["sqrt", ["coalesce", ["get", "officer_ct"], 0]];
-      const sizeDomainMax = 18;
+      const sizeDomainMax = 32;
       const radius = (low: number, high: number) => [
         "interpolate", ["linear"], sizeExpr,
         0, low * SCALE,
@@ -504,9 +505,9 @@
       // Captured so the timeline cursor's paint updates can rebuild the radius
       // interpolation each frame with the fade multiplier applied per-stop.
       radiusStops = [
-        [3, radius(0.8, 7)],
-        [6, radius(2.2, 12)],
-        [10, radius(4, 20)],
+        [3, radius(0.8, 9)],
+        [6, radius(2.2, 15)],
+        [10, radius(4, 24)],
       ];
       const initialRadius = cursorIdx == null
         ? baseRadiusExpression()
