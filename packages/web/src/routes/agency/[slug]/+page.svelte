@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { PageData } from "./$types";
   import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_SHORT, MODEL_SLUG } from "$lib/colors";
+  import { STATE_NAMES } from "$lib/states";
   import { localizeHref, getLocale } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
   import AgencySearch from "$lib/components/AgencySearch.svelte";
@@ -169,6 +170,28 @@
     {/key}
   </div>
 
+  <!-- Jurisdiction -->
+  {#if agency.city || agency.county || agency.state}
+    <div class="mt-6 rounded border border-slate-200 bg-slate-50 px-4 py-3">
+      <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Jurisdiction</p>
+      <p class="mt-1 font-semibold text-slate-900">
+        {#if agency.city}
+          {agency.city}{#if agency.county || agency.state},{/if}
+        {/if}
+        {#if agency.county && !agency.city}
+          {agency.county}{#if agency.state},{/if}
+        {/if}
+        {#if agency.state}
+          {STATE_NAMES[agency.state] ?? agency.state}
+        {/if}
+        {#if agency.county && agency.city}
+          <span class="ml-1 text-sm font-normal text-slate-500">({agency.county} County)</span>
+        {/if}
+      </p>
+      <p class="mt-1 text-xs italic text-slate-400">Coverage may overlap with county, state, or neighboring agencies.</p>
+    </div>
+  {/if}
+
   <!-- Key facts -->
   <dl class="mt-8 grid gap-4 border-y border-slate-200 py-8 sm:grid-cols-3">
     {#if agency.signed_date}
@@ -243,60 +266,6 @@
     </section>
   {/if}
 
-  <!-- Dive deeper -->
-  <section class="mt-10">
-    <h2 class="font-serif text-xl font-bold text-slate-900">{m.agency_records_heading()}</h2>
-    <p class="mt-2 text-slate-600">{m.agency_records_intro()}</p>
-
-    {#if muckrock.requests.length > 0}
-      <div class="mt-5">
-        <p class="text-sm font-semibold text-slate-700">{m.agency_records_matched_intro()}</p>
-        <ul class="mt-3 space-y-3">
-          {#each muckrock.requests as req}
-            <li class="overflow-hidden rounded-lg border border-slate-200 shadow-sm">
-              <div class="flex items-baseline justify-between gap-4 bg-slate-100 px-4 py-2">
-                <p class="font-sans text-xs font-bold uppercase tracking-widest text-slate-700">
-                  {req.status === "done" && req.datetime_done
-                    ? m.agency_records_completed_on({ date: dateFmt(req.datetime_done) ?? "" })
-                    : statusLabel(req.status)}
-                </p>
-                <p class="text-xs text-slate-400">MuckRock #{req.foia_id}</p>
-              </div>
-              <div class="bg-white px-4 py-3">
-                <p class="text-sm italic leading-relaxed text-slate-700">“{req.title}”</p>
-                <a
-                  href={req.absolute_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  class="mt-2 inline-block text-xs font-semibold no-underline hover:underline"
-                >{m.agency_records_view_on_muckrock()}</a>
-              </div>
-            </li>
-          {/each}
-        </ul>
-      </div>
-    {/if}
-
-    <ul class="mt-5 space-y-2 text-sm">
-      <li>
-        <a
-          href={muckrock.reporter_guide.absolute_url}
-          target="_blank"
-          rel="noreferrer"
-          class="font-semibold no-underline hover:underline"
-        >{m.agency_records_guide_label()} →</a>
-      </li>
-      <li>
-        <a
-          href={MUCKROCK_SIGNUP_URL}
-          target="_blank"
-          rel="noreferrer"
-          class="font-semibold no-underline hover:underline"
-        >{m.agency_records_diy_cta()} →</a>
-      </li>
-    </ul>
-  </section>
-
   <!-- Contact -->
   <section class="mt-10">
     <h2 class="font-serif text-xl font-bold text-slate-900">{m.agency_contact_heading()}</h2>
@@ -339,11 +308,13 @@
       <p class="mt-1 text-sm text-slate-500">Changes recorded since tracking began. Gaps between entries mean no changes were detected that week.</p>
       <ol class="mt-5 space-y-0 border-l-2 border-slate-200 pl-5">
         {#each [...agency.history].reverse() as event, i}
+          {@const isRemoved = event.removed.length > 0 && event.added.length === 0}
+          {@const isAdded = event.added.length > 0}
           <li class="relative pb-5 last:pb-0">
             <!-- Timeline dot -->
             <span
               class="absolute -left-[1.4375rem] top-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-white"
-              style="background: {event.removed.length && !event.added.length ? '#f87171' : event.added.length ? '#4ade80' : '#94a3b8'}; box-shadow: 0 0 0 2px {event.removed.length && !event.added.length ? '#fca5a5' : event.added.length ? '#86efac' : '#cbd5e1'};"
+              style={`background: ${isRemoved ? '#f87171' : isAdded ? '#4ade80' : '#94a3b8'}; box-shadow: 0 0 0 2px ${isRemoved ? '#fca5a5' : isAdded ? '#86efac' : '#cbd5e1'};`}
             ></span>
             <time class="block text-xs font-semibold uppercase tracking-wider text-slate-400">
               {new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' }).format(new Date(event.date))}
@@ -367,5 +338,59 @@
       </ol>
     </section>
   {/if}
+
+  <!-- Dive deeper -->
+  <section class="mt-10">
+    <h2 class="font-serif text-xl font-bold text-slate-900">{m.agency_records_heading()}</h2>
+    <p class="mt-2 text-slate-600">{m.agency_records_intro()}</p>
+
+    {#if muckrock.requests.length > 0}
+      <div class="mt-5">
+        <p class="text-sm font-semibold text-slate-700">{m.agency_records_matched_intro()}</p>
+        <ul class="mt-3 space-y-3">
+          {#each muckrock.requests as req}
+            <li class="overflow-hidden rounded-lg border border-slate-200 shadow-sm">
+              <div class="flex items-baseline justify-between gap-4 bg-slate-100 px-4 py-2">
+                <p class="font-sans text-xs font-bold uppercase tracking-widest text-slate-700">
+                  {req.status === "done" && req.datetime_done
+                    ? m.agency_records_completed_on({ date: dateFmt(req.datetime_done) ?? "" })
+                    : statusLabel(req.status)}
+                </p>
+                <p class="text-xs text-slate-400">MuckRock #{req.foia_id}</p>
+              </div>
+              <div class="bg-white px-4 py-3">
+                <p class="text-sm italic leading-relaxed text-slate-700">"{req.title}"</p>
+                <a
+                  href={req.absolute_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  class="mt-2 inline-block text-xs font-semibold no-underline hover:underline"
+                >{m.agency_records_view_on_muckrock()}</a>
+              </div>
+            </li>
+          {/each}
+        </ul>
+      </div>
+    {/if}
+
+    <ul class="mt-5 space-y-2 text-sm">
+      <li>
+        <a
+          href={muckrock.reporter_guide.absolute_url}
+          target="_blank"
+          rel="noreferrer"
+          class="font-semibold no-underline hover:underline"
+        >{m.agency_records_guide_label()} →</a>
+      </li>
+      <li>
+        <a
+          href={MUCKROCK_SIGNUP_URL}
+          target="_blank"
+          rel="noreferrer"
+          class="font-semibold no-underline hover:underline"
+        >{m.agency_records_diy_cta()} →</a>
+      </li>
+    </ul>
+  </section>
 
 </main>
