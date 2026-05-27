@@ -16,14 +16,18 @@ miami-dade-corrections-and-rehabilitation-fl:
   - kind: related_agency
     related_slug: miami-dade-sheriffs-office-fl
     text: >-
-      May overlap with the Miami-Dade Sheriff's Office; Florida re-established
-      the elected sheriff role in 2025 and the relationship between these two
-      records is unsettled.
+      Shares an Originating Agency Identifier (ORI FL0130000) with the
+      Miami-Dade Sheriff's Office — by the FBI's accounting, the two records
+      are the same institution. In the ICE data, the Task Force Model
+      agreement is filed under the Sheriff's Office and the Warrant Service
+      Officer agreement is filed under Corrections and Rehabilitation.
 
 miami-dade-sheriffs-office-fl:
   - kind: related_agency
     related_slug: miami-dade-corrections-and-rehabilitation-fl
     text: >-
-      See also Miami-Dade Corrections and Rehabilitation, which historically
-      handled custody operations for Miami-Dade County before the elected
-      sheriff role was re-established in 2025.
+      Shares an Originating Agency Identifier (ORI FL0130000) with Miami-Dade
+      Corrections and Rehabilitation — by the FBI's accounting, the two
+      records are the same institution. In the ICE data, the Task Force Model
+      agreement is filed under the Sheriff's Office and the Warrant Service
+      Officer agreement is filed under Corrections and Rehabilitation.
