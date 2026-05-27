@@ -44,16 +44,38 @@
   $: signedIndices = data.agencies.map((a) => signedIdx(a.signed_date));
   $: agencyPops = data.agencies.map((a) => a.population ?? 0);
 
-  // ORI-deduped views for the topline counters (hero stat + map overlay).
-  // Shared-ORI agency rows (sheriff + corrections under one FBI identifier)
-  // collapse to a single entry whose effective signed_date is the earliest of
-  // the group and whose population is taken once (same LEE row). Null-ORI rows
-  // pass through as singletons. See #92. The map continues to render every
-  // row as its own dot — only counters dedupe.
+  // ORI-deduped views for the map overlay counters. Two derivations because
+  // the hero shows two different unique-set semantics:
+  //   - count = all unique ORIs (state-level agencies still count as agencies)
+  //   - population sum = local-only (County + Municipality), because state-
+  //     level rows like state police report whole-state populations via LEE
+  //     and would compound with the city/county pops we're already summing
+  //     (see #99).
+  // Shared-ORI rows (sheriff + corrections under one FBI identifier) collapse
+  // to a single entry whose effective signed_date is the earliest of the
+  // group. Null-ORI rows pass through as singletons. See #92.
   $: uniqueAgencyData = (() => {
+    const byOri = new Map<string, { idx: number }>();
+    const nullOri: { idx: number }[] = [];
+    for (const a of data.agencies) {
+      const idx = signedIdx(a.signed_date);
+      if (a.ori) {
+        const prev = byOri.get(a.ori);
+        if (!prev) byOri.set(a.ori, { idx });
+        else if (idx < prev.idx) byOri.set(a.ori, { idx });
+      } else {
+        nullOri.push({ idx });
+      }
+    }
+    return [...byOri.values(), ...nullOri];
+  })();
+  $: uniqueSignedIndices = uniqueAgencyData.map((d) => d.idx);
+
+  $: uniqueLocalPopData = (() => {
     const byOri = new Map<string, { idx: number; pop: number }>();
     const nullOri: { idx: number; pop: number }[] = [];
     for (const a of data.agencies) {
+      if (a.agency_type !== "County" && a.agency_type !== "Municipality") continue;
       const idx = signedIdx(a.signed_date);
       const pop = a.population ?? 0;
       if (a.ori) {
@@ -66,8 +88,8 @@
     }
     return [...byOri.values(), ...nullOri];
   })();
-  $: uniqueSignedIndices = uniqueAgencyData.map((d) => d.idx);
-  $: uniqueAgencyPops = uniqueAgencyData.map((d) => d.pop);
+  $: uniqueLocalSignedIndices = uniqueLocalPopData.map((d) => d.idx);
+  $: uniqueLocalPops = uniqueLocalPopData.map((d) => d.pop);
   const today = new Date();
   const todayIdx =
     (today.getUTCFullYear() - TIMELINE_EPOCH_YEAR) * 12 +
@@ -81,8 +103,8 @@
   let cursorIdx = NaN;
   $: if (Number.isNaN(cursorIdx) && Number.isFinite(maxIdx)) cursorIdx = maxIdx;
   $: countAtCursor = uniqueSignedIndices.filter((i) => i <= cursorIdx).length;
-  $: popAtCursor = uniqueSignedIndices.reduce(
-    (sum, idx, i) => (idx <= cursorIdx ? sum + uniqueAgencyPops[i] : sum),
+  $: popAtCursor = uniqueLocalSignedIndices.reduce(
+    (sum, idx, i) => (idx <= cursorIdx ? sum + uniqueLocalPops[i] : sum),
     0,
   );
 
