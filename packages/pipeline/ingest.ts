@@ -840,7 +840,6 @@ for (const a of agencies) {
       a.ori = up.ori
       oriFromUpstream++
     }
-    if (up.population_policed != null) a.population = up.population_policed
   }
 
   if (!a.ori) {
@@ -858,8 +857,17 @@ for (const a of agencies) {
       a.lee = leeToLeeData(lee)
       leeAttached++
       leeYearDist.set(lee.data_year, (leeYearDist.get(lee.data_year) ?? 0) + 1)
-      if (a.population == null) a.population = lee.population
+      a.population = lee.population
     }
+  }
+
+  // MOA's population_policed is a fallback when LEE has no row for the
+  // agency. We prefer LEE because its non-overlapping convention (sheriff
+  // = unincorporated only) avoids double-counting in state-level sums;
+  // MOA reports whole-county pop for sheriffs, which the agency page
+  // surfaces as a separate "Population policed" slot for transparency.
+  if (a.population == null && a.agreement?.population_policed != null) {
+    a.population = a.agreement.population_policed
   }
 }
 
