@@ -378,7 +378,7 @@ const STATE_NAMES = {
 
 async function bakeHome() {
   await bakeCard(path.join(OG_DIR, "home.png"), {
-    title: "Every agreement between local police and ICE.",
+    title: "Every active agreement between local police and ICE.",
   });
   console.log(`✓ home.png`);
 }
