@@ -1,8 +1,10 @@
 <script lang="ts">
   import { localizeHref } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
+  import Gloss from "$lib/components/Gloss.svelte";
   $: title = m.methodology_meta_title();
   $: description = m.methodology_meta_description();
+  const seen = new Set<string>();
 </script>
 
 <svelte:head>
@@ -16,48 +18,48 @@
   <div class="prose-editorial mt-6 sm:mt-8">
     <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">{m.methodology_sources_heading()}</h2>
 
-    <p class="mt-3">{m.methodology_sources_lead()}</p>
+    <p class="mt-3"><Gloss text={m.methodology_sources_lead()} {seen} /></p>
 
     <ul>
       <li>
-        <strong><a href="https://www.ice.gov/identify-and-arrest/287g" target="_blank" rel="noreferrer">ICE 287(g) participants list</a></strong> {m.methodology_source_ice_body()}
+        <strong><a href="https://www.ice.gov/identify-and-arrest/287g" target="_blank" rel="noreferrer">ICE 287(g) participants list</a></strong> <Gloss text={m.methodology_source_ice_body()} {seen} />
       </li>
       <li>
-        <strong><a href="https://github.com/appelson/Tracking_287g" target="_blank" rel="noreferrer">appelson/Tracking_287g</a></strong> {m.methodology_source_appelson_body()}
+        <strong><a href="https://github.com/appelson/Tracking_287g" target="_blank" rel="noreferrer">appelson/Tracking_287g</a></strong> <Gloss text={m.methodology_source_appelson_body()} {seen} />
       </li>
       <li>
         <strong><a href="https://cde.ucr.cjis.gov/LATEST/webapp/#/pages/explorer/crime/crime-trend" target="_blank" rel="noreferrer">FBI Law Enforcement Explorer (LEE)</a></strong>
-        {m.methodology_source_lee_body()}
+        <Gloss text={m.methodology_source_lee_body()} {seen} />
       </li>
       <li>
         <strong><a href="https://www.wikidata.org/" target="_blank" rel="noreferrer">Wikidata</a></strong>
-        {m.methodology_source_wikidata_body()}
+        <Gloss text={m.methodology_source_wikidata_body()} {seen} />
       </li>
       <li>
         <strong><a href="https://www.muckrock.com/" target="_blank" rel="noreferrer">MuckRock</a></strong>
-        {m.methodology_source_muckrock_body()}
+        <Gloss text={m.methodology_source_muckrock_body()} {seen} />
       </li>
     </ul>
 
     <h2 class="mt-8 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.methodology_matching_heading()}</h2>
 
-    <p class="mt-3">{m.methodology_matching_body()}</p>
+    <p class="mt-3"><Gloss text={m.methodology_matching_body()} {seen} /></p>
 
     <h2 class="mt-8 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.methodology_limitations_heading()}</h2>
 
     <ul class="mt-3">
-      <li>{m.methodology_limitations_li_1()}</li>
-      <li>{m.methodology_limitations_li_2()}</li>
-      <li>{m.methodology_limitations_li_3()}</li>
+      <li><Gloss text={m.methodology_limitations_li_1()} {seen} /></li>
+      <li><Gloss text={m.methodology_limitations_li_2()} {seen} /></li>
+      <li><Gloss text={m.methodology_limitations_li_3()} {seen} /></li>
     </ul>
 
     <h2 class="mt-8 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.methodology_updates_heading()}</h2>
 
-    <p class="mt-3">{m.methodology_updates_body()}</p>
+    <p class="mt-3"><Gloss text={m.methodology_updates_body()} {seen} /></p>
 
     <h2 class="mt-8 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.methodology_license_heading()}</h2>
 
-    <p class="mt-3">{m.methodology_license_body()}</p>
+    <p class="mt-3"><Gloss text={m.methodology_license_body()} {seen} /></p>
 
     <h2 class="mt-8 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.contact_heading()}</h2>
 
