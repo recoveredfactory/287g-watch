@@ -8,7 +8,7 @@
   import { onMount } from "svelte";
   import { tweened } from "svelte/motion";
   import { cubicOut } from "svelte/easing";
-  import { localizeHref } from "$lib/paraglide/runtime";
+  import { localizeHref, getLocale } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
   import Gloss from "$lib/components/Gloss.svelte";
 
@@ -89,6 +89,19 @@
     timelinePlaying ||
     lingerActive ||
     (Number.isFinite(maxIdx) && cursorIdx < maxIdx - 0.05);
+
+  // Month label for the overlay's date ticker. Clamped to today so the label
+  // doesn't read "Jun 2026" during the small headroom past maxIdx.
+  const overlayMonthLabel = (idx: number): string => {
+    const clamped = Math.min(Math.max(0, idx), todayIdx);
+    const month = Math.floor(clamped);
+    const y = TIMELINE_EPOCH_YEAR + Math.floor(month / 12);
+    const mm = (month % 12) + 1;
+    const localeTag = getLocale() === "es" ? "es-MX" : "en-US";
+    return new Intl.DateTimeFormat(localeTag, { month: "short", year: "numeric", timeZone: "UTC" })
+      .format(new Date(Date.UTC(y, mm - 1, 1)));
+  };
+  $: overlayDateLabel = overlayMonthLabel(cursorIdx);
 
   // ── Search + filter ────────────────────────────────────────────────────────
   let searchQuery = "";
@@ -452,20 +465,22 @@
           {cursorIdx}
         />
         <div
-          class="count-overlay pointer-events-none absolute inset-x-0 top-2 flex justify-center sm:top-4"
+          class="count-overlay pointer-events-none absolute inset-x-0 top-2 flex justify-center sm:top-auto sm:bottom-4"
           class:visible={showCountOverlay}
-          class:playing={timelinePlaying}
           aria-hidden="true"
         >
           <div class="count-card">
-            <div class="count-stat">
-              <div class="count-number">{intFmt.format(Math.round($displayedCount))}</div>
-              <div class="count-label">agencies</div>
-            </div>
-            <div class="count-divider" aria-hidden="true"></div>
-            <div class="count-stat">
-              <div class="count-number">{popFmtOverlay.format(Math.max(0, $displayedPop))}</div>
-              <div class="count-label">Pop. covered</div>
+            <div class="count-date">{overlayDateLabel}</div>
+            <div class="count-stats">
+              <div class="count-stat">
+                <div class="count-number">{intFmt.format(Math.round($displayedCount))}</div>
+                <div class="count-label">agencies</div>
+              </div>
+              <div class="count-divider" aria-hidden="true"></div>
+              <div class="count-stat">
+                <div class="count-number">{popFmtOverlay.format(Math.max(0, $displayedPop))}</div>
+                <div class="count-label">Pop. covered</div>
+              </div>
             </div>
           </div>
         </div>
@@ -732,9 +747,12 @@
   }
   .count-card {
     display: inline-flex;
+    flex-direction: column;
     align-items: stretch;
-    gap: 0.9rem;
-    padding: 0.45rem 1rem;
+    /* Fixed width so the box doesn't widen as the count crosses
+       thousands or the population step-jumps to a wider compact label. */
+    width: 13rem;
+    padding: 0.4rem 0.75rem 0.5rem;
     border-radius: 0.55rem;
     background: rgba(255, 255, 255, 0.85);
     backdrop-filter: blur(6px);
@@ -742,20 +760,36 @@
     box-shadow:
       0 1px 3px rgba(15, 23, 42, 0.08),
       0 8px 22px rgba(15, 23, 42, 0.06);
-    transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
-    will-change: transform;
   }
   @media (min-width: 640px) {
-    .count-card { padding: 0.55rem 1.4rem; gap: 1.25rem; }
+    .count-card { width: 15rem; padding: 0.5rem 1rem 0.6rem; }
   }
-  .count-overlay.playing .count-card {
-    animation: count-breathe 1.6s ease-in-out infinite;
+  .count-date {
+    text-align: center;
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: #475569;
+    padding-bottom: 0.3rem;
+    margin-bottom: 0.35rem;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
   }
-  @keyframes count-breathe {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.025); }
+  @media (min-width: 640px) {
+    .count-date { font-size: 0.7rem; }
+  }
+  .count-stats {
+    display: flex;
+    gap: 0.75rem;
+    align-items: stretch;
+  }
+  @media (min-width: 640px) {
+    .count-stats { gap: 1rem; }
   }
   .count-stat {
+    flex: 1 1 0;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -770,23 +804,24 @@
     font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
     font-variant-numeric: tabular-nums;
     font-weight: 800;
-    font-size: 1.4rem;
+    font-size: 1.35rem;
     line-height: 1;
     color: #0f172a;
     letter-spacing: -0.02em;
   }
   @media (min-width: 640px) {
-    .count-number { font-size: 2rem; }
+    .count-number { font-size: 1.7rem; }
   }
   .count-label {
     margin-top: 0.25rem;
-    font-size: 0.58rem;
+    font-size: 0.55rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.16em;
+    letter-spacing: 0.14em;
     color: #64748b;
+    text-align: center;
   }
   @media (min-width: 640px) {
-    .count-label { font-size: 0.66rem; }
+    .count-label { font-size: 0.62rem; }
   }
 </style>
