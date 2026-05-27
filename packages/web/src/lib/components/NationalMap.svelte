@@ -632,6 +632,14 @@
         className: "map-popup",
       });
 
+      // Touch devices have no hover, so the existing mouseenter→click chain
+      // fires the popup and the navigation in the same gesture and the user
+      // never sees the tooltip. Gate hover handlers to real hover devices;
+      // touch uses a two-tap pattern: first tap shows the popup, second tap
+      // on the same dot (or on the popup itself) navigates.
+      const hasHoverPointer = window.matchMedia("(hover: hover)").matches;
+      let popupSlug: string | null = null;
+
       const isFeatureVisible = (p: any): boolean => {
         if (cursorIdx == null) return true;
         const idx = Number(p.signed_idx);
@@ -639,13 +647,7 @@
         return idx <= cursorIdx;
       };
 
-      map.on("mouseenter", "agencies", (e: any) => {
-        if (!e.features?.length) return;
-        const f = e.features[0];
-        const p = f.properties;
-        if (!isFeatureVisible(p)) return;
-        map.getCanvas().style.cursor = "pointer";
-        const coords = f.geometry.coordinates.slice();
+      const buildPopupHtml = (p: any): string => {
         const modelBadges = p.models
           ? p.models.split(", ").map((model: string) => {
               const bg = MODEL_COLORS[model] ?? "#e2e8f0";
@@ -654,26 +656,71 @@
               return `<span style="display:inline-block;background:${bg};color:${fg};border-radius:3px;padding:1px 7px;font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;">${label}</span>`;
             }).join(" ")
           : "";
+        return `<div class="popup-name">${p.name}</div>` +
+          `<div class="popup-sub">${[p.city, p.state].filter(Boolean).join(", ")}</div>` +
+          (modelBadges ? `<div class="popup-badges">${modelBadges}</div>` : "");
+      };
+
+      const showPopupForFeature = (f: any) => {
+        const p = f.properties;
         popup
-          .setLngLat(coords)
-          .setHTML(
-            `<div class="popup-name">${p.name}</div>` +
-            `<div class="popup-sub">${[p.city, p.state].filter(Boolean).join(", ")}</div>` +
-            (modelBadges ? `<div class="popup-badges">${modelBadges}</div>` : ""),
-          )
+          .setLngLat(f.geometry.coordinates.slice())
+          .setHTML(buildPopupHtml(p))
           .addTo(map);
+        popupSlug = p.slug;
+        if (!hasHoverPointer && p.slug) {
+          const el = popup.getElement();
+          if (el) {
+            el.style.cursor = "pointer";
+            el.addEventListener(
+              "click",
+              (ev) => { ev.stopPropagation(); goto(`/agency/${p.slug}`); },
+              { once: true },
+            );
+          }
+        }
+      };
+
+      const dismissPopup = () => {
+        popup.remove();
+        popupSlug = null;
+      };
+
+      map.on("mouseenter", "agencies", (e: any) => {
+        if (!hasHoverPointer) return;
+        if (!e.features?.length) return;
+        const f = e.features[0];
+        if (!isFeatureVisible(f.properties)) return;
+        map.getCanvas().style.cursor = "pointer";
+        showPopupForFeature(f);
       });
 
       map.on("mouseleave", "agencies", () => {
+        if (!hasHoverPointer) return;
         map.getCanvas().style.cursor = "";
-        popup.remove();
+        dismissPopup();
       });
 
       map.on("click", "agencies", (e: any) => {
         if (!e.features?.length) return;
-        if (!isFeatureVisible(e.features[0].properties)) return;
-        const slug = e.features[0].properties.slug;
+        const f = e.features[0];
+        if (!isFeatureVisible(f.properties)) return;
+        const slug = f.properties.slug;
+        // Touch: first tap on a new dot opens the popup; second tap on the
+        // same dot navigates. Hover devices navigate immediately as before.
+        if (!hasHoverPointer && popupSlug !== slug) {
+          showPopupForFeature(f);
+          return;
+        }
         if (slug) goto(`/agency/${slug}`);
+      });
+
+      // Touch: tap on empty map dismisses the popup. Hover devices already
+      // handle dismissal via mouseleave.
+      map.on("click", (e: any) => {
+        if (hasHoverPointer || !popupSlug) return;
+        const feats = map.queryRenderedFeatures(e.point, { layers: ["agencies"] });
+        if (feats.length === 0) dismissPopup();
       });
 
     });
