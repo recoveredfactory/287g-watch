@@ -67,6 +67,7 @@
   "home_search_baseline": "{count} agencias en {states} estados",
   "home_search_no_match": "Ninguna agencia coincide con tu búsqueda.",
   "home_search_use_detected_state": "Usar mi estado ({state})",
+  "home_search_year_signed": "Año de firma",
 
   "home_pagination_previous": "Anterior",
   "home_pagination_next": "Siguiente",
