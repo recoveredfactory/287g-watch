@@ -1,2 +1,6 @@
 packages:
   - "packages/*"
+allowBuilds:
+  aws-sdk: false
+  esbuild: false
+  playwright-chromium: false

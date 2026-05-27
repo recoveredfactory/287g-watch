@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { PageData } from "./$types";
-  import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_DARK_COLORS, MODEL_SHORT, MODEL_SLUG, MODEL_ORDER } from "$lib/colors";
+  import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_DARK_COLORS, MODEL_SHORT, MODEL_MINI, MODEL_SLUG, MODEL_ORDER } from "$lib/colors";
   import { STATE_NAMES } from "$lib/states";
   import NationalMap from "$lib/components/NationalMap.svelte";
   import MapTimelineScrubber from "$lib/components/MapTimelineScrubber.svelte";
@@ -281,7 +281,7 @@
       </p>
 
       {#if userStateCallout}
-        <p class="mt-4 border-l-4 border-[#ce1483] bg-pink-50/40 px-4 py-3 text-base text-slate-700 sm:text-lg">
+        <p class="mt-4 border-l-4 border-[#BE6079] bg-rose-50/40 px-4 py-3 text-base text-slate-700 sm:text-lg">
           {@html userStateCallout}
         </p>
       {/if}
@@ -567,30 +567,30 @@
           </button>
         </div>
       {:else}
-        <div class="mt-4 overflow-x-auto rounded-lg border border-slate-200">
-          <table class="w-full min-w-[600px] text-sm">
+        <div class="mt-4 rounded-lg border border-slate-200">
+          <table class="w-full text-sm">
             <thead>
               <tr class="border-b border-slate-200 bg-slate-50 text-left">
-                <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Agency</th>
-                <th class="px-3 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Agreement</th>
-                <th class="px-3 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Signed</th>
-                <th class="hidden px-3 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Population</th>
-                <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Links</th>
+                <th class="sticky z-10 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500 sm:px-4 sm:py-3" style="top: var(--site-header-height)">Agency</th>
+                <th class="sticky z-10 bg-slate-50 px-2 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500 sm:px-3 sm:py-3" style="top: var(--site-header-height)">Type</th>
+                <th class="sticky z-10 bg-slate-50 px-2 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500 sm:px-3 sm:py-3" style="top: var(--site-header-height)">Signed</th>
+                <th class="sticky z-10 bg-slate-50 px-2 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500 sm:px-3 sm:py-3" style="top: var(--site-header-height)">MOA</th>
+                <th class="sticky z-10 hidden bg-slate-50 px-2 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500 sm:table-cell sm:px-3 sm:py-3" style="top: var(--site-header-height)">FOIA</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
               {#each pageAgencies as agency (agency.slug)}
                 <tr class="group hover:bg-slate-50">
-                  <td class="px-4 py-3">
+                  <td class="px-3 py-2 sm:px-4 sm:py-3">
                     <a
                       href={localizeHref(`/agency/${agency.slug}`)}
                       class="font-semibold leading-snug text-slate-900 no-underline hover:underline"
                     >{agency.name}</a>
-                    <p class="mt-0.5 text-xs text-slate-400">
+                    <p class="text-xs text-slate-500">
                       {[agency.city, agency.state].filter(Boolean).join(", ")}
                     </p>
                   </td>
-                  <td class="px-3 py-3">
+                  <td class="px-2 py-2 sm:px-3 sm:py-3">
                     <div class="flex flex-wrap gap-1">
                       {#each agency.models as model}
                         <span
@@ -598,26 +598,22 @@
                           class:model-badge--jail={model.includes("Jail")}
                           class:model-badge--taskforce={model.includes("Task")}
                           class:model-badge--wso={model.includes("Warrant")}
-                        >{MODEL_SHORT[model] ?? model}</span>
+                        ><span class="sm:hidden">{MODEL_MINI[model] ?? model}</span><span class="hidden sm:inline">{MODEL_SHORT[model] ?? model}</span></span>
                       {/each}
                     </div>
                   </td>
-                  <td class="px-3 py-3 tabular-nums text-slate-500">
+                  <td class="px-2 py-2 tabular-nums text-slate-500 sm:px-3 sm:py-3">
                     {agency.signed_date ? agency.signed_date.slice(0, 4) : "—"}
                   </td>
-                  <td class="hidden px-3 py-3 tabular-nums text-slate-500">
-                    {agency.population ? popFmt.format(agency.population) : "—"}
+                  <td class="px-2 py-2 text-xs font-semibold sm:px-3 sm:py-3">
+                    {#if agency.moa_url}
+                      <a href={agency.moa_url} target="_blank" rel="noreferrer" class="no-underline hover:underline">↗</a>
+                    {:else}
+                      <span class="text-slate-300">—</span>
+                    {/if}
                   </td>
-                  <td class="px-4 py-3">
-                    <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold">
-                      {#if agency.moa_url}
-                        <a href={agency.moa_url} target="_blank" rel="noreferrer" class="no-underline hover:underline">MOA ↗</a>
-                      {/if}
-                      {#if agency.contact_website}
-                        <a href={agency.contact_website} target="_blank" rel="noreferrer" class="no-underline hover:underline">Web ↗</a>
-                      {/if}
-                      <a href="https://www.muckrock.com/foi/create/" target="_blank" rel="noreferrer" class="no-underline hover:underline">FOIA ↗</a>
-                    </div>
+                  <td class="hidden px-2 py-2 text-xs font-semibold sm:table-cell sm:px-3 sm:py-3">
+                    <a href="https://www.muckrock.com/foi/create/" target="_blank" rel="noreferrer" class="no-underline hover:underline">→</a>
                   </td>
                 </tr>
               {/each}
