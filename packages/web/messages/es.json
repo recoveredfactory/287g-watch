@@ -40,7 +40,7 @@
 
   "home_map_heading": "Agencias 287(g), por modelo del programa",
   "home_map_subhead": "Haz clic en cualquier punto para ver el acuerdo y los registros de la agencia.",
-  "home_map_caveat": "Una agencia que dejó de participar el mes pasado no aparece en este mapa.",
+  "home_map_caveat": "Este mapa muestra las agencias que actualmente participan en 287(g). Una agencia que dejó de participar el mes pasado no aparece en este mapa.",
   "home_map_empty_title": "No hay datos cargados",
   "home_map_empty_subtitle": "Ejecuta el pipeline para generar los datos de agencias.",
 
