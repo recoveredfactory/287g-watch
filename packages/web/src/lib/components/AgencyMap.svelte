@@ -27,6 +27,8 @@
     roadFill: string;
     roadMedium: string;
     haloFill: string;
+    dotStroke: string;
+    dotStrokeWidth: number;
     text: string;
     textHalo: string;
   };
@@ -42,6 +44,8 @@
       roadFill: "#eef2f5",
       roadMedium: "#cdd6dc",
       haloFill: "#ffffff",
+      dotStroke: "#dde4eb",
+      dotStrokeWidth: 0.6,
       text: "#334155",
       textHalo: "rgba(255,255,255,0.85)",
     },
@@ -56,6 +60,8 @@
       roadFill: "#525f6c",
       roadMedium: "#252d38",
       haloFill: "#e8ecf2",
+      dotStroke: "rgba(255,255,255,0.18)",
+      dotStrokeWidth: 0.25,
       text: "#c2cad4",
       textHalo: "rgba(8,12,18,0.9)",
     },
@@ -124,8 +130,10 @@
       if (map.getLayer("road-casing")) map.setPaintProperty("road-casing", "line-color", p.roadCasing);
       if (map.getLayer("road-fill")) map.setPaintProperty("road-fill", "line-color", p.roadFill);
       if (map.getLayer("road-medium")) map.setPaintProperty("road-medium", "line-color", p.roadMedium);
-      if (map.getLayer("context-agencies"))
-        map.setPaintProperty("context-agencies", "circle-stroke-color", p.bg);
+      if (map.getLayer("context-agencies")) {
+        map.setPaintProperty("context-agencies", "circle-stroke-color", p.dotStroke);
+        map.setPaintProperty("context-agencies", "circle-stroke-width", p.dotStrokeWidth);
+      }
       if (map.getLayer("agency-halo")) map.setPaintProperty("agency-halo", "circle-color", p.haloFill);
       if (map.getLayer("places-major")) {
         map.setPaintProperty("places-major", "text-color", p.text);
@@ -146,6 +154,7 @@
       } as any,
       center: dotCoords ?? [-98, 39],
       zoom: 5,
+      minZoom: 3,
       attributionControl: { compact: true },
     });
     map.addControl(new ml.NavigationControl({ showCompass: false }), "top-right");
@@ -284,8 +293,8 @@
             "circle-color": ["get", "color"],
             // Slight bg-colored stroke for cluster separation, lower fill
             // opacity for overlap readability — matches the homepage map.
-            "circle-stroke-width": 0.6,
-            "circle-stroke-color": p.bg,
+            "circle-stroke-width": p.dotStrokeWidth,
+            "circle-stroke-color": p.dotStroke,
             "circle-stroke-opacity": 1,
             "circle-radius": [
               "interpolate", ["linear"], ["zoom"],

@@ -158,12 +158,14 @@
         {#each agency.notes as note}
           <li>
             {note.text}
-            {#if note.related_slug && agencyBySlug.get(note.related_slug)}
+            {#if note.related_slug}
               {@const related = agencyBySlug.get(note.related_slug)}
-              <a
-                href={localizeHref(`/agency/${related.slug}`)}
-                class="ml-1 font-semibold no-underline hover:underline"
-              >View {related.name} →</a>
+              {#if related}
+                <a
+                  href={localizeHref(`/agency/${related.slug}`)}
+                  class="ml-1 font-semibold no-underline hover:underline"
+                >View {related.name} →</a>
+              {/if}
             {/if}
           </li>
         {/each}
@@ -191,7 +193,7 @@
   <!-- Jurisdiction -->
   {#if agency.city || agency.county || agency.state}
     <div class="mt-6 rounded border border-slate-200 bg-slate-50 px-4 py-3">
-      <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Jurisdiction</p>
+      <p class="text-sm font-semibold uppercase tracking-wider text-slate-700">Jurisdiction</p>
       <p class="mt-1 font-semibold text-slate-900">
         {#if agency.city}
           {agency.city}{#if agency.county || agency.state},{/if}
@@ -211,65 +213,65 @@
   {/if}
 
   <!-- Key facts -->
-  <dl class="mt-8 grid gap-4 border-y border-slate-200 py-8 sm:grid-cols-3">
+  <dl class="mt-8 grid gap-6 border-y border-slate-200 py-8 sm:grid-cols-3">
     {#if agency.signed_date}
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-500">{m.agency_signed_date()}</dt>
-        <dd class="mt-1 font-semibold text-slate-900">{dateFmt(agency.signed_date)}</dd>
+        <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_signed_date()}</dt>
+        <dd class="mt-1 text-xl font-bold text-slate-900">{dateFmt(agency.signed_date)}</dd>
       </div>
     {/if}
     {#if agency.population}
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-500">{m.agency_population()}</dt>
-        <dd class="mt-1 font-semibold text-slate-900">{intFmt.format(agency.population)}</dd>
-        {#if agency.lee?.data_year}<dd class="text-xs text-slate-500">FBI LEE {agency.lee.data_year}</dd>{/if}
+        <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_population()}</dt>
+        <dd class="mt-1 text-xl font-bold text-slate-900">{intFmt.format(agency.population)}</dd>
+        {#if agency.lee?.data_year}<dd class="mt-0.5 text-xs text-slate-400">FBI LEE {agency.lee.data_year}</dd>{/if}
       </div>
     {/if}
     {#if agency.lee?.officer_ct != null}
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-500">{m.agency_officers()}</dt>
-        <dd class="mt-1 font-semibold text-slate-900">{intFmt.format(agency.lee.officer_ct)}</dd>
-        <dd class="text-xs text-slate-500">FBI LEE {agency.lee.data_year}</dd>
+        <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_officers()}</dt>
+        <dd class="mt-1 text-xl font-bold text-slate-900">{intFmt.format(agency.lee.officer_ct)}</dd>
+        <dd class="mt-0.5 text-xs text-slate-400">FBI LEE {agency.lee.data_year}</dd>
       </div>
     {/if}
     {#if agency.lee?.civilian_ct != null}
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-500">{m.agency_civilian_staff()}</dt>
-        <dd class="mt-1 font-semibold text-slate-900">{intFmt.format(agency.lee.civilian_ct)}</dd>
-        <dd class="text-xs text-slate-500">FBI LEE {agency.lee.data_year}</dd>
+        <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_civilian_staff()}</dt>
+        <dd class="mt-1 text-xl font-bold text-slate-900">{intFmt.format(agency.lee.civilian_ct)}</dd>
+        <dd class="mt-0.5 text-xs text-slate-400">FBI LEE {agency.lee.data_year}</dd>
       </div>
     {/if}
     {#if agency.lee?.total_pe_ct != null}
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-500">{m.agency_total_personnel()}</dt>
-        <dd class="mt-1 font-semibold text-slate-900">{intFmt.format(agency.lee.total_pe_ct)}</dd>
-        <dd class="text-xs text-slate-500">FBI LEE {agency.lee.data_year}</dd>
+        <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_total_personnel()}</dt>
+        <dd class="mt-1 text-xl font-bold text-slate-900">{intFmt.format(agency.lee.total_pe_ct)}</dd>
+        <dd class="mt-0.5 text-xs text-slate-400">FBI LEE {agency.lee.data_year}</dd>
       </div>
     {/if}
     {#if agency.lee?.pe_ct_per_1000 != null}
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-500">Officers per 1,000</dt>
-        <dd class="mt-1 font-semibold text-slate-900">{agency.lee.pe_ct_per_1000.toFixed(2)}</dd>
-        <dd class="text-xs text-slate-500">FBI LEE {agency.lee.data_year}</dd>
+        <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">Officers per 1,000</dt>
+        <dd class="mt-1 text-xl font-bold text-slate-900">{agency.lee.pe_ct_per_1000.toFixed(2)}</dd>
+        <dd class="mt-0.5 text-xs text-slate-400">FBI LEE {agency.lee.data_year}</dd>
       </div>
     {/if}
     {#if agency.agreement?.population_policed != null}
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-500">Population policed</dt>
-        <dd class="mt-1 font-semibold text-slate-900">{intFmt.format(agency.agreement.population_policed)}</dd>
-        <dd class="text-xs text-slate-500">As reported in MOA</dd>
+        <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">Population policed</dt>
+        <dd class="mt-1 text-xl font-bold text-slate-900">{intFmt.format(agency.agreement.population_policed)}</dd>
+        <dd class="mt-0.5 text-xs text-slate-400">As reported in MOA</dd>
       </div>
     {/if}
     {#if agency.agreement?.operating_budget != null}
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-500">{m.agency_operating_budget()}</dt>
-        <dd class="mt-1 font-semibold text-slate-900">${intFmt.format(agency.agreement.operating_budget)}</dd>
-        <dd class="text-xs text-slate-500">As reported in MOA</dd>
+        <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_operating_budget()}</dt>
+        <dd class="mt-1 text-xl font-bold text-slate-900">${intFmt.format(agency.agreement.operating_budget)}</dd>
+        <dd class="mt-0.5 text-xs text-slate-400">As reported in MOA</dd>
       </div>
     {/if}
     {#if agency.moa_url}
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-500">{m.agency_moa_heading()}</dt>
+        <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_moa_heading()}</dt>
         <dd class="mt-1">
           <a
             href={agency.moa_url}
@@ -399,13 +401,20 @@
                 <p class="text-xs text-slate-500">MuckRock #{req.foia_id}</p>
               </div>
               <div class="bg-white px-4 py-3">
-                <p class="text-sm italic leading-relaxed text-slate-700">"{req.title}"</p>
                 <a
                   href={req.absolute_url}
                   target="_blank"
                   rel="noreferrer"
-                  class="mt-2 inline-block text-xs font-semibold no-underline hover:underline"
-                >{m.agency_records_view_on_muckrock()}</a>
+                  class="text-sm font-semibold leading-relaxed text-slate-800 no-underline hover:underline"
+                >"{req.title}"</a>
+                <p class="mt-1.5">
+                  <a
+                    href={req.absolute_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    class="text-xs font-semibold no-underline hover:underline"
+                  >{m.agency_records_view_on_muckrock()}</a>
+                </p>
               </div>
             </li>
           {/each}
