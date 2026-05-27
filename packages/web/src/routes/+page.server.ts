@@ -42,6 +42,7 @@ export type Agency = {
   lng?: number;
   moa_url?: string;
   ori?: string | null;
+  snapshot_date?: string | null;
   contact_address?: string | null;
   contact_phone?: string | null;
   contact_email?: string | null;

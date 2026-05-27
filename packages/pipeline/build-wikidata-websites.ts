@@ -218,6 +218,73 @@ SELECT DISTINCT ?item ?itemLabel ?website ?stateLabel WHERE {
 }
 LIMIT 5000`)
 
+// ── Marshal offices ──────────────────────────────────────────────────────────
+await runQuery('Marshal / Constable', `
+SELECT DISTINCT ?item ?itemLabel ?website ?stateLabel WHERE {
+  ?item wdt:P17 wd:Q30 ;
+        wdt:P856 ?website .
+  ?item rdfs:label ?itemLabel . FILTER(LANG(?itemLabel) = "en")
+  FILTER(CONTAINS(UCASE(STR(?itemLabel)), "MARSHAL") ||
+         CONTAINS(UCASE(STR(?itemLabel)), "CONSTABLE"))
+  OPTIONAL {
+    ?item wdt:P131 ?county .
+    OPTIONAL {
+      ?county wdt:P131 ?state .
+      ?state wdt:P31 wd:Q35657 .
+      ?state rdfs:label ?stateLabel . FILTER(LANG(?stateLabel) = "en")
+    }
+    OPTIONAL {
+      ?county wdt:P31 wd:Q35657 .
+      ?county rdfs:label ?stateLabel . FILTER(LANG(?stateLabel) = "en")
+    }
+  }
+}
+LIMIT 3000`)
+
+// ── By instance type: police (Q35535) ────────────────────────────────────────
+await runQuery('Instance: police agency (Q35535)', `
+SELECT DISTINCT ?item ?itemLabel ?website ?stateLabel WHERE {
+  ?item wdt:P17 wd:Q30 ;
+        wdt:P31/wdt:P279* wd:Q35535 ;
+        wdt:P856 ?website .
+  ?item rdfs:label ?itemLabel . FILTER(LANG(?itemLabel) = "en")
+  OPTIONAL {
+    ?item wdt:P131 ?county .
+    OPTIONAL {
+      ?county wdt:P131 ?state .
+      ?state wdt:P31 wd:Q35657 .
+      ?state rdfs:label ?stateLabel . FILTER(LANG(?stateLabel) = "en")
+    }
+    OPTIONAL {
+      ?county wdt:P31 wd:Q35657 .
+      ?county rdfs:label ?stateLabel . FILTER(LANG(?stateLabel) = "en")
+    }
+  }
+}
+LIMIT 5000`)
+
+// ── By instance type: sheriff (Q146591) ──────────────────────────────────────
+await runQuery('Instance: sheriff department (Q146591)', `
+SELECT DISTINCT ?item ?itemLabel ?website ?stateLabel WHERE {
+  ?item wdt:P17 wd:Q30 ;
+        wdt:P31/wdt:P279* wd:Q146591 ;
+        wdt:P856 ?website .
+  ?item rdfs:label ?itemLabel . FILTER(LANG(?itemLabel) = "en")
+  OPTIONAL {
+    ?item wdt:P131 ?county .
+    OPTIONAL {
+      ?county wdt:P131 ?state .
+      ?state wdt:P31 wd:Q35657 .
+      ?state rdfs:label ?stateLabel . FILTER(LANG(?stateLabel) = "en")
+    }
+    OPTIONAL {
+      ?county wdt:P31 wd:Q35657 .
+      ?county rdfs:label ?stateLabel . FILTER(LANG(?stateLabel) = "en")
+    }
+  }
+}
+LIMIT 3000`)
+
 // ── Save ──────────────────────────────────────────────────────────────────────
 mkdirSync(resolve(__dirname, 'data'), { recursive: true })
 writeFileSync(OUT_PATH, JSON.stringify(output, null, 2))
