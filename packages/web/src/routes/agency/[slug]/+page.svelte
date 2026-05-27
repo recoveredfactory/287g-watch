@@ -107,7 +107,7 @@
 
 <main id="main-content" class="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
   <!-- Breadcrumb -->
-  <nav class="text-sm text-slate-500" aria-label="Breadcrumb">
+  <nav class="text-sm text-slate-600" aria-label="Breadcrumb">
     <a href={localizeHref("/")} class="no-underline hover:underline">{m.agency_breadcrumb_home()}</a>
     <span class="mx-1.5">›</span>
     <span>{agency.name}</span>
@@ -120,7 +120,7 @@
         <h1 class="text-2xl font-black leading-tight text-slate-900 sm:text-3xl">
           {agency.name}
         </h1>
-        <p class="mt-1 text-base text-slate-500">
+        <p class="mt-1 text-base text-slate-600">
           {[agency.agency_type, agency.city, agency.county, agency.state]
             .filter(Boolean)
             .join(" · ")}
@@ -142,7 +142,8 @@
           {#if MODEL_SLUG[model]}
             <a
               href={localizeHref(`/model/${MODEL_SLUG[model]}`)}
-              class="text-xs text-slate-400 no-underline hover:text-slate-600 hover:underline"
+              class="text-xs font-semibold no-underline hover:underline"
+              style="color: {MODEL_COLORS[model] ?? '#64748b'};"
             >About the {MODEL_SHORT[model] ?? model} agreement →</a>
           {/if}
         {/each}
@@ -190,7 +191,7 @@
   <!-- Jurisdiction -->
   {#if agency.city || agency.county || agency.state}
     <div class="mt-6 rounded border border-slate-200 bg-slate-50 px-4 py-3">
-      <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Jurisdiction</p>
+      <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Jurisdiction</p>
       <p class="mt-1 font-semibold text-slate-900">
         {#if agency.city}
           {agency.city}{#if agency.county || agency.state},{/if}
@@ -202,10 +203,10 @@
           {STATE_NAMES[agency.state] ?? agency.state}
         {/if}
         {#if agency.county && agency.city}
-          <span class="ml-1 text-sm font-normal text-slate-500">({agency.county} County)</span>
+          <span class="ml-1 text-sm font-normal text-slate-600">({agency.county} County)</span>
         {/if}
       </p>
-      <p class="mt-1 text-xs italic text-slate-400">Coverage may overlap with county, state, or neighboring agencies.</p>
+      <p class="mt-1 text-xs italic text-slate-500">Coverage may overlap with county, state, or neighboring agencies.</p>
     </div>
   {/if}
 
@@ -213,43 +214,48 @@
   <dl class="mt-8 grid gap-4 border-y border-slate-200 py-8 sm:grid-cols-3">
     {#if agency.signed_date}
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_signed_date()}</dt>
+        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-500">{m.agency_signed_date()}</dt>
         <dd class="mt-1 font-semibold text-slate-900">{dateFmt(agency.signed_date)}</dd>
       </div>
     {/if}
     {#if agency.population}
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_population()}</dt>
+        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-500">{m.agency_population()}</dt>
         <dd class="mt-1 font-semibold text-slate-900">{intFmt.format(agency.population)}</dd>
+        {#if agency.lee?.data_year}<dd class="text-xs text-slate-500">FBI LEE {agency.lee.data_year}</dd>{/if}
       </div>
     {/if}
     {#if agency.lee?.officer_ct != null}
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_officers()}</dt>
+        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-500">{m.agency_officers()}</dt>
         <dd class="mt-1 font-semibold text-slate-900">{intFmt.format(agency.lee.officer_ct)}</dd>
+        <dd class="text-xs text-slate-500">FBI LEE {agency.lee.data_year}</dd>
       </div>
     {/if}
     {#if agency.lee?.civilian_ct != null}
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_civilian_staff()}</dt>
+        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-500">{m.agency_civilian_staff()}</dt>
         <dd class="mt-1 font-semibold text-slate-900">{intFmt.format(agency.lee.civilian_ct)}</dd>
+        <dd class="text-xs text-slate-500">FBI LEE {agency.lee.data_year}</dd>
       </div>
     {/if}
     {#if agency.lee?.total_pe_ct != null}
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_total_personnel()}</dt>
+        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-500">{m.agency_total_personnel()}</dt>
         <dd class="mt-1 font-semibold text-slate-900">{intFmt.format(agency.lee.total_pe_ct)}</dd>
+        <dd class="text-xs text-slate-500">FBI LEE {agency.lee.data_year}</dd>
       </div>
     {/if}
     {#if agency.agreement?.operating_budget != null}
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_operating_budget()}</dt>
+        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-500">{m.agency_operating_budget()}</dt>
         <dd class="mt-1 font-semibold text-slate-900">${intFmt.format(agency.agreement.operating_budget)}</dd>
+        <dd class="text-xs text-slate-500">As reported in MOA</dd>
       </div>
     {/if}
     {#if agency.moa_url}
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_moa_heading()}</dt>
+        <dt class="text-xs font-semibold uppercase tracking-wider text-slate-500">{m.agency_moa_heading()}</dt>
         <dd class="mt-1">
           <a
             href={agency.moa_url}
@@ -261,9 +267,6 @@
       </div>
     {/if}
   </dl>
-  {#if agency.lee?.data_year}
-    <p class="mt-2 text-xs italic text-slate-400">{m.agency_staffing_note({ year: agency.lee.data_year })}</p>
-  {/if}
 
   <!-- Agreement -->
   {#if agency.moa_url}
@@ -290,31 +293,31 @@
       <dl class="mt-4 space-y-3">
         {#if agency.contact_address}
           <div class="flex gap-4">
-            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_contact_address()}</dt>
+            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{m.agency_contact_address()}</dt>
             <dd class="text-slate-700">{agency.contact_address}</dd>
           </div>
         {/if}
         {#if agency.contact_phone}
           <div class="flex gap-4">
-            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_contact_phone()}</dt>
+            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{m.agency_contact_phone()}</dt>
             <dd><a href="tel:{agency.contact_phone}">{agency.contact_phone}</a></dd>
           </div>
         {/if}
         {#if agency.contact_email}
           <div class="flex gap-4">
-            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_contact_email()}</dt>
+            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{m.agency_contact_email()}</dt>
             <dd><a href="mailto:{agency.contact_email}">{agency.contact_email}</a></dd>
           </div>
         {/if}
         {#if agency.contact_website}
           <div class="flex gap-4">
-            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_contact_website()}</dt>
+            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{m.agency_contact_website()}</dt>
             <dd class="min-w-0 break-all"><a href={agency.contact_website} target="_blank" rel="noreferrer">{agency.contact_website}</a></dd>
           </div>
         {/if}
       </dl>
     {:else}
-      <p class="mt-3 text-sm italic text-slate-400">{m.agency_contact_none()}</p>
+      <p class="mt-3 text-sm italic text-slate-600">{m.agency_contact_none()}</p>
     {/if}
   </section>
 
@@ -322,7 +325,7 @@
   {#if agency.history && agency.history.length > 0}
     <section class="mt-10">
       <h2 class="font-serif text-xl font-bold text-slate-900">Agreement History</h2>
-      <p class="mt-1 text-sm text-slate-500">Changes recorded since tracking began. Gaps between entries mean no changes were detected that week.</p>
+      <p class="mt-1 text-sm text-slate-600">Changes recorded since tracking began. Gaps between entries mean no changes were detected that week.</p>
       <ol class="mt-5 space-y-0 border-l-2 border-slate-200 pl-5">
         {#each [...agency.history].reverse() as event, i}
           {@const isRemoved = event.removed.length > 0 && event.added.length === 0}
@@ -333,7 +336,7 @@
               class="absolute -left-[1.4375rem] top-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-white"
               style={`background: ${isRemoved ? '#f87171' : isAdded ? '#4ade80' : '#94a3b8'}; box-shadow: 0 0 0 2px ${isRemoved ? '#fca5a5' : isAdded ? '#86efac' : '#cbd5e1'};`}
             ></span>
-            <time class="block text-xs font-semibold uppercase tracking-wider text-slate-400">
+            <time class="block text-xs font-semibold uppercase tracking-wider text-slate-500">
               {new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' }).format(new Date(event.date))}
             </time>
             <ul class="mt-1 space-y-0.5">
@@ -373,7 +376,7 @@
                     ? m.agency_records_completed_on({ date: dateFmt(req.datetime_done) ?? "" })
                     : statusLabel(req.status)}
                 </p>
-                <p class="text-xs text-slate-400">MuckRock #{req.foia_id}</p>
+                <p class="text-xs text-slate-500">MuckRock #{req.foia_id}</p>
               </div>
               <div class="bg-white px-4 py-3">
                 <p class="text-sm italic leading-relaxed text-slate-700">"{req.title}"</p>

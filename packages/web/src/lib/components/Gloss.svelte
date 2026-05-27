@@ -119,7 +119,7 @@
   }
 
   :global(.gloss-term:focus-visible) {
-    outline: 2px solid #ce1483;
+    outline: 2px solid #BE6079;
     outline-offset: 2px;
     border-radius: 2px;
   }
@@ -153,7 +153,7 @@
   .gloss-popover-link {
     font-size: 11px;
     font-weight: 600;
-    color: #ce1483;
+    color: #BE6079;
     text-decoration: none;
   }
 

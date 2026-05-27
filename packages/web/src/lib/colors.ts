@@ -1,7 +1,7 @@
 export const MODEL_COLORS: Record<string, string> = {
   "Jail Enforcement Model": "#BE6079",
   "Task Force Model": "#3C97E2",
-  "Warrant Service Officer": "#83AD71",
+  "Warrant Service Officer": "#5E9148",
 };
 
 export const MODEL_TEXT_COLORS: Record<string, string> = {
@@ -33,4 +33,10 @@ export const MODEL_SHORT: Record<string, string> = {
   "Jail Enforcement Model": "Jail Enforcement",
   "Task Force Model": "Task Force",
   "Warrant Service Officer": "Warrant Service",
+};
+
+export const MODEL_MINI: Record<string, string> = {
+  "Jail Enforcement Model": "JEM",
+  "Task Force Model": "TFM",
+  "Warrant Service Officer": "WSO",
 };

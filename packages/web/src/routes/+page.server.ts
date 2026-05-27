@@ -42,10 +42,10 @@ export type Agency = {
   lng?: number;
   moa_url?: string;
   ori?: string | null;
-  contact_address?: string;
-  contact_phone?: string;
-  contact_email?: string;
-  contact_website?: string;
+  contact_address?: string | null;
+  contact_phone?: string | null;
+  contact_email?: string | null;
+  contact_website?: string | null;
   history?: HistoryEvent[];
   lee?: LeeData | null;
   agreement?: AgreementMetadata | null;
