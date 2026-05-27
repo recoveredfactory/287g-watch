@@ -443,14 +443,14 @@
           <div class="flex items-center gap-3 text-xs text-slate-600 sm:text-sm">
             <span class="flex items-center gap-1.5">
               <span
-                class="inline-block h-2 w-2 rounded-full border border-white bg-slate-400 shadow-sm"
+                class="inline-block h-[6px] w-[6px] rounded-full border border-white bg-slate-400 shadow-sm"
                 aria-hidden="true"
               ></span>
               10
             </span>
             <span class="flex items-center gap-1.5">
               <span
-                class="inline-block h-[26px] w-[26px] rounded-full border border-white bg-slate-400 shadow-sm"
+                class="inline-block h-[20px] w-[20px] rounded-full border border-white bg-slate-400 shadow-sm"
                 aria-hidden="true"
               ></span>
               1,000+ {m.home_map_size_legend_label()}
