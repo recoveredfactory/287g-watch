@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { localizeHref } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
   import { GLOSSARY_TERMS, termSlug } from "$lib/glossary/terms";
 
@@ -28,6 +29,9 @@
         <dt class="font-semibold text-slate-900">{t.term}</dt>
         <dd class="mt-1 text-sm leading-relaxed text-slate-600 sm:text-base">
           {t.definition}
+          {#if t.learnMoreHref}
+            <a href={localizeHref(t.learnMoreHref)} class="mt-1 block text-sm font-semibold">Learn more →</a>
+          {/if}
           {#if t.seeAlso?.length}
             <span class="mt-1 block text-sm text-slate-400">
               {m.glossary_see_also()}

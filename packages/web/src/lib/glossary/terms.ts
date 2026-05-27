@@ -2,6 +2,7 @@ export type GlossaryTerm = {
   term: string;
   definition: string;
   seeAlso?: string[];
+  learnMoreHref?: string;
 };
 
 export const GLOSSARY_TERMS: GlossaryTerm[] = [
@@ -38,6 +39,7 @@ export const GLOSSARY_TERMS: GlossaryTerm[] = [
     definition:
       "Under the Jail Enforcement Model (JEM), trained local officers screen people booked into local jails to identify those who may be removable under federal immigration law.",
     seeAlso: ["287(g)", "Task Force Model", "Warrant Service Officer"],
+    learnMoreHref: "/model/jail",
   },
   {
     term: "Memorandum of Agreement",
@@ -60,12 +62,14 @@ export const GLOSSARY_TERMS: GlossaryTerm[] = [
     definition:
       "Under the Task Force Model (TFM), trained local officers work alongside ICE agents in the community to make immigration arrests — the broadest authority granted under 287(g).",
     seeAlso: ["287(g)", "Jail Enforcement Model", "Warrant Service Officer"],
+    learnMoreHref: "/model/taskforce",
   },
   {
     term: "Warrant Service Officer",
     definition:
       "The Warrant Service Officer (WSO) model authorizes local officers to serve administrative warrants on people ICE has already identified for removal. Officers cannot initiate independent enforcement.",
     seeAlso: ["287(g)", "Administrative warrant", "Jail Enforcement Model"],
+    learnMoreHref: "/model/wso",
   },
 ];
 

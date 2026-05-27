@@ -24,15 +24,6 @@
 
     <p>{m.about_why_2()}</p>
 
-    <h2 class="mt-8 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.attribution_heading()}</h2>
-
-    <p class="mt-3">{m.attribution_body()}</p>
-    <ul class="mt-3">
-      <li><strong>Recovered Factory</strong> — <a href="https://recoveredfactory.net/en" target="_blank" rel="noreferrer">recoveredfactory.net</a></li>
-      <li><strong>Tory Lysik</strong> — <a href="https://tlysik.com" target="_blank" rel="noreferrer">tlysik.com</a></li>
-      <li><strong>David Eads</strong></li>
-    </ul>
-
     <h2 class="mt-8 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.about_involve_heading()}</h2>
 
     <p>{m.about_involve_lead()}</p>
@@ -56,8 +47,8 @@
 
     <p class="mt-3">{m.contact_body()}</p>
     <ul class="mt-3">
-      <li>Tory Lysik — <a href="mailto:lysiktory@gmail.com">lysiktory@gmail.com</a></li>
-      <li>David Eads — <a href="mailto:davideads@gmail.com">davideads@gmail.com</a></li>
+      <li>Tory Lysik — <a href="mailto:lysiktory@gmail.com">lysiktory@gmail.com</a> · <a href="https://tlysik.com" target="_blank" rel="noreferrer">tlysik.com</a></li>
+      <li>David Eads — <a href="mailto:davideads@gmail.com">davideads@gmail.com</a> · <a href="https://davideads.com" target="_blank" rel="noreferrer">davideads.com</a></li>
       <li>Recovered Factory — <a href="https://recoveredfactory.net/en" target="_blank" rel="noreferrer">recoveredfactory.net</a></li>
     </ul>
   </div>
