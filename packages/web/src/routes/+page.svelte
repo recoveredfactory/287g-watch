@@ -20,6 +20,21 @@
   const intFmt = new Intl.NumberFormat();
   const popFmt = new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 });
 
+  // ── Map palette (user-toggleable) ──────────────────────────────────────────
+  type PaletteKey = "cream" | "sand" | "invert";
+  let mapPalette: PaletteKey = "cream";
+  const PALETTE_OPTIONS: Array<{ key: PaletteKey; label: string }> = [
+    { key: "cream",  label: "Cream" },
+    { key: "sand",   label: "Sand" },
+    { key: "invert", label: "Invert" },
+  ];
+  // Tint swatch in the legend should match whatever palette is active
+  const PALETTE_TINT: Record<PaletteKey, string> = {
+    cream: "#d8c8a8",
+    sand: "#c8b58a",
+    invert: "#c8b58a",
+  };
+
   // ── Search + filter ────────────────────────────────────────────────────────
   let searchQuery = "";
   let activeModels: Set<string> = new Set();
@@ -327,8 +342,8 @@
   </section>
 
   <!-- ── Map ──────────────────────────────────────────────────────────────── -->
-  <section class="border-b border-slate-200 bg-stone-50 px-4 py-8 sm:px-6 sm:py-10">
-    <div class="mx-auto max-w-6xl">
+  <section class="border-b border-slate-200 bg-stone-50 pt-8 sm:pt-10">
+    <div class="mx-auto max-w-6xl px-4 sm:px-6">
       <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
         <div>
           <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">
@@ -339,7 +354,7 @@
           </p>
         </div>
         <!-- Legend -->
-        <div class="flex flex-wrap gap-x-4 gap-y-2 sm:gap-x-6">
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-2 sm:gap-x-6">
           {#each MODEL_ORDER as full}
             {@const short = MODEL_SHORT[full]}
             <span class="flex items-center gap-1.5 text-xs text-slate-600 sm:text-sm">
@@ -350,26 +365,46 @@
               {short}
             </span>
           {/each}
+          <span class="flex items-center gap-1.5 text-xs text-slate-600 sm:text-sm">
+            <span class="inline-block h-2.5 w-3.5 rounded-sm border border-slate-300 sm:h-3 sm:w-4" style="background: {PALETTE_TINT[mapPalette]};"></span>
+            State patrol participating
+          </span>
         </div>
       </div>
 
-      <!-- Map: shorter on mobile, taller on desktop -->
-      <div class="relative mt-4 h-[320px] overflow-hidden rounded-lg border border-slate-200 shadow-sm sm:h-[500px] lg:h-[600px]">
-        {#if data.agencies.length === 0}
-          <div class="flex h-full items-center justify-center bg-slate-100 text-slate-500">
-            <div class="px-6 text-center">
-              <p class="font-medium text-slate-700">{m.home_map_empty_title()}</p>
-              <p class="mt-1 text-sm">{m.home_map_empty_subtitle()}</p>
-            </div>
-          </div>
-        {:else}
-          <NationalMap
-            agencies={data.agencies}
-            {selectedStates}
-            statePatrolStates={Object.values(data.stateMeta).filter((s) => s.has_state_patrol).map((s) => s.state)}
-          />
-        {/if}
+      <!-- Palette selector -->
+      <div class="mt-3 flex items-center gap-2 text-xs text-slate-500">
+        <span class="hidden sm:inline">Map tone:</span>
+        <div class="inline-flex rounded-md border border-slate-300 bg-white p-0.5 shadow-sm">
+          {#each PALETTE_OPTIONS as opt}
+            <button
+              type="button"
+              class="rounded px-2.5 py-1 text-xs font-medium transition-colors {mapPalette === opt.key ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'}"
+              on:click={() => (mapPalette = opt.key)}
+              aria-pressed={mapPalette === opt.key}
+            >{opt.label}</button>
+          {/each}
+        </div>
       </div>
+    </div>
+
+    <!-- Map: full-bleed so the country breaks the column and reads at scale -->
+    <div class="relative mt-4 h-[360px] overflow-hidden border-y border-slate-200 shadow-sm sm:h-[560px] lg:h-[680px]">
+      {#if data.agencies.length === 0}
+        <div class="flex h-full items-center justify-center bg-slate-100 text-slate-500">
+          <div class="px-6 text-center">
+            <p class="font-medium text-slate-700">{m.home_map_empty_title()}</p>
+            <p class="mt-1 text-sm">{m.home_map_empty_subtitle()}</p>
+          </div>
+        </div>
+      {:else}
+        <NationalMap
+          agencies={data.agencies}
+          {selectedStates}
+          statePatrolStates={Object.values(data.stateMeta).filter((s) => s.has_state_patrol).map((s) => s.state)}
+          palette={mapPalette}
+        />
+      {/if}
     </div>
   </section>
 

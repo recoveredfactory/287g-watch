@@ -29,21 +29,39 @@
   let container: HTMLDivElement;
   let map: any = null;
   const isMobile = browser && window.matchMedia("(max-width: 640px)").matches;
+  // Debug-only: ?scale=officers|population|flat lets us A/B sizing schemes
+  // without redeploying. Falls back to officers in prod.
+  const scaleMode: "officers" | "population" | "flat" =
+    browser && import.meta.env.DEV
+      ? ((new URLSearchParams(window.location.search).get("scale") as any) ?? "officers")
+      : "officers";
+  export type PaletteKey = "cream" | "sand" | "invert";
+  export let palette: PaletteKey = "cream";
+
+  // Palettes drafted off the brand colors (muted rose, sky, sage) so the
+  // model dots stay coherent against the basemap. Three picks the user
+  // can toggle between via the selector above the map.
+  const PALETTES: Record<PaletteKey, { bg: string; state: string; tint: string; line: string }> = {
+    cream:  { bg: "#f0e9d8", state: "#fcfaf2", tint: "#d8c8a8", line: "#b9ad8e" },
+    sand:   { bg: "#e6dcc4", state: "#faf6e8", tint: "#c8b58a", line: "#a89b7e" },
+    invert: { bg: "#fafaf9", state: "#e8e2d4", tint: "#c8b58a", line: "#a89b7e" },
+  };
 
   const MODEL_FALLBACK = "#94a3b8";
   const FULL_BOUNDS: [[number, number], [number, number]] = [[-127, 21], [-65, 50]];
+  const FIT_PADDING = isMobile ? 6 : 10;
 
   function fitToSelection() {
     if (!map) return;
     if (selectedStates.size === 0) {
-      map.fitBounds(FULL_BOUNDS, { padding: 24, duration: 500 });
+      map.fitBounds(FULL_BOUNDS, { padding: FIT_PADDING, duration: 500 });
       return;
     }
     const points = agencies
       .filter((a) => selectedStates.has(a.state) && a.lat != null && a.lng != null)
       .map((a) => toInsetCoords(a.lng!, a.lat!, a.state));
     if (points.length === 0) {
-      map.fitBounds(FULL_BOUNDS, { padding: 24, duration: 500 });
+      map.fitBounds(FULL_BOUNDS, { padding: FIT_PADDING, duration: 500 });
       return;
     }
     let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
@@ -90,13 +108,25 @@
 
   $: if (map) updateSource();
 
+  // Re-paint when the user toggles the palette via the selector
+  $: if (map && map.isStyleLoaded()) {
+    const c = PALETTES[palette];
+    map.setPaintProperty("background", "background-color", c.bg);
+    if (map.getLayer("state-fills"))
+      map.setPaintProperty("state-fills", "fill-color", c.state);
+    if (map.getLayer("state-patrol-tint"))
+      map.setPaintProperty("state-patrol-tint", "fill-color", c.tint);
+    if (map.getLayer("state-lines"))
+      map.setPaintProperty("state-lines", "line-color", c.line);
+  }
+
   onMount(async () => {
     if (!browser) return;
 
     const ml = await import("maplibre-gl");
 
     const FIT_BOUNDS = FULL_BOUNDS;
-    const FIT_OPTIONS = { padding: 24, animate: false };
+    const FIT_OPTIONS = { padding: FIT_PADDING, animate: false };
 
     const ro = new ResizeObserver(() => {
       if (!map) return;
@@ -119,7 +149,7 @@
         glyphs: "https://fonts.basemaps.cartocdn.com/gl/fonts/{fontstack}/{range}.pbf",
         projection: { type: "mercator" },
         layers: [
-          { id: "background", type: "background", paint: { "background-color": "#dde4eb" } },
+          { id: "background", type: "background", paint: { "background-color": PALETTES[palette].bg } },
         ],
       } as any,
       // Inset layout: continental US + territory insets all fit in this window
@@ -127,7 +157,7 @@
       fitBoundsOptions: FIT_OPTIONS,
       minZoom: 1,   // overridden on load below
       maxZoom: 14,
-      attributionControl: false,
+      attributionControl: { compact: true },
     });
 
     map.addControl(new ml.NavigationControl({ showCompass: false }), "top-right");
@@ -144,15 +174,11 @@
         data: "/us-inset.geojson",
       });
 
-      // State fills — white land against the blue-grey water background
       map.addLayer({
         id: "state-fills",
         type: "fill",
         source: "states",
-        paint: {
-          "fill-color": "#f5f4f5",
-          "fill-opacity": 1,
-        },
+        paint: { "fill-color": PALETTES[palette].state, "fill-opacity": 1 },
       });
 
       // Warm tint over states whose 287(g) participants include a literal
@@ -168,7 +194,7 @@
           type: "fill",
           source: "states",
           filter: ["in", ["get", "name"], ["literal", patrolStateNames]],
-          paint: { "fill-color": "#efe7dc", "fill-opacity": 1 },
+          paint: { "fill-color": PALETTES[palette].tint, "fill-opacity": 1 },
         });
       }
 
@@ -176,10 +202,7 @@
         id: "state-lines",
         type: "line",
         source: "states",
-        paint: {
-          "line-color": "#94a3b8",
-          "line-width": 1.5,
-        },
+        paint: { "line-color": PALETTES[palette].line, "line-width": 1.5 },
       });
 
       // County lines — appear at zoom 5+
@@ -307,12 +330,25 @@
         data: geojson,
       });
 
-      // Agency dots — on top of city labels. Radius scales with sqrt of
-      // sworn-officer count so a 3000-officer department reads as bigger
-      // than a 20-officer one without making the small ones disappear.
-      // Mobile gets a tighter scale so dots don't crowd the smaller canvas.
+      // Agency dots — on top of city labels. Radius scales by sqrt of the
+      // chosen metric so big departments read visibly heavier than rural
+      // sheriff's offices, without erasing the small ones. Mobile gets a
+      // tighter scale; ?scale=population|flat swaps the metric in dev for
+      // visual tuning.
       const SCALE = isMobile ? 0.7 : 1;
-      const sqrtOfficers = ["sqrt", ["coalesce", ["get", "officer_ct"], 0]];
+      const sizeExpr =
+        scaleMode === "flat"
+          ? 20
+          : ["sqrt", ["coalesce", ["get", scaleMode === "population" ? "population" : "officer_ct"], 0]];
+      // Domain ceiling matched to each metric's 95th percentile:
+      //   officers p95 = 307 → sqrt ≈ 17.5
+      //   population p95 = 255k → sqrt ≈ 505
+      const sizeDomainMax = scaleMode === "population" ? 600 : 18;
+      const radius = (low: number, high: number) => [
+        "interpolate", ["linear"], sizeExpr as any,
+        0, low * SCALE,
+        sizeDomainMax, high * SCALE,
+      ];
       map.addLayer({
         id: "agencies",
         type: "circle",
@@ -321,14 +357,14 @@
           "circle-color": ["get", "color"],
           "circle-radius": [
             "interpolate", ["linear"], ["zoom"],
-            3, ["interpolate", ["linear"], sqrtOfficers, 0, 1.2 * SCALE, 60, 4.5 * SCALE],
-            6, ["interpolate", ["linear"], sqrtOfficers, 0, 2.2 * SCALE, 60, 7 * SCALE],
-            10, ["interpolate", ["linear"], sqrtOfficers, 0, 3.5 * SCALE, 60, 10 * SCALE],
+            3, radius(0.8, 7),
+            6, radius(1.8, 11),
+            10, radius(3, 16),
           ],
-          "circle-stroke-width": 1,
-          "circle-stroke-color": ["get", "color"],
-          "circle-stroke-opacity": 1,
-          "circle-opacity": 0.65,
+          "circle-stroke-width": 0.8,
+          "circle-stroke-color": "#ffffff",
+          "circle-stroke-opacity": 0.85,
+          "circle-opacity": 0.78,
         },
       });
 
