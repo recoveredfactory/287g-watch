@@ -18,9 +18,11 @@
   const p = {
     bg: "#0c1117",
     stateBg: "#161e27",
-    stateHighlight: "#1f2a36",
+    stateHighlight: "#27323e",
     stateLines: "#3a4552",
     stateLineWidth: 0.5,
+    stateHighlightBorder: "#94a3b8",
+    stateHighlightBorderWidth: 1.8,
     county: "#1c242e",
     roadCasing: "#252d38",
     roadFill: "#525f6c",
@@ -127,6 +129,20 @@
         type: "line",
         source: "states",
         paint: { "line-color": p.stateLines, "line-width": p.stateLineWidth },
+      });
+
+      // Bright border on the current state so the locator reads instantly
+      // even at the country-wide overview zoom. Drawn over the shared
+      // state-lines layer so it wins against shared edges with neighbors.
+      map.addLayer({
+        id: "state-highlight-border",
+        type: "line",
+        source: "states",
+        filter: ["==", ["get", "name"], stateGjName],
+        paint: {
+          "line-color": p.stateHighlightBorder,
+          "line-width": p.stateHighlightBorderWidth,
+        },
       });
 
       map.addSource("counties", { type: "geojson", data: countiesGj });
