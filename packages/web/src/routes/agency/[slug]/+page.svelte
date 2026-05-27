@@ -6,8 +6,10 @@
   import { m } from "$lib/paraglide/messages.js";
   import AgencySearch from "$lib/components/AgencySearch.svelte";
   import AgencyMap from "$lib/components/AgencyMap.svelte";
+  import Gloss from "$lib/components/Gloss.svelte";
 
   export let data: PageData;
+  const seen = new Set<string>();
 
   // Reactive destructure so navigating between agencies via the sticky search
   // (same dynamic route, same component instance) actually refreshes content.
@@ -295,7 +297,7 @@
     <section class="mt-10">
       <h2 class="font-serif text-xl font-bold text-slate-900">{m.agency_moa_heading()}</h2>
       <p class="mt-2 text-slate-600">
-        {m.agency_moa_body({ agency_name: agency.name })}
+        <Gloss text={m.agency_moa_body({ agency_name: agency.name })} {seen} />
       </p>
       <a
         href={agency.moa_url}
@@ -390,7 +392,7 @@
   <!-- Dive deeper -->
   <section class="mt-10">
     <h2 class="font-serif text-xl font-bold text-slate-900">{m.agency_records_heading()}</h2>
-    <p class="mt-2 text-slate-600">{m.agency_records_intro()}</p>
+    <p class="mt-2 text-slate-600"><Gloss text={m.agency_records_intro()} {seen} /></p>
 
     {#if muckrock.requests.length > 0}
       <div class="mt-5">

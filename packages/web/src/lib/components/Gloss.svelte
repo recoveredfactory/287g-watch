@@ -4,12 +4,17 @@
   import { TERMS_MAP, termSlug } from "$lib/glossary/terms";
 
   export let text: string;
+  // Optional shared "already glossed" tracker. Pass a single Set to multiple
+  // Gloss instances on the same page to gloss only the first mention of each
+  // term page-wide rather than per-block. Omit for per-block first-mention
+  // (the default).
+  export let seen: Set<string> | undefined = undefined;
 
   let container: HTMLElement;
   let popover = { visible: false, term: "", def: "", slug: "", x: 0, y: 0 };
   let hideTimer: ReturnType<typeof setTimeout>;
 
-  $: processed = processGloss(text);
+  $: processed = processGloss(text, seen);
 
   function getEntry(el: HTMLElement) {
     const key = decodeURIComponent(el.dataset.term ?? "").toLowerCase();
