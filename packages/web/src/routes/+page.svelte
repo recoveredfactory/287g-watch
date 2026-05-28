@@ -103,6 +103,10 @@
   let cursorIdx = NaN;
   $: if (Number.isNaN(cursorIdx) && Number.isFinite(maxIdx)) cursorIdx = maxIdx;
   $: countAtCursor = uniqueSignedIndices.filter((i) => i <= cursorIdx).length;
+  // Statewide agencies (state police, corrections, etc.) are intentionally not
+  // plotted — a single dot would misrepresent a whole-state jurisdiction. We
+  // surface the count below the scrubber instead.
+  $: statewideCount = data.agencies.filter((a) => a.agency_type === "State Agency").length;
   $: popAtCursor = uniqueLocalSignedIndices.reduce(
     (sum, idx, i) => (idx <= cursorIdx ? sum + uniqueLocalPops[i] : sum),
     0,
@@ -536,6 +540,12 @@
       <div class="bg-white">
         <div class="mx-auto max-w-6xl">
           <MapTimelineScrubber bind:this={scrubberRef} {minIdx} {maxIdx} labelMaxIdx={todayIdx} bind:cursorIdx bind:playing={timelinePlaying} {countAtCursor} />
+          <div class="px-4 pb-4 text-xs leading-relaxed text-slate-500 sm:px-6">
+            {#if statewideCount > 0}
+              <p>{m.home_map_statewide_note({ count: statewideCount })}</p>
+            {/if}
+            <p class="mt-1">{m.home_map_boundaries_note()}</p>
+          </div>
         </div>
       </div>
     {/if}
