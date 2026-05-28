@@ -314,11 +314,17 @@ for (let i = 0; i < allDirs.length; i += BATCH) {
 console.log()
 
 // Reject broken snapshots. A handful of upstream dates return malformed xlsx
-// that parse as a mass-removal — e.g. 2026-01-01 dropped 1,012 of ~1,582
-// agencies before bouncing back days later. With every-other-day ingest these
-// show up as isolated one-snapshot dips, so we drop any snapshot that is
-// implausibly small: fewer than 500 agencies, or under 70% of the last good
-// snapshot. See #118.
+// that parse as a mass phantom-removal and bounce back days later. We pin the
+// known-bad dates outright (some, like 2026-02-28, drop too few agencies to
+// trip the ratio test below). The pipeline is run attended, so the count
+// heuristic additionally FLAGS any new suspicious snapshot — verify it and add
+// it to KNOWN_BAD_SNAPSHOTS. See #118.
+const KNOWN_BAD_SNAPSHOTS = new Set([
+  '2026-01-01', // 1,012 of ~1,582 dropped, back by 2026-01-10
+  '2025-10-25', //   870 dropped, back by 2025-11-01
+  '2025-06-10', //   492 dropped, back by 2025-06-21
+  '2026-02-28', //    55 dropped + re-added; too mild for the ratio test
+])
 const MIN_AGENCIES = 500
 const DROP_RATIO = 0.7
 const snapshots: SnapshotRecord[] = []
@@ -326,12 +332,16 @@ const rejected: { date: string; count: number; reason: string }[] = []
 let lastGoodCount = 0
 for (const snap of rawSnapshots) {
   const count = snap.agencies.size
-  if (count < MIN_AGENCIES) {
-    rejected.push({ date: snap.date, count, reason: `<${MIN_AGENCIES}` })
+  if (KNOWN_BAD_SNAPSHOTS.has(snap.date)) {
+    rejected.push({ date: snap.date, count, reason: 'known-bad' })
     continue
   }
-  if (lastGoodCount && count < DROP_RATIO * lastGoodCount) {
-    rejected.push({ date: snap.date, count, reason: `<${DROP_RATIO * 100}% of ${lastGoodCount}` })
+  // Heuristic detector for *new* broken snapshots: an implausible count drop.
+  // Reject and warn loudly so an attended run can confirm and pin it above.
+  if (count < MIN_AGENCIES || (lastGoodCount && count < DROP_RATIO * lastGoodCount)) {
+    const reason = count < MIN_AGENCIES ? `<${MIN_AGENCIES}` : `<${DROP_RATIO * 100}% of ${lastGoodCount}`
+    rejected.push({ date: snap.date, count, reason: `SUSPECT (${reason})` })
+    console.warn(`  ⚠ SUSPECT snapshot ${snap.date}: ${count} agencies (${reason}) — verify and add to KNOWN_BAD_SNAPSHOTS if broken`)
     continue
   }
   snapshots.push(snap)
