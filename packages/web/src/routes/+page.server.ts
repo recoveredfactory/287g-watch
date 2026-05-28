@@ -63,8 +63,32 @@ export type StateMeta = {
   has_state_patrol: boolean;
 };
 
+// What the homepage actually ships to the client: one slim entry per agency,
+// used by the map, the timeline animation, and the client-side searchable
+// list. It omits the heavy agency-page-only fields (history, the full lee
+// record, agreement, notes, contacts) — keeping them roughly doubled the
+// payload (~1.65 MB → 727 KB minified). Only lee.officer_ct survives, for the
+// map's "officers per agency" tooltip. See #135.
+export type HomeAgency = {
+  slug: string;
+  name: string;
+  state: string;
+  county?: string;
+  city?: string;
+  agency_type: string;
+  models: string[];
+  primary_model: string;
+  signed_date?: string;
+  population?: number;
+  lat?: number;
+  lng?: number;
+  moa_url?: string;
+  ori?: string | null;
+  lee?: { officer_ct: number | null } | null;
+};
+
 export type PageData = {
-  agencies: Agency[];
+  agencies: HomeAgency[];
   agencyCount: number;
   // Headline count deduplicated by FBI ORI. Several "agencies" in the upstream
   // sheet share an ORI (a sheriff's office and the same county's corrections
@@ -142,8 +166,28 @@ export const load = async ({ fetch }): Promise<PageData> => {
       }
     }
 
+    // Project to the slim client shape *after* the aggregates above, which
+    // still read the full records (snapshot_date, lee, etc.). See #135.
+    const homeAgencies: HomeAgency[] = agencies.map((a) => ({
+      slug: a.slug,
+      name: a.name,
+      state: a.state,
+      county: a.county,
+      city: a.city,
+      agency_type: a.agency_type,
+      models: a.models,
+      primary_model: a.primary_model,
+      signed_date: a.signed_date,
+      population: a.population,
+      lat: a.lat,
+      lng: a.lng,
+      moa_url: a.moa_url,
+      ori: a.ori,
+      lee: a.lee ? { officer_ct: a.lee.officer_ct } : null,
+    }));
+
     return {
-      agencies,
+      agencies: homeAgencies,
       agencyCount: agencies.length,
       agencyCountUnique,
       stateCount: states.size,
