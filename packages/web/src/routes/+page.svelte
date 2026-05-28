@@ -267,6 +267,11 @@
     }
 
     mounted = true;
+
+    // Hook for scripts/bake-map-video.mjs to drive cursorIdx deterministically
+    // without racing the scrubber's rAF loop.
+    (window as any).__setCursor = (idx: number) => { cursorIdx = idx; };
+    (window as any).__getTimelineBounds = () => ({ minIdx, maxIdx, todayIdx });
   });
 
   $: allStates = [...new Set(data.agencies.map((a) => a.state).filter(Boolean))].sort();
