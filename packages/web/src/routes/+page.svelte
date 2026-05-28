@@ -260,9 +260,13 @@
     if (models)
       activeModels = new Set(models.split(",").map((s) => SLUG_TO_MODEL[s]).filter(Boolean));
 
-    // Geo: detect user's state for the toggle button but do NOT auto-filter.
+    // Geo: detect the user's state for the hero callout (incl. the "no 287(g)
+    // here" message for states with zero agreements) and the filter button.
+    // Gate on a valid state code, NOT on allStates — allStates only contains
+    // states that *have* agencies, so gating on it suppressed the no-287(g)
+    // callout for the very states it's meant for (e.g. IL). See #138.
     const geo = await getCachedGeo();
-    if (geo.state && allStates.includes(geo.state)) {
+    if (geo.state && STATE_NAMES[geo.state]) {
       detectedState = geo.state;
     }
 
@@ -628,7 +632,7 @@
               </button>
             {/each}
 
-            {#if detectedState && !selectedStates.has(detectedState)}
+            {#if detectedState && statesWithAnyAgreement.has(detectedState) && !selectedStates.has(detectedState)}
               <button
                 type="button"
                 on:click={() => toggleState(detectedState!)}
