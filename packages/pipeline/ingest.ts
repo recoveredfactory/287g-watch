@@ -5,7 +5,9 @@
  * Pulls from appelson/Tracking_287g sheets snapshots (xlsx):
  *   - Discovers the latest snapshot directory via GitHub API
  *   - Downloads and parses the xlsx file
- *   - Geocodes via Census Bureau county centroid Gazetteer
+ *   - Geocodes via Census Bureau gazetteers: municipalities → place / county-
+ *     subdivision centroid (the town), others → county centroid; statewide
+ *     agencies get no dot. Gazetteer misses fall back to Geocodio (cached).
  *   - Samples one snapshot per week to build per-agency agreement history
  *   - Joins FBI Law Enforcement Employees data (ORI, officer/civilian counts, population)
  *
@@ -25,8 +27,19 @@ const OUT_DIR = resolve(__dirname, '../web/static/data/dist')
 
 const GITHUB_SHEETS_API =
   'https://api.github.com/repos/appelson/Tracking_287g/contents/sheets'
-const COUNTY_GAZETTEER_URL =
-  'https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2023_Gazetteer/2023_Gaz_counties_national.zip'
+const GAZETTEER_BASE =
+  'https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2023_Gazetteer'
+const COUNTY_GAZETTEER_URL = `${GAZETTEER_BASE}/2023_Gaz_counties_national.zip`
+const PLACE_GAZETTEER_URL = `${GAZETTEER_BASE}/2023_Gaz_place_national.zip`
+const COUSUB_GAZETTEER_URL = `${GAZETTEER_BASE}/2023_Gaz_cousubs_national.zip`
+
+// Geocodio is a paid fallback for the handful of agencies the offline Census
+// gazetteers can't resolve by name (universities, airports, oddly-named
+// constabularies). Results are cached to geocode_cache.json so reruns are free
+// and deterministic; the pipeline runs fine without the key, just with a few
+// ungeocoded stragglers.
+const GEOCODIO_API_KEY = process.env.GEOCODIO_API_KEY
+const GEOCODE_CACHE_PATH = resolve(__dirname, 'geocode_cache.json')
 
 const GH_TOKEN = process.env.GITHUB_TOKEN || process.env.GH_TOKEN
 const ghHeaders: Record<string, string> = GH_TOKEN
@@ -470,45 +483,118 @@ for (const rows of byAgency.values()) {
 
 console.log(`  ${grouped.length} unique agencies`)
 
-// ── 4. Geocode via county centroid ─────────────────────────────────────────────
+// ── 4. Geocode via Census gazetteers ────────────────────────────────────────────
+//
+// Cascade per agency:
+//   • State Agency      → no dot (statewide bodies aren't a single point; surfaced
+//                         in lists/counts instead, never on the map)
+//   • Municipality      → place / county-subdivision centroid keyed off the agency
+//                         name (the actual town), falling back to its county centroid
+//   • County (or other) → county centroid
+//   • anything still un-located → Geocodio fallback (§4b, below)
+//
+// Place names are matched case-insensitively with Saint/St. and &/and folded
+// together, indexed under both the full gazetteer name ("Lake City") and the
+// suffix-stripped form ("Apopka" from "Apopka city") so "X City"-style names and
+// bare names both resolve.
 
-console.log('\nFetching county centroids from Census Bureau Gazetteer...')
+// Fold the spelling variants the upstream sheet and the Census files disagree on.
+const normPlace = (s: string): string =>
+  s
+    .toUpperCase()
+    .replace(/\bSAINTE?\s+/g, (m) => (m.trim() === 'SAINTE' ? 'STE. ' : 'ST. '))
+    .replace(/&/g, 'AND')
+    .replace(/[.']/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
 
-const gazResp = await fetch(COUNTY_GAZETTEER_URL)
-if (!gazResp.ok) throw new Error(`Census Gazetteer: ${gazResp.status}`)
+const PLACE_SUFFIX =
+  /\s+(city|town|village|borough|CDP|municipality|township|consolidated government|metro(politan)? government|unified government|urban county)$/i
 
-const zip = new AdmZip(Buffer.from(await gazResp.arrayBuffer()))
-const txtEntry = zip.getEntries().find((e) => e.entryName.endsWith('.txt'))
-if (!txtEntry) throw new Error('No .txt in Census Gazetteer zip')
+// Trailing agency words to strip so an agency name collapses to its place name,
+// e.g. "Apopka Police Department" → "Apopka", "Manheim Borough PD" → "Manheim Borough".
+const AGENCY_TAIL =
+  /\s+(Police(\s+Services)?\s+Department|Police\s+Dept\.?|Department\s+of\s+Police|Police\s+Services|Marshal(?:'?s)?\s+Office|Constable(?:'?s)?(\s+Office)?|Department\s+of\s+Public\s+Safety|Public\s+Safety\s+Department|Public\s+Safety|Police|Department\s+of\s+Corrections)\s*$/i
 
-const [headerLine, ...dataLines] = txtEntry.getData().toString('latin1').trim().split('\n')
-const headers = headerLine.split('\t').map((h) => h.trim())
-const col = (name: string) => headers.indexOf(name)
+const placeNameFromAgency = (name: string): string =>
+  name.replace(/^(City|Town|Village|Borough)\s+of\s+/i, '').replace(AGENCY_TAIL, '').trim()
 
-const centroids = new Map<string, [number, number]>()
-for (const line of dataLines) {
-  const cols = line.split('\t')
-  const state = cols[col('USPS')]?.trim()
-  const name = cols[col('NAME')]?.trim()
-  const lat = parseFloat(cols[col('INTPTLAT')]?.trim())
-  const lng = parseFloat(cols[col('INTPTLONG')]?.trim())
-  if (!state || !name || isNaN(lat) || isNaN(lng)) continue
-
-  const nameUpper = name.toUpperCase()
-  const stripped = nameUpper.replace(COUNTY_SUFFIX, '').trim()
-  const key = (n: string) => `${n}|${state}`
-  centroids.set(key(nameUpper), [lat, lng])
-  if (!centroids.has(key(stripped))) centroids.set(key(stripped), [lat, lng])
+async function loadGazetteer(url: string): Promise<Array<[string, string, number, number]>> {
+  const resp = await fetch(url)
+  if (!resp.ok) throw new Error(`Census Gazetteer ${url}: ${resp.status}`)
+  const zip = new AdmZip(Buffer.from(await resp.arrayBuffer()))
+  const txtEntry = zip.getEntries().find((e) => e.entryName.endsWith('.txt'))
+  if (!txtEntry) throw new Error(`No .txt in Census Gazetteer zip: ${url}`)
+  const [headerLine, ...dataLines] = txtEntry.getData().toString('latin1').trim().split('\n')
+  const headers = headerLine.split('\t').map((h) => h.trim())
+  const col = (name: string) => headers.indexOf(name)
+  const out: Array<[string, string, number, number]> = []
+  for (const line of dataLines) {
+    const cols = line.split('\t')
+    const state = cols[col('USPS')]?.trim()
+    const name = cols[col('NAME')]?.trim()
+    const lat = parseFloat(cols[col('INTPTLAT')]?.trim())
+    const lng = parseFloat(cols[col('INTPTLONG')]?.trim())
+    if (!state || !name || isNaN(lat) || isNaN(lng)) continue
+    out.push([state, name, lat, lng])
+  }
+  return out
 }
 
-console.log(`  Loaded ${centroids.size} county centroid entries`)
+console.log('\nFetching Census Bureau gazetteers (counties, places, county subdivisions)...')
+const [countyRows, placeRows, cousubRows] = await Promise.all([
+  loadGazetteer(COUNTY_GAZETTEER_URL),
+  loadGazetteer(PLACE_GAZETTEER_URL),
+  loadGazetteer(COUSUB_GAZETTEER_URL),
+])
 
-function getLatLng(county: string | null, state: string): [number | null, number | null] {
-  if (!county) return [null, null]
-  const upper = county.toUpperCase()
-  const stripped = upper.replace(COUNTY_SUFFIX, '').trim()
+// County centroids: keyed by full ("Orange County") and stripped ("Orange") name.
+const counties = new Map<string, [number, number]>()
+for (const [state, name, lat, lng] of countyRows) {
+  const full = normPlace(name)
+  const stripped = normPlace(name.replace(COUNTY_SUFFIX, ''))
   const key = (n: string) => `${n}|${state}`
-  return centroids.get(key(upper)) ?? centroids.get(key(stripped)) ?? [null, null]
+  if (!counties.has(key(full))) counties.set(key(full), [lat, lng])
+  if (!counties.has(key(stripped))) counties.set(key(stripped), [lat, lng])
+}
+
+// Place + county-subdivision centroids share one index (a municipality may be
+// either an incorporated place or a New England-style town/township).
+const places = new Map<string, [number, number]>()
+for (const [state, name, lat, lng] of [...placeRows, ...cousubRows]) {
+  const full = normPlace(name)
+  const stripped = normPlace(name.replace(PLACE_SUFFIX, ''))
+  const key = (n: string) => `${n}|${state}`
+  if (!places.has(key(full))) places.set(key(full), [lat, lng])
+  if (!places.has(key(stripped))) places.set(key(stripped), [lat, lng])
+}
+
+console.log(
+  `  Loaded ${counties.size} county + ${places.size} place/cousub centroid keys`,
+)
+
+function countyLatLng(county: string | null, state: string): [number, number] | null {
+  if (!county) return null
+  const full = normPlace(county)
+  const stripped = normPlace(county.replace(COUNTY_SUFFIX, ''))
+  return counties.get(`${full}|${state}`) ?? counties.get(`${stripped}|${state}`) ?? null
+}
+
+function placeLatLng(name: string, state: string): [number, number] | null {
+  return places.get(`${normPlace(placeNameFromAgency(name))}|${state}`) ?? null
+}
+
+// Deterministic (offline) geocode. Returns null when nothing matches — those
+// agencies go to the Geocodio fallback in §4b.
+function geocode(
+  name: string,
+  county: string | null,
+  state: string,
+  type: string | null,
+): [number, number] | null {
+  if (type === 'State Agency') return null // statewide → never a single map dot
+  if (type === 'Municipality') return placeLatLng(name, state) ?? countyLatLng(county, state)
+  return countyLatLng(county, state)
 }
 
 // ── 5. Build output ────────────────────────────────────────────────────────────
@@ -530,7 +616,7 @@ for (const row of grouped) {
   const slug = count === 0 ? base : `${base}-${count}`
   seenSlugs.set(base, count + 1)
 
-  const [lat, lng] = getLatLng(row.county, state)
+  const [lat, lng] = geocode(name, row.county, state, row.agency_type) ?? [null, null]
   const hKey = historyKey(row.name, state)
 
   agencies.push({
@@ -559,6 +645,59 @@ for (const row of grouped) {
     agreement: null,
     notes: null,
   })
+}
+
+// ── 4b. Geocodio fallback for gazetteer misses ──────────────────────────────────
+//
+// A handful of agencies (universities, airports, oddly-named constabularies)
+// don't resolve against the Census gazetteers. Geocodio geocodes them by name.
+// Responses — including misses, cached as null — persist to geocode_cache.json so
+// reruns don't re-bill the API and the offline output stays reproducible. State
+// Agencies are excluded by design (they get no dot), so they're never queried.
+
+interface GeocodeCache {
+  [query: string]: { lat: number; lng: number } | null
+}
+
+const geocodeCache: GeocodeCache = existsSync(GEOCODE_CACHE_PATH)
+  ? JSON.parse(readFileSync(GEOCODE_CACHE_PATH, 'utf8'))
+  : {}
+
+async function geocodio(query: string): Promise<[number, number] | null> {
+  if (query in geocodeCache) {
+    const hit = geocodeCache[query]
+    return hit ? [hit.lat, hit.lng] : null
+  }
+  if (!GEOCODIO_API_KEY) return null // not cached and no key → leave ungeocoded
+  const url = `https://api.geocod.io/v1.7/geocode?q=${encodeURIComponent(query)}&limit=1&api_key=${GEOCODIO_API_KEY}`
+  const resp = await fetch(url)
+  if (!resp.ok) {
+    console.warn(`  Geocodio ${resp.status} for "${query}"`)
+    return null
+  }
+  const data = (await resp.json()) as { results?: Array<{ location?: { lat: number; lng: number } }> }
+  const loc = data.results?.[0]?.location ?? null
+  geocodeCache[query] = loc ? { lat: loc.lat, lng: loc.lng } : null
+  return loc ? [loc.lat, loc.lng] : null
+}
+
+const fallbackTargets = agencies.filter((a) => a.lat === null && a.agency_type !== 'State Agency')
+if (fallbackTargets.length) {
+  const cachedCount = fallbackTargets.filter((a) => `${a.name}, ${a.state}` in geocodeCache).length
+  console.log(
+    `\nGeocodio fallback: ${fallbackTargets.length} agencies unresolved by gazetteer` +
+      ` (${cachedCount} cached${GEOCODIO_API_KEY ? '' : ', no API key — uncached will stay ungeocoded'})`,
+  )
+  let resolved = 0
+  for (const a of fallbackTargets) {
+    const hit = await geocodio(`${a.name}, ${a.state}`)
+    if (hit) {
+      ;[a.lat, a.lng] = hit
+      resolved++
+    }
+  }
+  writeFileSync(GEOCODE_CACHE_PATH, JSON.stringify(geocodeCache, null, 2))
+  console.log(`  Resolved ${resolved}/${fallbackTargets.length} via Geocodio`)
 }
 
 // ── 5. Join FBI / upstream agency metadata ────────────────────────────────────
@@ -1179,11 +1318,17 @@ writeFileSync(resolve(OUT_DIR, 'agency_index.json'), JSON.stringify(agencies, nu
 writeFileSync(resolve(OUT_DIR, 'state_meta.json'), JSON.stringify(stateCoverage, null, 2))
 
 const geocoded = agencies.filter((a) => a.lat !== null).length
+const stateAgencies = agencies.filter((a) => a.agency_type === 'State Agency').length
+const mappable = agencies.length - stateAgencies // statewide bodies are off-map by design
+const ungeocoded = agencies.filter((a) => a.lat === null && a.agency_type !== 'State Agency').length
 const withHistory = agencies.filter((a) => a.history.length > 0).length
 console.log(`\nWrote ${agencies.length} agencies → ${resolve(OUT_DIR, 'agency_index.json')}`)
 console.log(`Snapshot: ${snapshotName}  (${snapshotDate})`)
 console.log(`States: ${new Set(agencies.map((a) => a.state)).size}`)
-console.log(`Geocoded: ${geocoded}/${agencies.length} (${Math.round((geocoded / agencies.length) * 100)}%)`)
+console.log(
+  `Geocoded: ${geocoded}/${mappable} mappable (${Math.round((geocoded / mappable) * 100)}%)` +
+    ` — ${stateAgencies} statewide agencies off-map by design, ${ungeocoded} still unresolved`,
+)
 console.log(`Agencies with history events: ${withHistory}`)
 
 const modelCounts = new Map<string, number>()

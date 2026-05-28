@@ -47,11 +47,24 @@
         <strong><a href="https://www.muckrock.com/" target="_blank" rel="noreferrer">MuckRock</a></strong>
         <Gloss text={m.methodology_source_muckrock_body()} {seen} />
       </li>
+      <li>
+        <strong><a href="https://www.census.gov/geographies/reference-files/time-series/geo/gazetteer-files.html" target="_blank" rel="noreferrer">U.S. Census Bureau Gazetteer</a></strong>
+        <Gloss text={m.methodology_source_census_body()} {seen} />
+      </li>
+      <li>
+        <strong><a href="https://www.geocod.io/" target="_blank" rel="noreferrer">Geocod.io</a></strong>
+        <Gloss text={m.methodology_source_geocodio_body()} {seen} />
+      </li>
     </ul>
 
     <h2 class="mt-8 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.methodology_matching_heading()}</h2>
 
     <p class="mt-3"><Gloss text={m.methodology_matching_body()} {seen} /></p>
+
+    <h2 class="mt-8 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.methodology_mapping_heading()}</h2>
+
+    <p class="mt-3"><Gloss text={m.methodology_mapping_body()} {seen} /></p>
+    <p class="mt-3"><Gloss text={m.methodology_mapping_statewide()} {seen} /></p>
 
     <h2 class="mt-8 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.methodology_population_heading()}</h2>
 
