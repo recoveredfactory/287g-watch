@@ -125,6 +125,8 @@ interface Agency {
   models: string[]
   primary_model: string | null
   signed_date: string | null
+  first_seen_date: string | null
+  terminated_date: string | null
   population: number | null
   lat: number | null
   lng: number | null
@@ -184,27 +186,15 @@ function historyKey(name: string, state: string): string {
   return `${state.toUpperCase()}\x00${normalized}`
 }
 
-function getISOWeek(date: Date): string {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
-  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7))
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
-  const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
-  return `${d.getUTCFullYear()}-${String(weekNo).padStart(2, '0')}`
-}
-
 type GHEntry = { name: string; type: string; url: string }
 
-// Pick the most recent snapshot directory for each calendar week
-function sampleWeekly(dirs: GHEntry[]): GHEntry[] {
-  const byWeek = new Map<string, GHEntry>()
-  for (const dir of dirs) { // dirs are sorted newest-first
-    const m = dir.name.match(/^sheets_(\d{4})(\d{2})(\d{2})/)
-    if (!m) continue
-    const date = new Date(`${m[1]}-${m[2]}-${m[3]}T12:00:00Z`)
-    const weekKey = getISOWeek(date)
-    if (!byWeek.has(weekKey)) byWeek.set(weekKey, dir)
-  }
-  return [...byWeek.values()].sort((a, b) => a.name.localeCompare(b.name))
+// All snapshot dirs, oldest-first, that carry a parseable date. The upstream
+// repo publishes every-other-day, so this is ~170 snapshots since May 2025 —
+// we ingest all of them and filter out the broken ones below (see #118).
+function chronologicalSnapshots(dirs: GHEntry[]): GHEntry[] {
+  return dirs
+    .filter((d) => /^sheets_\d{8}/.test(d.name))
+    .sort((a, b) => a.name.localeCompare(b.name))
 }
 
 // Parse an xlsx buffer into a map of historyKey → Set<model>
@@ -279,8 +269,8 @@ const snapshotDate = dateMatch
 
 console.log('\nBuilding agreement history from weekly snapshots...')
 
-const sampledDirs = sampleWeekly(snapshotDirs)
-console.log(`  Sampling ${sampledDirs.length} weekly snapshots`)
+const allDirs = chronologicalSnapshots(snapshotDirs)
+console.log(`  Ingesting all ${allDirs.length} snapshots (oldest-first)`)
 
 interface SnapshotRecord {
   date: string
@@ -289,10 +279,10 @@ interface SnapshotRecord {
 
 // Fetch snapshots in small batches to respect GitHub API rate limits
 const BATCH = 5
-const snapshots: SnapshotRecord[] = []
+const rawSnapshots: SnapshotRecord[] = []
 
-for (let i = 0; i < sampledDirs.length; i += BATCH) {
-  const batch = sampledDirs.slice(i, i + BATCH)
+for (let i = 0; i < allDirs.length; i += BATCH) {
+  const batch = allDirs.slice(i, i + BATCH)
   const results = await Promise.all(
     batch.map(async (dir): Promise<SnapshotRecord | null> => {
       const m = dir.name.match(/^sheets_(\d{4})(\d{2})(\d{2})/)
@@ -318,10 +308,65 @@ for (let i = 0; i < sampledDirs.length; i += BATCH) {
       return { date, agencies: parseSnapshot(buf) }
     })
   )
-  for (const r of results) if (r) snapshots.push(r)
-  process.stdout.write(`  ${Math.min(i + BATCH, sampledDirs.length)}/${sampledDirs.length} fetched\r`)
+  for (const r of results) if (r) rawSnapshots.push(r)
+  process.stdout.write(`  ${Math.min(i + BATCH, allDirs.length)}/${allDirs.length} fetched\r`)
 }
 console.log()
+
+// Reject broken snapshots. A handful of upstream dates return malformed xlsx
+// that parse as a mass-removal — e.g. 2026-01-01 dropped 1,012 of ~1,582
+// agencies before bouncing back days later. With every-other-day ingest these
+// show up as isolated one-snapshot dips, so we drop any snapshot that is
+// implausibly small: fewer than 500 agencies, or under 70% of the last good
+// snapshot. See #118.
+const MIN_AGENCIES = 500
+const DROP_RATIO = 0.7
+const snapshots: SnapshotRecord[] = []
+const rejected: { date: string; count: number; reason: string }[] = []
+let lastGoodCount = 0
+for (const snap of rawSnapshots) {
+  const count = snap.agencies.size
+  if (count < MIN_AGENCIES) {
+    rejected.push({ date: snap.date, count, reason: `<${MIN_AGENCIES}` })
+    continue
+  }
+  if (lastGoodCount && count < DROP_RATIO * lastGoodCount) {
+    rejected.push({ date: snap.date, count, reason: `<${DROP_RATIO * 100}% of ${lastGoodCount}` })
+    continue
+  }
+  snapshots.push(snap)
+  lastGoodCount = count
+}
+console.log(`  ${snapshots.length} snapshots accepted, ${rejected.length} rejected`)
+for (const r of rejected) {
+  console.log(`    rejected ${r.date}: ${r.count} agencies (${r.reason})`)
+}
+
+// First-seen / terminated dates observed across the clean snapshot sequence.
+// snapshots are oldest-first, so firstSeen is set once and lastSeen advances.
+const observed = new Map<string, { firstSeen: string; lastSeen: string }>()
+for (const snap of snapshots) {
+  for (const key of snap.agencies.keys()) {
+    const e = observed.get(key)
+    if (!e) observed.set(key, { firstSeen: snap.date, lastSeen: snap.date })
+    else e.lastSeen = snap.date
+  }
+}
+const latestAcceptedDate = snapshots.at(-1)?.date ?? null
+
+// First snapshot an agency was observed with any model.
+function firstSeenDate(key: string): string | null {
+  return observed.get(key)?.firstSeen ?? null
+}
+
+// Last snapshot an agency was observed in, IF it has since disappeared.
+// Null when the agency is still present in the most recent clean snapshot
+// (i.e. currently active).
+function terminatedDate(key: string): string | null {
+  const e = observed.get(key)
+  if (!e) return null
+  return e.lastSeen === latestAcceptedDate ? null : e.lastSeen
+}
 
 // Derive per-agency history: only record dates where models changed
 function buildHistory(key: string): HistoryEvent[] {
@@ -488,6 +533,8 @@ for (const row of grouped) {
     models: row.models,
     primary_model: primary,
     signed_date: row.signed_date,
+    first_seen_date: firstSeenDate(hKey),
+    terminated_date: terminatedDate(hKey),
     population: null,
     lat,
     lng,
