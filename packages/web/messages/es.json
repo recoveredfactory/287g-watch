@@ -33,7 +33,7 @@
   "home_hero_headline_line2": "entre la policía local e ICE",
   "home_hero_lead": "Bajo la Sección 287(g) de la Ley de Inmigración y Nacionalidad, las agencias locales de policía pueden firmar acuerdos con ICE que autorizan a sus oficiales a realizar funciones de inmigración. El programa se ha expandido drásticamente desde 2025.",
   "home_stat_agencies": "agencias participantes",
-  "home_stat_states": "estados",
+  "home_stat_states": "estados y territorios",
   "home_stat_population": "residentes de jurisdicciones participantes",
   "home_stat_agencies_footnote": "*Identificadores FBI únicos; algunos identificadores agrupan varios nombres de agencia.",
 
@@ -67,7 +67,7 @@
   "home_search_all_states": "Todos los estados",
   "home_search_match_count": "{matched} de {total} agencias coinciden",
   "home_search_clear_filters": "Limpiar filtros",
-  "home_search_baseline": "{rows} filas de {agencies} agencias en {states} estados",
+  "home_search_baseline": "{rows} filas de {agencies} agencias en {states} estados y territorios",
   "home_search_no_match": "Ninguna agencia coincide con tu búsqueda.",
   "home_search_use_detected_state": "Usar mi estado ({state})",
   "home_search_year_signed": "Año de firma",
