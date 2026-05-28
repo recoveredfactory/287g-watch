@@ -165,11 +165,11 @@ const gradientSvg = Buffer.from(`
 <svg xmlns="http://www.w3.org/2000/svg" width="${SIZE.width}" height="${SIZE.height}">
   <defs>
     <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%"   stop-color="#0c1117" stop-opacity="0.00" />
-      <stop offset="35%"  stop-color="#0c1117" stop-opacity="0.15" />
-      <stop offset="55%"  stop-color="#0c1117" stop-opacity="0.68" />
-      <stop offset="75%"  stop-color="#0c1117" stop-opacity="0.88" />
-      <stop offset="100%" stop-color="#0c1117" stop-opacity="0.92" />
+      <stop offset="0%"   stop-color="#05080c" stop-opacity="0.30" />
+      <stop offset="30%"  stop-color="#05080c" stop-opacity="0.48" />
+      <stop offset="52%"  stop-color="#05080c" stop-opacity="0.80" />
+      <stop offset="70%"  stop-color="#05080c" stop-opacity="0.94" />
+      <stop offset="100%" stop-color="#05080c" stop-opacity="0.98" />
     </linearGradient>
   </defs>
   <rect width="100%" height="100%" fill="url(#g)" />
@@ -223,14 +223,16 @@ const escapeHtml = (s) =>
     .replace(/"/g, "&quot;");
 
 // Pick a title size that keeps the longest realistic title within ~3 lines
-// of the 600px-wide centered block. Tuned empirically against agency names.
+// of the 880px-wide centered block. Tuned empirically against agency names.
+// Floor raised for legibility once messaging apps downscale the card to a
+// thumbnail (#131).
 const titleSize = (s) => {
   const n = String(s ?? "").length;
-  if (n <= 22) return 64;
-  if (n <= 34) return 56;
-  if (n <= 48) return 48;
-  if (n <= 64) return 42;
-  return 36;
+  if (n <= 22) return 104;
+  if (n <= 34) return 92;
+  if (n <= 48) return 78;
+  if (n <= 64) return 68;
+  return 60;
 };
 
 // Every card carries the "287(g) Watch" eyebrow as the constant brand
@@ -248,24 +250,25 @@ const cardHtml = ({ title, subtitle, subtitleAccent, subtitleSize, meta }) => `
   height: ${SIZE.height}px;
   align-items: flex-end;
   justify-content: center;
-  padding-bottom: 48px;
+  padding-bottom: 104px;
   font-family: 'Inter';
 ">
   <div style="
     display: flex;
     flex-direction: column;
     align-items: center;
-    width: 880px;
+    width: 1040px;
     text-align: center;
   ">
     <div style="
       font-family: 'Inter';
-      font-size: 20px;
+      font-size: 30px;
       font-weight: 600;
       letter-spacing: 0.22em;
       text-transform: uppercase;
       color: ${BRAND_PINK};
-      margin-bottom: 20px;
+      margin-bottom: 22px;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.7);
     ">
       ${escapeHtml(BRAND)}
     </div>
@@ -276,6 +279,7 @@ const cardHtml = ({ title, subtitle, subtitleAccent, subtitleSize, meta }) => `
       line-height: 1.08;
       color: #ffffff;
       letter-spacing: -0.005em;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.85), 0 1px 3px rgba(0,0,0,0.9);
     ">
       ${escapeHtml(title)}
     </div>
@@ -284,11 +288,12 @@ const cardHtml = ({ title, subtitle, subtitleAccent, subtitleSize, meta }) => `
         ? `
     <div style="
       font-family: 'Inter';
-      font-size: ${subtitleSize ?? 22}px;
+      font-size: ${subtitleSize ?? 34}px;
       font-weight: 600;
       line-height: 1.35;
       color: ${subtitleAccent ?? "rgba(255,255,255,0.82)"};
       margin-top: 18px;
+      text-shadow: 0 1px 6px rgba(0,0,0,0.8);
     ">
       ${escapeHtml(subtitle)}
     </div>`
@@ -299,12 +304,13 @@ const cardHtml = ({ title, subtitle, subtitleAccent, subtitleSize, meta }) => `
         ? `
     <div style="
       font-family: 'Inter';
-      font-size: 16px;
+      font-size: 25px;
       font-weight: 400;
       letter-spacing: 0.04em;
       line-height: 1.3;
-      color: rgba(255,255,255,0.55);
-      margin-top: 12px;
+      color: rgba(255,255,255,0.72);
+      margin-top: 14px;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.75);
     ">
       ${escapeHtml(meta)}
     </div>`
@@ -400,7 +406,7 @@ async function bakeModels() {
     await bakeCard(path.join(OG_DIR, "model", `${slug}.png`), {
       title: `${MODEL_SHORT[model]} Model`,
       subtitle: MODEL_DEFINITIONS[model],
-      subtitleSize: 28,
+      subtitleSize: 38,
       subtitleAccent: MODEL_COLORS[model],
     });
     console.log(`✓ model/${slug}.png`);
