@@ -914,7 +914,11 @@ for (const a of agencies) {
       a.lee = leeToLeeData(lee)
       leeAttached++
       leeYearDist.set(lee.data_year, (leeYearDist.get(lee.data_year) ?? 0) + 1)
-      a.population = lee.population
+      // LEE reports population 0 (not null) for agencies that don't report it.
+      // Treat that as "no LEE population" so the MOA population_policed fallback
+      // below fills it — otherwise big agencies show 0 residents (e.g. Broward
+      // County: LEE 0, MOA 1,951,260). Real positive LEE values still win. #142
+      if (lee.population) a.population = lee.population
     }
   }
 
