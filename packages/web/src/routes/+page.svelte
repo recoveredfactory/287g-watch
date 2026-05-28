@@ -157,6 +157,13 @@
   let mounted = false;
   let detectedState: string | null = null;
 
+  // States with at least one agreement of ANY kind (local or state-level).
+  // The "no 287(g)" callout keys off this, NOT stateMeta.participating —
+  // that field counts only local (County/Municipality) agencies, so a state
+  // like MA whose only agreement is state-level (Dept. of Corrections) has
+  // participating===0 yet is very much not 287(g)-free. See #138.
+  $: statesWithAnyAgreement = new Set(data.agencies.map((a) => a.state));
+
   // Geo-aware participation callout. Renders once client-side geo resolves.
   // FL gets a distinct message because SB 168 (2019) mandates 287(g)
   // cooperation — its high coverage isn't comparable to voluntary states.
@@ -166,7 +173,7 @@
     const meta = data.stateMeta[detectedState];
     if (!stateName || !meta || !meta.local_le_agencies) return null;
     const boldState = `<b>${stateName}</b>`;
-    if (meta.participating === 0) {
+    if (!statesWithAnyAgreement.has(detectedState)) {
       return m.home_hero_state_callout_none({ state: boldState });
     }
     const agencyPct = Math.round((meta.participating / meta.local_le_agencies) * 100);
