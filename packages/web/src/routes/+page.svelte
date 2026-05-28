@@ -194,30 +194,31 @@
     });
   })();
 
-  // localStorage-cached geo detection — avoids hitting /api/geo on every page load
+  // Per-session geo cache — dedupes /api/geo across a browsing session but
+  // re-checks on the next visit, so a wrong/stale geo lookup self-heals
+  // instead of being pinned for days. sessionStorage clears when the tab
+  // closes (also makes VPN/location testing trivial: new tab = fresh lookup).
   const GEO_KEY = "rf-geo-v1";
-  const GEO_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
   async function getCachedGeo(): Promise<{ country: string | null; state: string | null }> {
     try {
-      const raw = localStorage.getItem(GEO_KEY);
+      const raw = sessionStorage.getItem(GEO_KEY);
       if (raw) {
         const cached = JSON.parse(raw);
-        if (typeof cached.t === "number" && Date.now() - cached.t < GEO_TTL_MS) {
-          return { country: cached.c ?? null, state: cached.s ?? null };
-        }
+        return { country: cached.c ?? null, state: cached.s ?? null };
       }
     } catch {}
     try {
       const res = await fetch("/api/geo", { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
-        try {
-          localStorage.setItem(
-            GEO_KEY,
-            JSON.stringify({ c: data.country, s: data.state, t: Date.now() })
-          );
-        } catch {}
+        // Only cache a definitive answer; don't pin a transient null for the
+        // whole session.
+        if (data.country) {
+          try {
+            sessionStorage.setItem(GEO_KEY, JSON.stringify({ c: data.country, s: data.state }));
+          } catch {}
+        }
         return data;
       }
     } catch {}
@@ -260,9 +261,13 @@
     if (models)
       activeModels = new Set(models.split(",").map((s) => SLUG_TO_MODEL[s]).filter(Boolean));
 
-    // Geo: detect user's state for the toggle button but do NOT auto-filter.
+    // Geo: detect the user's state for the hero callout (incl. the "no 287(g)
+    // here" message for states with zero agreements) and the filter button.
+    // Gate on a valid state code, NOT on allStates — allStates only contains
+    // states that *have* agencies, so gating on it suppressed the no-287(g)
+    // callout for the very states it's meant for (e.g. IL). See #138.
     const geo = await getCachedGeo();
-    if (geo.state && allStates.includes(geo.state)) {
+    if (geo.state && STATE_NAMES[geo.state]) {
       detectedState = geo.state;
     }
 
@@ -628,7 +633,7 @@
               </button>
             {/each}
 
-            {#if detectedState && !selectedStates.has(detectedState)}
+            {#if detectedState && statesWithAnyAgreement.has(detectedState) && !selectedStates.has(detectedState)}
               <button
                 type="button"
                 on:click={() => toggleState(detectedState!)}
