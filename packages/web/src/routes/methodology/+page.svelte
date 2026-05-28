@@ -53,12 +53,16 @@
 
     <p class="mt-3"><Gloss text={m.methodology_matching_body()} {seen} /></p>
 
+    <h2 class="mt-8 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.methodology_population_heading()}</h2>
+
+    <p class="mt-3"><Gloss text={m.methodology_population_body_1()} {seen} /></p>
+    <p class="mt-3"><Gloss text={m.methodology_population_body_2()} {seen} /></p>
+
     <h2 class="mt-8 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.methodology_limitations_heading()}</h2>
 
     <ul class="mt-3">
       <li><Gloss text={m.methodology_limitations_li_1()} {seen} /></li>
       <li><Gloss text={m.methodology_limitations_li_2()} {seen} /></li>
-      <li><Gloss text={m.methodology_limitations_li_3()} {seen} /></li>
     </ul>
 
     <h2 class="mt-8 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.methodology_updates_heading()}</h2>
