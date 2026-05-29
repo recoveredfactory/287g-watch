@@ -161,14 +161,17 @@ if (SKIP_SNAPSHOT && (await exists(SNAP_PATH))) {
 console.log(`[bg] building shared background…`);
 const tBg = Date.now();
 
+// Top stops are kept light so the lifted map (below) shows through cleanly in
+// the upper ~half of the card; from 50% down the wash crushes to near-opaque
+// so the title still lands on solid dark and stays legible.
 const gradientSvg = Buffer.from(`
 <svg xmlns="http://www.w3.org/2000/svg" width="${SIZE.width}" height="${SIZE.height}">
   <defs>
     <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%"   stop-color="#05080c" stop-opacity="0.30" />
-      <stop offset="30%"  stop-color="#05080c" stop-opacity="0.48" />
-      <stop offset="52%"  stop-color="#05080c" stop-opacity="0.80" />
-      <stop offset="70%"  stop-color="#05080c" stop-opacity="0.94" />
+      <stop offset="0%"   stop-color="#05080c" stop-opacity="0.10" />
+      <stop offset="28%"  stop-color="#05080c" stop-opacity="0.22" />
+      <stop offset="50%"  stop-color="#05080c" stop-opacity="0.70" />
+      <stop offset="70%"  stop-color="#05080c" stop-opacity="0.93" />
       <stop offset="100%" stop-color="#05080c" stop-opacity="0.98" />
     </linearGradient>
   </defs>
@@ -189,7 +192,15 @@ const trimmed = await sharp(mapPngBuf)
       .toBuffer(),
   );
 
+// Lift the map before compositing. The source map is a very dark theme, so
+// over the (now lighter) top of the gradient it would otherwise collapse into
+// the near-black fill. A contrast stretch raises the landmass to a readable
+// slate and a saturation bump makes the data dots glow — the dots are the
+// data, so we want them to carry color. (Treatment "D" from the contrast
+// review; see git history.)
 const mapBg = await sharp(trimmed)
+  .linear(1.7, -8)
+  .modulate({ saturation: 1.5 })
   .resize(SIZE.width, SIZE.height, { fit: "cover", position: "center" })
   .composite([{ input: gradientSvg, top: 0, left: 0 }])
   .png()
