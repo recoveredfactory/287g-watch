@@ -17,6 +17,7 @@
 //   pnpm bake:map-video --fps=30 --duration=10
 //   pnpm bake:map-video --skip-frames     # re-encode existing frames only
 //   pnpm bake:map-video --keep-frames     # keep static/video/frames/ around
+//   pnpm bake:map-video --as-of="May 28, 2026"  # pin the watermark date
 
 import { chromium } from "playwright";
 import { spawn } from "node:child_process";
@@ -58,6 +59,19 @@ const GIF_WIDTH = Number(argValue("--gif-width") ?? 800);
 // Hold the final frame for this many seconds before the gif loops — gives
 // readers a beat to absorb the final state instead of restarting instantly.
 const GIF_HOLD = Number(argValue("--gif-hold") ?? 2);
+// Static provenance watermark baked into every frame (bottom-right, over the
+// Atlantic). Carries what the title bar doesn't: a findable source URL, the
+// data as-of date, and the license — so the clip stays attributable when it
+// circulates detached from the page. The count card's month label is the
+// animated timeline cursor, NOT this; the two are independent on purpose.
+// --as-of defaults to today (re-cuts follow an ingest), override to pin it.
+const AS_OF =
+  argValue("--as-of") ??
+  new Date().toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
 
 const TOTAL_FRAMES = Math.round(FPS * DURATION);
 
@@ -113,7 +127,7 @@ if (!SKIP_FRAMES) {
   // Strip chrome, scrubber, supporting banners; swap label; inject title bar
   // with legend; widen count card so the longer label fits.
   // Runs after the map mounts so .maplibregl-canvas and the scrubber DOM exist.
-  await page.evaluate((mapHeight) => {
+  await page.evaluate(({ mapHeight, asOf }) => {
     (window).__BAKE_MAP_HEIGHT__ = mapHeight;
     const kill = (sel) =>
       document.querySelectorAll(sel).forEach((el) => el.remove());
@@ -271,8 +285,31 @@ if (!SKIP_FRAMES) {
     const targetH = window.__BAKE_MAP_HEIGHT__ ?? 1010;
     mapDiv.style.setProperty("height", `${targetH}px`, "important");
 
+    // Provenance watermark, anchored to the map div's bottom-right corner
+    // (mapDiv is position:relative). Two muted lines with a soft shadow so
+    // they hold up over both dark ocean and the lighter landmass as the
+    // cursor sweeps. pointer-events:none keeps it inert.
+    const wm = document.createElement("div");
+    wm.setAttribute("data-bake-watermark", "");
+    wm.style.cssText = [
+      "position: absolute",
+      "right: 18px",
+      "bottom: 14px",
+      "z-index: 30",
+      "text-align: right",
+      "line-height: 1.4",
+      "pointer-events: none",
+      "font-family: 'Inter', system-ui, sans-serif",
+      "text-shadow: 0 1px 3px rgba(0,0,0,0.9)",
+    ].join(";");
+    wm.innerHTML = `
+      <div style="font-size:15px;font-weight:600;color:#cbd5e1;letter-spacing:0.01em;">287g.recoveredfactory.net</div>
+      <div style="font-size:12px;font-weight:400;color:#94a3b8;letter-spacing:0.02em;">Data as of ${asOf} &middot; CC BY-ND 4.0</div>
+    `;
+    mapDiv.appendChild(wm);
+
     document.body.style.background = "#ffffff";
-  }, MAP_HEIGHT);
+  }, { mapHeight: MAP_HEIGHT, asOf: AS_OF });
 
   // Wait for MapLibre to reflow into the new container height. ResizeObserver
   // fires, the canvas resizes, then we need a paint before measuring.
