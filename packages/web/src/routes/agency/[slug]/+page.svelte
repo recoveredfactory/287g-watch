@@ -66,7 +66,7 @@
   });
 
   const intFmt = new Intl.NumberFormat();
-  const dateFmt = (d?: string) => {
+  const dateFmt = (d?: string | null) => {
     if (!d) return null;
     try {
       const localeTag = getLocale() === "es" ? "es-MX" : "en-US";
@@ -80,6 +80,17 @@
       return d;
     }
   };
+
+  // Show "First seen in ICE data" only when it actually diverges from the
+  // signing date. Since signed_date is now ICE's earliest reported date (#118),
+  // the two land within days for most agencies — the tile only earns its space
+  // for the cases where they genuinely differ (e.g. long-standing agreements
+  // first tracked in 2025). Threshold: more than two weeks apart.
+  const DAY_MS = 86_400_000;
+  $: showFirstSeen =
+    !!agency.first_seen_date &&
+    (!agency.signed_date ||
+      Math.abs(+new Date(agency.first_seen_date) - +new Date(agency.signed_date)) > 14 * DAY_MS);
 </script>
 
 <svelte:head>
@@ -214,12 +225,28 @@
     </div>
   {/if}
 
+  <!-- Ended notice (terminated agencies) -->
+  {#if agency.terminated_date}
+    <div class="mt-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+      <p class="text-sm font-bold uppercase tracking-wide text-amber-900">{m.agency_ended_heading()}</p>
+      <p class="mt-1 text-sm text-amber-800">
+        {m.agency_ended_body({ agency_name: agency.name, date: dateFmt(agency.terminated_date) ?? "" })}
+      </p>
+    </div>
+  {/if}
+
   <!-- Key facts -->
   <dl class="mt-8 grid gap-6 border-y border-slate-200 py-8 sm:grid-cols-3">
     {#if agency.signed_date}
       <div>
         <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_signed_date()}</dt>
         <dd class="mt-1 text-xl font-bold text-slate-900">{dateFmt(agency.signed_date)}</dd>
+      </div>
+    {/if}
+    {#if showFirstSeen}
+      <div>
+        <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_first_seen()}</dt>
+        <dd class="mt-1 text-xl font-bold text-slate-900">{dateFmt(agency.first_seen_date)}</dd>
       </div>
     {/if}
     {#if agency.lee?.population != null}
@@ -340,6 +367,44 @@
       <p class="mt-3 text-sm italic text-slate-600">{m.agency_contact_none()}</p>
     {/if}
   </section>
+
+  <!-- Agreement history (restored in #118 Phase B-min, now on rename-resolved data) -->
+  {#if agency.history && agency.history.length > 0}
+    <section class="mt-10">
+      <h2 class="font-serif text-xl font-bold text-slate-900">{m.agency_history_heading()}</h2>
+      <p class="mt-1 text-sm text-slate-600">{m.agency_history_intro()}</p>
+      <ol class="mt-5 space-y-0 border-l-2 border-slate-200 pl-5">
+        {#each [...agency.history].reverse() as event}
+          {@const isRemoved = event.removed.length > 0 && event.added.length === 0}
+          {@const isAdded = event.added.length > 0}
+          <li class="relative pb-5 last:pb-0">
+            <!-- Timeline dot -->
+            <span
+              class="absolute -left-[1.8125rem] top-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-white"
+              style={`background: ${isRemoved ? '#f87171' : isAdded ? '#4ade80' : '#94a3b8'}; box-shadow: 0 0 0 2px ${isRemoved ? '#fca5a5' : isAdded ? '#86efac' : '#cbd5e1'};`}
+            ></span>
+            <time class="block text-xs font-semibold uppercase tracking-wider text-slate-500">
+              {dateFmt(event.date)}
+            </time>
+            <ul class="mt-1 space-y-0.5">
+              {#each event.added as model}
+                <li class="flex items-center gap-1.5 text-sm text-slate-700">
+                  <span class="text-green-500 font-bold">+</span>
+                  <span>{model}</span>
+                </li>
+              {/each}
+              {#each event.removed as model}
+                <li class="flex items-center gap-1.5 text-sm text-slate-500 line-through">
+                  <span class="text-red-400 font-bold no-underline" style="text-decoration: none;">−</span>
+                  <span>{model}</span>
+                </li>
+              {/each}
+            </ul>
+          </li>
+        {/each}
+      </ol>
+    </section>
+  {/if}
 
   <!-- Data provenance -->
   <p class="mt-6 text-xs text-slate-400">
