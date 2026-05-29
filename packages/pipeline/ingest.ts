@@ -25,6 +25,10 @@ import { parse as parseYaml } from 'yaml'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const OUT_DIR = resolve(__dirname, '../web/static/data/dist')
+// Snapshot xlsx files are immutable once published (each dir is a dated capture),
+// so we cache them on disk. Warm re-runs make zero GitHub API calls for already-
+// seen snapshots — fast and token-free. Delete .cache/sheets to force a refresh.
+const CACHE_DIR = resolve(__dirname, '.cache/sheets')
 
 const GITHUB_SHEETS_API =
   'https://api.github.com/repos/appelson/Tracking_287g/contents/sheets'
@@ -192,6 +196,68 @@ function historyKey(name: string, state: string): string {
   return `${state.toUpperCase()}\x00${normalized}`
 }
 
+// ── Rename resolution ───────────────────────────────────────────────────────
+//
+// The upstream sheet relabels agencies constantly — "Miami Dade" → "Miami-Dade",
+// "Ft. Myers" → "Fort Myers", "City of X PD" → "X PD", plus raw typos
+// ("Calacasieu" → "Calcasieu") and a campaign of state-prefixing ("Department of
+// Public Safety" → "Texas Department of Public Safety"). Under the naive
+// "absent from the latest snapshot = terminated" rule, every relabel reads as a
+// termination + a brand-new agency. These helpers fold a vanished agency back
+// into its surviving record so only GENUINE departures count as terminations.
+// Validated offline against all 144 clean snapshots (see #118): cleanly
+// separates 42 renames from 68 real terminations with zero false merges.
+
+const STATE_FULL_BY_ABBR: Record<string, string> = Object.fromEntries(
+  Object.entries(STATE_ABBREVS).map(([full, ab]) => [ab, full.toLowerCase()]),
+)
+
+// Aggressive canonical form for identity matching (more folding than historyKey):
+// hyphens → space, &/. /' normalized, common abbreviations expanded.
+function canonName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[.'’,/]/g, ' ')
+    .replace(/-/g, ' ')
+    .replace(/&/g, ' and ')
+    .replace(/\bft\b/g, 'fort')
+    .replace(/\bst\b/g, 'saint')
+    .replace(/\bste\b/g, 'sainte')
+    .replace(/\btwp\b/g, 'township')
+    .replace(/\bdept\b/g, 'department')
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+// Generic agency words dropped so the distinctive part (the place / qualifier)
+// can be compared on its own.
+const RENAME_FILLER = new Set([
+  'police', 'department', 'sheriffs', 'sheriff', 'office', 'of', 'the', 'county',
+  'city', 'town', 'village', 'borough', 'services', 'service', 'public', 'safety',
+  'division', 'corrections', 'correctional', 'board', 'commissioners', 'detention',
+  'center', 'dps', 'authority', 'and', 'district',
+])
+function distinctiveTokens(name: string): Set<string> {
+  return new Set(canonName(name).split(' ').filter((w) => w && !RENAME_FILLER.has(w)))
+}
+const sameSet = (a: Set<string>, b: Set<string>): boolean =>
+  a.size === b.size && [...a].every((x) => b.has(x))
+
+// Levenshtein edit distance (small strings; iterative two-row would be leaner
+// but agency names are short enough that the full matrix is fine).
+function editDistance(a: string, b: string): number {
+  const m = a.length, n = b.length
+  if (!m) return n
+  if (!n) return m
+  const d: number[][] = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)])
+  for (let j = 0; j <= n; j++) d[0][j] = j
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1))
+  return d[m][n]
+}
+
 type GHEntry = { name: string; type: string; url: string }
 
 // All snapshot dirs, oldest-first, that carry a parseable date. The upstream
@@ -203,12 +269,25 @@ function chronologicalSnapshots(dirs: GHEntry[]): GHEntry[] {
     .sort((a, b) => a.name.localeCompare(b.name))
 }
 
-// Parse an xlsx buffer into a map of historyKey → Set<model>
-function parseSnapshot(buf: Buffer): Map<string, Set<string>> {
+// One agency as observed in a single snapshot: its models plus the raw row
+// fields we need to emit a record for it even after it later disappears (a
+// terminated agency is never in the latest snapshot, so it never reaches the
+// normalize/group pass — we rebuild it from its last-seen observation instead).
+interface SnapshotAgency {
+  models: Set<string>
+  name: string
+  state: string
+  county: string | null
+  agency_type: string | null
+  signed_date: string | null
+}
+
+// Parse an xlsx buffer into a map of historyKey → SnapshotAgency
+function parseSnapshot(buf: Buffer): Map<string, SnapshotAgency> {
   const wb = xlsxRead(buf, { type: 'buffer', cellDates: true })
   const ws = wb.Sheets[wb.SheetNames[0]]
   const rows = xlsxUtils.sheet_to_json<RawRow>(ws, { defval: null })
-  const result = new Map<string, Set<string>>()
+  const result = new Map<string, SnapshotAgency>()
   for (const row of rows) {
     const stateFull = str(row.STATE).toUpperCase()
     const state = STATE_ABBREVS[stateFull]
@@ -218,10 +297,43 @@ function parseSnapshot(buf: Buffer): Map<string, Set<string>> {
     const model = str(row['SUPPORT TYPE'])
     if (!model) continue
     const key = historyKey(name, state)
-    if (!result.has(key)) result.set(key, new Set())
-    result.get(key)!.add(model)
+    let e = result.get(key)
+    if (!e) {
+      e = {
+        models: new Set(),
+        name,
+        state,
+        county: str(row.COUNTY) || null,
+        agency_type: str(row.TYPE) || null,
+        signed_date: parseSignedDate(row.SIGNED),
+      }
+      result.set(key, e)
+    }
+    e.models.add(model)
   }
   return result
+}
+
+// Return a snapshot dir's xlsx bytes, disk-cached by dir name. On a cache hit
+// this makes no network calls at all; on a miss it lists the dir, downloads the
+// xlsx, and caches it. Returns null if the dir has no xlsx.
+async function snapshotBuffer(dir: GHEntry): Promise<Buffer | null> {
+  const cachePath = resolve(CACHE_DIR, `${dir.name}.xlsx`)
+  if (existsSync(cachePath)) return readFileSync(cachePath)
+
+  const filesResp = await ghFetch(dir.url)
+  if (!filesResp.ok) return null
+  type GHFile = { name: string; download_url: string }
+  const files = (await filesResp.json()) as GHFile[]
+  const xlsxFile = files.find((f) => f.name.endsWith('.xlsx'))
+  if (!xlsxFile) return null
+
+  const dataResp = await ghFetch(xlsxFile.download_url)
+  if (!dataResp.ok) return null
+  const buf = Buffer.from(await dataResp.arrayBuffer())
+  mkdirSync(CACHE_DIR, { recursive: true })
+  writeFileSync(cachePath, buf)
+  return buf
 }
 
 // ── 1. Fetch latest snapshot ───────────────────────────────────────────────────
@@ -241,18 +353,10 @@ let latestBuf: Buffer | null = null
 let snapshotName = ''
 
 for (const dir of snapshotDirs.slice(0, 5)) {
-  const filesResp = await ghFetch(dir.url)
-  if (!filesResp.ok) continue
-  type GHFile = { name: string; download_url: string }
-  const files = (await filesResp.json()) as GHFile[]
-  const xlsxFile = files.find((f) => f.name.endsWith('.xlsx'))
-  if (!xlsxFile) continue
+  const buf = await snapshotBuffer(dir)
+  if (!buf) continue
 
-  console.log(`  Fetching ${xlsxFile.download_url}`)
-  const dataResp = await ghFetch(xlsxFile.download_url)
-  if (!dataResp.ok) throw new Error(`xlsx fetch: ${dataResp.status}`)
-
-  latestBuf = Buffer.from(await dataResp.arrayBuffer())
+  latestBuf = buf
   snapshotName = dir.name
   const wb = xlsxRead(latestBuf, { type: 'buffer', cellDates: true })
   const ws = wb.Sheets[wb.SheetNames[0]]
@@ -280,7 +384,7 @@ console.log(`  Ingesting all ${allDirs.length} snapshots (oldest-first)`)
 
 interface SnapshotRecord {
   date: string
-  agencies: Map<string, Set<string>>
+  agencies: Map<string, SnapshotAgency>
 }
 
 // Fetch snapshots in small batches to respect GitHub API rate limits
@@ -300,17 +404,8 @@ for (let i = 0; i < allDirs.length; i += BATCH) {
         return { date, agencies: parseSnapshot(latestBuf) }
       }
 
-      const filesResp = await ghFetch(dir.url)
-      if (!filesResp.ok) return null
-      type GHFile = { name: string; download_url: string }
-      const files = (await filesResp.json()) as GHFile[]
-      const xlsxFile = files.find((f) => f.name.endsWith('.xlsx'))
-      if (!xlsxFile) return null
-
-      const dataResp = await ghFetch(xlsxFile.download_url)
-      if (!dataResp.ok) return null
-
-      const buf = Buffer.from(await dataResp.arrayBuffer())
+      const buf = await snapshotBuffer(dir)
+      if (!buf) return null
       return { date, agencies: parseSnapshot(buf) }
     })
   )
@@ -358,38 +453,45 @@ for (const r of rejected) {
   console.log(`    rejected ${r.date}: ${r.count} agencies (${r.reason})`)
 }
 
-// First-seen / terminated dates observed across the clean snapshot sequence.
-// snapshots are oldest-first, so firstSeen is set once and lastSeen advances.
-const observed = new Map<string, { firstSeen: string; lastSeen: string }>()
-for (const snap of snapshots) {
-  for (const key of snap.agencies.keys()) {
+// Observed window per agency across the clean snapshot sequence. snapshots are
+// oldest-first, so firstIdx is set once and lastIdx advances. We also keep the
+// last-seen row so a since-terminated agency can be rebuilt from it (it never
+// reaches the latest-snapshot normalize/group pass). first_seen/terminated date
+// derivation moves below, after rename resolution merges aliases (#118).
+const N = snapshots.length
+const dateAt = (i: number): string => snapshots[i].date
+const observed = new Map<string, { firstIdx: number; lastIdx: number; lastRow: SnapshotAgency }>()
+// Earliest non-blank signed date ICE ever reported for each agency. ICE revises
+// the SIGNED cell forward over time (and sometimes lists an agency before
+// assigning any date), which would otherwise push an agency's timeline position
+// months past when it actually appeared. We pin the EARLIEST claim as the
+// baseline so the timeline reflects first intent, not the latest revision. #118
+const earliestSigned = new Map<string, string>()
+snapshots.forEach((snap, i) => {
+  for (const [key, obs] of snap.agencies) {
     const e = observed.get(key)
-    if (!e) observed.set(key, { firstSeen: snap.date, lastSeen: snap.date })
-    else e.lastSeen = snap.date
+    if (!e) observed.set(key, { firstIdx: i, lastIdx: i, lastRow: obs })
+    else { e.lastIdx = i; e.lastRow = obs }
+    if (obs.signed_date) {
+      const prev = earliestSigned.get(key)
+      if (!prev || obs.signed_date < prev) earliestSigned.set(key, obs.signed_date)
+    }
   }
-}
-const latestAcceptedDate = snapshots.at(-1)?.date ?? null
+})
 
-// First snapshot an agency was observed with any model.
-function firstSeenDate(key: string): string | null {
-  return observed.get(key)?.firstSeen ?? null
-}
-
-// Last snapshot an agency was observed in, IF it has since disappeared.
-// Null when the agency is still present in the most recent clean snapshot
-// (i.e. currently active).
-function terminatedDate(key: string): string | null {
-  const e = observed.get(key)
-  if (!e) return null
-  return e.lastSeen === latestAcceptedDate ? null : e.lastSeen
-}
-
-// Derive per-agency history: only record dates where models changed
-function buildHistory(key: string): HistoryEvent[] {
+// Derive per-agency history: only record dates where the model set changed.
+// Takes an alias group (one canonical key plus any pre-rename keys merged into
+// it) and unions their models per snapshot, so a relabel doesn't read as a
+// drop-then-re-add. The groups never overlap in time, so the union is clean.
+function buildHistory(keys: Set<string>): HistoryEvent[] {
   const events: HistoryEvent[] = []
   let prev = new Set<string>()
   for (const snap of snapshots) {
-    const curr = snap.agencies.get(key) ?? new Set()
+    const curr = new Set<string>()
+    for (const k of keys) {
+      const obs = snap.agencies.get(k)
+      if (obs) for (const m of obs.models) curr.add(m)
+    }
     const added = [...curr].filter((m) => !prev.has(m))
     const removed = [...prev].filter((m) => !curr.has(m))
     if (added.length || removed.length) {
@@ -647,6 +749,107 @@ function geocode(
 
 console.log('\nBuilding output...')
 
+// ── Rename resolution + termination detection (#118) ─────────────────────────
+//
+// Active keys = the agencies we emit (drawn from the latest snapshot). Anything
+// observed historically but absent from this set has "disappeared": it was
+// either relabeled (fold it into the surviving record) or it genuinely left.
+const activeKeys = new Set(grouped.map((g) => historyKey(g.name, g.state)))
+
+// Candidate active agencies per state, with their latest-known name + county.
+const activeByState = new Map<string, { key: string; name: string; county: string | null }[]>()
+for (const key of activeKeys) {
+  const e = observed.get(key)
+  if (!e) continue
+  const st = e.lastRow.state
+  const bucket = activeByState.get(st) ?? []
+  bucket.push({ key, name: e.lastRow.name, county: e.lastRow.county })
+  activeByState.set(st, bucket)
+}
+
+// Find the active agency a vanished one was renamed into, or null if it looks
+// like a genuine departure. Tiers, strictest first (validated in #118):
+//   1. exact canonical-name match
+//   2. state-prefix addition ("…" → "Texas …"): exact after stripping the state
+//   3. typo: full-string edit distance ≤ 2 (every real upstream typo is ≤2;
+//      every distinct-agency near-miss like Pike/Hale County is ≥3)
+//   4. identical distinctive tokens + same county (label drift)
+//   4b. identical distinctive tokens, ≥2 of them, county-agnostic
+function findRenameTarget(vanishedKey: string): string | null {
+  const e = observed.get(vanishedKey)!
+  const st = e.lastRow.state
+  const cands = activeByState.get(st) ?? []
+  const c = canonName(e.lastRow.name)
+  const dt = distinctiveTokens(e.lastRow.name)
+  const foldCounty = (x: string | null) => (x ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
+  const eCounty = foldCounty(e.lastRow.county)
+  for (const a of cands) if (canonName(a.name) === c) return a.key
+  const sn = STATE_FULL_BY_ABBR[st]
+  const strip = (s: string) => (sn && s.startsWith(sn + ' ') ? s.slice(sn.length + 1) : s)
+  const cs = strip(c)
+  for (const a of cands) if (strip(canonName(a.name)) === cs) return a.key
+  let best: string | null = null
+  let bestD = Infinity
+  for (const a of cands) {
+    const d = editDistance(c, canonName(a.name))
+    if (d < bestD) { bestD = d; best = a.key }
+  }
+  if (best && bestD <= 2) return best
+  for (const a of cands)
+    if (dt.size && sameSet(dt, distinctiveTokens(a.name)) && foldCounty(a.county) === eCounty) return a.key
+  for (const a of cands) if (dt.size >= 2 && sameSet(dt, distinctiveTokens(a.name))) return a.key
+  return null
+}
+
+// Walk every disappeared agency: merge renames into their survivor (carrying the
+// earlier first-seen + a unified history) and collect sustained departures.
+const TERMINATION_MIN_ABSENT_SNAPSHOTS = 3 // ~1 week at the every-other-day cadence
+const aliasGroups = new Map<string, Set<string>>() // active key → {self, ...pre-rename aliases}
+const mergedFirstIdx = new Map<string, number>()    // active key → earliest first-seen idx
+for (const key of activeKeys) {
+  const e = observed.get(key)
+  if (e) mergedFirstIdx.set(key, e.firstIdx)
+}
+const terminationKeys: string[] = []
+let renameCount = 0
+let blipCount = 0
+for (const [key, e] of observed) {
+  if (activeKeys.has(key)) continue // still active
+  const target = findRenameTarget(key)
+  if (target) {
+    renameCount++
+    const group = aliasGroups.get(target) ?? new Set([target])
+    group.add(key)
+    aliasGroups.set(target, group)
+    if (e.firstIdx < (mergedFirstIdx.get(target) ?? Infinity)) mergedFirstIdx.set(target, e.firstIdx)
+    continue
+  }
+  if (N - 1 - e.lastIdx >= TERMINATION_MIN_ABSENT_SNAPSHOTS) terminationKeys.push(key)
+  else blipCount++
+}
+console.log(
+  `  Rename resolution: ${renameCount} relabels merged, ${blipCount} brief blips ignored, ${terminationKeys.length} genuine terminations`,
+)
+
+// first_seen reflects the earliest alias in the group; an active agency is never
+// terminated, so terminated_date is set only on the separate terminated payload.
+function firstSeenDate(key: string): string | null {
+  const idx = mergedFirstIdx.get(key) ?? observed.get(key)?.firstIdx
+  return idx == null ? null : dateAt(idx)
+}
+const aliasGroupOf = (key: string): Set<string> => aliasGroups.get(key) ?? new Set([key])
+
+// Earliest signing date ICE ever reported across the alias group (so a relabel
+// doesn't reset the clock). Null if ICE never put a date on this agency.
+function earliestSignedDate(keys: Set<string>): string | null {
+  let best: string | null = null
+  for (const k of keys) {
+    const s = earliestSigned.get(k)
+    if (s && (!best || s < best)) best = s
+  }
+  return best
+}
+
 const seenSlugs = new Map<string, number>()
 const agencies: Agency[] = []
 
@@ -674,9 +877,9 @@ for (const row of grouped) {
     agency_type: row.agency_type ?? 'Unknown',
     models: row.models,
     primary_model: primary,
-    signed_date: row.signed_date,
+    signed_date: earliestSignedDate(aliasGroupOf(hKey)) ?? row.signed_date,
     first_seen_date: firstSeenDate(hKey),
-    terminated_date: terminatedDate(hKey),
+    terminated_date: null,
     population: null,
     lat,
     lng,
@@ -686,12 +889,62 @@ for (const row of grouped) {
     contact_website: null,
     contact_phone: null,
     contact_address: null,
-    history: buildHistory(hKey),
+    history: buildHistory(aliasGroupOf(hKey)),
     lee: null,
     agreement: null,
     notes: null,
   })
 }
+
+// Genuine terminations: rebuild each from its last-seen snapshot row (it never
+// reached the latest-snapshot pass above) and emit to a SEPARATE payload so the
+// active topline in agency_index.json is unchanged. The map animation reads
+// this file to fade agencies out at their terminated_date.
+const terminatedAgencies: Agency[] = []
+for (const key of terminationKeys) {
+  const e = observed.get(key)!
+  const row = e.lastRow
+  const name = titleAgency(row.name)
+  if (!name || !row.state) continue
+
+  const models = [...row.models].sort()
+  const primary = MODEL_PRIORITY.find((m) => models.includes(m)) ?? models[0] ?? null
+
+  const base = makeSlug(name, row.state)
+  const count = seenSlugs.get(base) ?? 0
+  const slug = count === 0 ? base : `${base}-${count}`
+  seenSlugs.set(base, count + 1)
+
+  const [lat, lng] = geocode(name, row.county, row.state, row.agency_type) ?? [null, null]
+
+  terminatedAgencies.push({
+    slug,
+    name,
+    state: row.state,
+    county: row.county,
+    city: null,
+    agency_type: row.agency_type ?? 'Unknown',
+    models,
+    primary_model: primary,
+    signed_date: earliestSignedDate(aliasGroupOf(key)) ?? row.signed_date,
+    first_seen_date: firstSeenDate(key),
+    terminated_date: dateAt(e.lastIdx),
+    population: null,
+    lat,
+    lng,
+    moa_url: null,
+    ori: null,
+    snapshot_date: snapshotDate,
+    contact_website: null,
+    contact_phone: null,
+    contact_address: null,
+    history: buildHistory(aliasGroupOf(key)),
+    lee: null,
+    agreement: null,
+    notes: null,
+  })
+}
+console.log(`  ${agencies.length} active agencies, ${terminatedAgencies.length} terminated`)
 
 // ── 5. Join FBI / upstream agency metadata ────────────────────────────────────
 
@@ -1309,6 +1562,10 @@ if (existsSync(NOTES_PATH)) {
 mkdirSync(OUT_DIR, { recursive: true })
 writeFileSync(resolve(OUT_DIR, 'agency_index.json'), JSON.stringify(agencies, null, 2))
 writeFileSync(resolve(OUT_DIR, 'state_meta.json'), JSON.stringify(stateCoverage, null, 2))
+// Terminated agencies live in a separate payload so the active topline is
+// untouched; the homepage map reads this to fade departures out (#118).
+writeFileSync(resolve(OUT_DIR, 'terminated_agencies.json'), JSON.stringify(terminatedAgencies, null, 2))
+console.log(`Wrote ${terminatedAgencies.length} terminated agencies → ${resolve(OUT_DIR, 'terminated_agencies.json')}`)
 
 const geocoded = agencies.filter((a) => a.lat !== null).length
 const stateAgencies = agencies.filter((a) => a.agency_type === 'State Agency').length
