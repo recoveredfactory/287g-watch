@@ -11,6 +11,7 @@ packages/web/static/og
 packages/web/static/og-bg-map.png
 packages/web/static/video
 packages/pipeline/__pycache__
+packages/pipeline/.cache
 packages/pipeline/.venv
 packages/pipeline/data/scraped_contacts.json
 packages/pipeline/data/csllea_*.tsv
