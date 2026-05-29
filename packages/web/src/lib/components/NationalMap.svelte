@@ -8,7 +8,7 @@
 
   export let selectedStates: Set<string> = new Set();
 
-  export let agencies: Array<{
+  type MapAgency = {
     slug: string;
     name: string;
     state: string;
@@ -20,7 +20,13 @@
     lng?: number | null;
     lee?: { officer_ct?: number | null } | null;
     signed_date?: string | null;
-  }> = [];
+    terminated_date?: string | null;
+  };
+  export let agencies: MapAgency[] = [];
+  // Once-active agencies that have left 287(g). Rendered as dots that fade in at
+  // their signing date (like any dot) and fade OUT as the cursor crosses their
+  // terminated_date. Separate from `agencies` so topline counts stay active-only.
+  export let terminatedAgencies: MapAgency[] = [];
 
   // Continuous timeline cursor for the smooth playback animation. The value is
   // a fractional month index relative to Jan 2025 (idx 0 = Jan 2025, idx 16 =
@@ -35,16 +41,20 @@
 
   // Dark is the only palette — steely analytical mode, replaces the prior
   // slate/dark toggle so map tone reads consistently across the site.
+  // Land is lifted to a readable slate (sea stays near-black) so the country
+  // shape separates and the dots read against a lighter ground — the OG cards'
+  // "treatment D" intent (linear(1.7,-8)) ported to the live style, without
+  // touching the dots themselves. See #118, #148.
   const C = {
     bg: "#0c1117",
-    state: "#18202a",
+    state: "#212e3f",
     line: "#42566c",
     lineWidth: 0.7,
-    county: "#1c242e",
+    county: "#283546",
     roadCasing: "#231f1c",
     roadFill: "#4f463f",
-    roadMajorCasing: "#1e1a18",
-    roadMajorFill: "#3a322c",
+    roadMajorCasing: "#221d1a",
+    roadMajorFill: "#4a4139",
     roadMedium: "#231f1c",
     dotStroke: "rgba(255,255,255,0.18)",
     dotStrokeWidth: 0.25,
@@ -103,9 +113,21 @@
     return (y - TIMELINE_EPOCH_YEAR) * 12 + (m - 1) + (day - 1) / 31;
   };
 
+  // Termination index in the same fractional-month space. Active agencies (no
+  // terminated_date) get a sentinel far past the timeline so the cursor never
+  // reaches it — their dots never fade out.
+  const TERMINATION_NONE = 1_000_000;
+  const terminatedDateIdx = (d?: string | null): number => {
+    if (!d || d.length < 10) return TERMINATION_NONE;
+    const y = Number(d.slice(0, 4));
+    const m = Number(d.slice(5, 7));
+    const day = Number(d.slice(8, 10));
+    return (y - TIMELINE_EPOCH_YEAR) * 12 + (m - 1) + (day - 1) / 31;
+  };
+
   $: geojson = {
     type: "FeatureCollection",
-    features: agencies
+    features: [...agencies, ...terminatedAgencies]
       .filter((a) => a.lat != null && a.lng != null)
       .map((a) => {
         const [lng, lat] = toInsetCoords(a.lng!, a.lat!, a.state);
@@ -123,6 +145,7 @@
             officer_ct: a.lee?.officer_ct ?? 0,
             color: MODEL_COLORS[a.primary_model ?? ""] ?? MODEL_FALLBACK,
             signed_idx: signedDateIdx(a.signed_date),
+            terminated_idx: terminatedDateIdx(a.terminated_date),
           },
         };
       }),
@@ -149,8 +172,17 @@
     0, 0,
     FADE_WINDOW, 1,
   ];
+  // Fade-OUT for terminated dots: full opacity until the cursor reaches the
+  // termination date, then ramps to 0 over FADE_WINDOW. Active dots carry a
+  // sentinel terminated_idx far in the future, so this clamps to 1 for them.
+  const fadeOutMultiplier = (cursor: number) => [
+    "interpolate", ["linear"],
+    ["-", cursor, ["get", "terminated_idx"]],
+    0, 1,
+    FADE_WINDOW, 0,
+  ];
   const opacityWithFade = (cursor: number) => [
-    "*", BASE_OPACITY, fadeMultiplier(cursor),
+    "*", BASE_OPACITY, fadeMultiplier(cursor), fadeOutMultiplier(cursor),
   ];
 
   // MapLibre rule: ["zoom"] can only appear as the direct input of a top-level
@@ -165,8 +197,9 @@
   const radiusWithFade = (cursor: number): any => {
     if (!radiusStops.length) return 1;
     const fm = fadeMultiplier(cursor);
+    const fo = fadeOutMultiplier(cursor);
     const flat: any[] = [];
-    for (const [z, r] of radiusStops) flat.push(z, ["*", fm, r]);
+    for (const [z, r] of radiusStops) flat.push(z, ["*", fm, fo, r]);
     return ["interpolate", ["linear"], ["zoom"], ...flat];
   };
 
@@ -337,7 +370,7 @@
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
           "line-color": C.roadCasing,
-          "line-width": ["interpolate", ["linear"], ["zoom"], 2, 1.8, 5, 2.5, 9, 4, 12, 5.5],
+          "line-width": ["interpolate", ["linear"], ["zoom"], 2, 1.8, 5, 2.6, 9, 4.6, 12, 6.4, 15, 8],
           // Fades in 3.5→4.5 as the static overlay fades out — single highway at every zoom.
           "line-opacity": ["interpolate", ["linear"], ["zoom"], 3.5, 0, 4.5, 0.8],
         },
@@ -352,25 +385,27 @@
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
           "line-color": C.roadFill,
-          "line-width": ["interpolate", ["linear"], ["zoom"], 2, 0.8, 5, 1.2, 9, 2, 12, 3],
+          "line-width": ["interpolate", ["linear"], ["zoom"], 2, 0.8, 5, 1.3, 9, 2.5, 12, 3.8, 15, 4.8],
           "line-opacity": ["interpolate", ["linear"], ["zoom"], 3.5, 0, 4.5, 0.95],
         },
       });
 
-      // US/state highways — visible from zoom 5+ once the viewport is
-      // narrow enough that they don't read as visual noise.
+      // US/state highways — shown from the national view (fading in with the
+      // interstates at 3.5→4.5), because agencies string along these corridors,
+      // so seeing the network explains the dot clustering. Faint hint when
+      // zoomed out, fuller as you zoom in.
       map.addLayer({
         id: "road-major-casing",
         type: "line",
         source: "base",
         "source-layer": "roads",
-        minzoom: 5,
+        minzoom: 3,
         filter: ["==", ["get", "kind"], "major_road"],
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
           "line-color": C.roadMajorCasing,
-          "line-width": ["interpolate", ["linear"], ["zoom"], 5, 0.8, 9, 2, 12, 3.5],
-          "line-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0, 5.5, 0.65],
+          "line-width": ["interpolate", ["linear"], ["zoom"], 3, 0.6, 5, 1.0, 9, 2.5, 12, 4.2, 15, 5.4],
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 3.5, 0, 4.5, 0.6, 8, 0.8],
         },
       });
 
@@ -379,28 +414,45 @@
         type: "line",
         source: "base",
         "source-layer": "roads",
-        minzoom: 5,
+        minzoom: 3,
         filter: ["==", ["get", "kind"], "major_road"],
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
           "line-color": C.roadMajorFill,
-          "line-width": ["interpolate", ["linear"], ["zoom"], 5, 0.4, 9, 1.1, 12, 2],
-          "line-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0, 5.5, 0.9],
+          "line-width": ["interpolate", ["linear"], ["zoom"], 3, 0.35, 5, 0.5, 9, 1.5, 12, 2.7, 15, 3.5],
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 3.5, 0, 4.5, 0.7, 8, 0.95],
         },
       });
 
-      // Medium roads fade in at city zoom for context
+      // Medium roads fade in approaching city zoom for context
       map.addLayer({
         id: "road-medium",
         type: "line",
         source: "base",
         "source-layer": "roads",
-        minzoom: 8,
+        minzoom: 7,
         filter: ["==", ["get", "kind"], "medium_road"],
         paint: {
           "line-color": C.roadMedium,
-          "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.4, 12, 1.5],
-          "line-opacity": 0.8,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 7, 0.3, 12, 1.6, 15, 2.6],
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 7, 0, 8, 0.85],
+        },
+      });
+
+      // Minor roads / local streets — only once zoomed into a city, so the
+      // urban grid fills in under the dots instead of an empty slate. Kept
+      // faint so it reads as texture, not a full street map.
+      map.addLayer({
+        id: "road-minor",
+        type: "line",
+        source: "base",
+        "source-layer": "roads",
+        minzoom: 11,
+        filter: ["==", ["get", "kind"], "minor_road"],
+        paint: {
+          "line-color": C.roadMedium,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 11, 0.25, 14, 1, 16, 1.8],
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 11, 0, 12.5, 0.6],
         },
       });
 
@@ -506,8 +558,9 @@
       // interpolation each frame with the fade multiplier applied per-stop.
       radiusStops = [
         [3, radius(0.8, 9)],
-        [6, radius(2.2, 15)],
-        [10, radius(4, 24)],
+        [6, radius(2.4, 16)],
+        [10, radius(5, 30)],
+        [13, radius(8, 40)],
       ];
       const initialRadius = cursorIdx == null
         ? baseRadiusExpression()

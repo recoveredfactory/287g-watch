@@ -71,6 +71,24 @@
   })();
   $: uniqueSignedIndices = uniqueAgencyData.map((d) => d.idx);
 
+  // Terminated agencies, ORI-deduped, with both their signing and termination
+  // indices — so the headline can show *net active at the cursor*: an agency
+  // counts once the cursor passes its signing date and is subtracted once the
+  // cursor passes its termination date. See #118.
+  $: uniqueTerminatedData = (() => {
+    const byOri = new Map<string, { signed: number; ended: number }>();
+    const nullOri: { signed: number; ended: number }[] = [];
+    for (const a of data.terminatedAgencies ?? []) {
+      const entry = { signed: signedIdx(a.signed_date), ended: signedIdx(a.terminated_date) };
+      if (a.ori) {
+        if (!byOri.has(a.ori)) byOri.set(a.ori, entry);
+      } else {
+        nullOri.push(entry);
+      }
+    }
+    return [...byOri.values(), ...nullOri];
+  })();
+
   $: uniqueLocalPopData = (() => {
     const byOri = new Map<string, { idx: number; pop: number }>();
     const nullOri: { idx: number; pop: number }[] = [];
@@ -102,7 +120,12 @@
   ) + 0.5;
   let cursorIdx = NaN;
   $: if (Number.isNaN(cursorIdx) && Number.isFinite(maxIdx)) cursorIdx = maxIdx;
-  $: countAtCursor = uniqueSignedIndices.filter((i) => i <= cursorIdx).length;
+  // Net active at the cursor: active agencies signed by now, plus terminated
+  // agencies that were signed by now but haven't yet left — so the number dips
+  // as departures cross the cursor, instead of only ever climbing.
+  $: countAtCursor =
+    uniqueSignedIndices.filter((i) => i <= cursorIdx).length +
+    uniqueTerminatedData.filter((d) => d.signed <= cursorIdx && d.ended > cursorIdx).length;
   // Statewide agencies (state police, corrections, etc.) are intentionally not
   // plotted — a single dot would misrepresent a whole-state jurisdiction. We
   // surface the count below the scrubber instead.
@@ -513,6 +536,7 @@
       {:else}
         <NationalMap
           agencies={data.agencies}
+          terminatedAgencies={data.terminatedAgencies}
           {selectedStates}
           {cursorIdx}
         />
