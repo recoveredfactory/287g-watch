@@ -310,7 +310,7 @@ if (!SKIP_FRAMES) {
     ].join(";");
     wm.innerHTML = `
       <div style="font-size:20px;font-weight:600;color:#cbd5e1;letter-spacing:0.01em;">287g.recoveredfactory.net</div>
-      <div style="font-size:16px;font-weight:400;color:#94a3b8;letter-spacing:0.02em;">Data as of ${asOf} &middot; CC BY-ND 4.0</div>
+      <div style="font-size:16px;font-weight:400;color:#94a3b8;letter-spacing:0.02em;">Data as of ${asOf} &middot; CC BY 4.0</div>
     `;
     mapDiv.appendChild(wm);
 

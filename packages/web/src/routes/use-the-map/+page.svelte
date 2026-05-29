@@ -9,7 +9,7 @@
   $: description = m.usemap_meta_description();
   const siteUrl = import.meta.env.PUBLIC_SITE_URL ?? "https://287g.recoveredfactory.net";
 
-  const LICENSE_URL = "https://creativecommons.org/licenses/by-nd/4.0/";
+  const LICENSE_URL = "https://creativecommons.org/licenses/by/4.0/";
   const LICENSE_EMAIL = "davideads@recoveredfactory.net";
 
   $: asOf = data.snapshotDate
@@ -90,6 +90,7 @@
       <a href={LICENSE_URL} target="_blank" rel="noreferrer">{m.usemap_license_link()}</a>
       {m.usemap_license_body_suffix()}
     </p>
+    <p class="mt-3">{m.usemap_license_ask()}</p>
 
     <h2 class="mt-8 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.usemap_custom_heading()}</h2>
     <p class="mt-3">
