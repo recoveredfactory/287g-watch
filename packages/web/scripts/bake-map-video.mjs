@@ -195,6 +195,12 @@ if (!SKIP_FRAMES) {
     if (legendBlock) {
       legendBlock.style.color = "#e2e8f0";
       legendBlock.style.alignItems = "flex-end";
+      legendBlock.style.textAlign = "right";
+      // Push each legend row (model swatches, size circles) hard to the right
+      // edge so the wrapped rows stack cleanly under the title bar's right side.
+      legendBlock.querySelectorAll(":scope > div").forEach((row) => {
+        row.style.justifyContent = "flex-end";
+      });
       legendBlock.querySelectorAll("span").forEach((s) => {
         // Don't touch the colored swatches (they have inline background style).
         if (!s.style.background) {
@@ -212,12 +218,12 @@ if (!SKIP_FRAMES) {
     // and widen / wrap the card so "active 287(g) agreements" doesn't
     // overflow on top of "Pop. covered". Bump type sizes for video legibility.
     mapSection.querySelectorAll(".count-card").forEach((el) => {
-      el.style.width = "22rem";
-      el.style.padding = "0.85rem 1.1rem 0.9rem";
-      el.style.borderRadius = "0.7rem";
+      el.style.width = "26rem";
+      el.style.padding = "1.05rem 1.4rem 1.1rem";
+      el.style.borderRadius = "0.8rem";
     });
     mapSection.querySelectorAll(".count-number").forEach((el) => {
-      el.style.fontSize = "2.4rem";
+      el.style.fontSize = "3.2rem";
     });
     mapSection.querySelectorAll(".count-label").forEach((el) => {
       const txt = (el.textContent ?? "").trim();
@@ -227,12 +233,12 @@ if (!SKIP_FRAMES) {
       el.style.whiteSpace = "normal";
       el.style.lineHeight = "1.15";
       el.style.minHeight = "2em"; // keep both stats vertically aligned
-      el.style.fontSize = "0.85rem";
-      el.style.marginTop = "0.4rem";
+      el.style.fontSize = "1.05rem";
+      el.style.marginTop = "0.5rem";
     });
     mapSection.querySelectorAll(".count-date").forEach((el) => {
-      el.style.fontSize = "0.95rem";
-      el.style.marginTop = "0.55rem";
+      el.style.fontSize = "1.2rem";
+      el.style.marginTop = "0.65rem";
     });
 
     // Build the title bar: 287(g) Watch eyebrow + headline on the left,
@@ -255,8 +261,8 @@ if (!SKIP_FRAMES) {
     const titleCol = document.createElement("div");
     titleCol.style.cssText = "display:flex;flex-direction:column;gap:3px;";
     titleCol.innerHTML = `
-      <div style="font-size:13px;font-weight:600;letter-spacing:0.22em;text-transform:uppercase;color:#BE6079;">287(g) Watch</div>
-      <div style="font-family:'Bitter',Georgia,serif;font-size:32px;font-weight:700;line-height:1.1;color:#ffffff;">Active 287(g) agreements</div>
+      <div style="font-size:20px;font-weight:600;letter-spacing:0.22em;text-transform:uppercase;color:#BE6079;">287(g) Watch</div>
+      <div style="font-family:'Bitter',Georgia,serif;font-size:52px;font-weight:700;line-height:1.08;color:#ffffff;">Active 287(g) agreements</div>
     `;
     bar.appendChild(titleCol);
     if (legendBlock) {
@@ -268,7 +274,7 @@ if (!SKIP_FRAMES) {
     // otherwise win over an inline style on the wrapper).
     const styleTag = document.createElement("style");
     styleTag.textContent = `
-      [data-bake-legend], [data-bake-legend] span { font-size: 15px !important; }
+      [data-bake-legend], [data-bake-legend] span { font-size: 20px !important; }
     `;
     document.head.appendChild(styleTag);
 
@@ -303,8 +309,8 @@ if (!SKIP_FRAMES) {
       "text-shadow: 0 1px 3px rgba(0,0,0,0.9)",
     ].join(";");
     wm.innerHTML = `
-      <div style="font-size:15px;font-weight:600;color:#cbd5e1;letter-spacing:0.01em;">287g.recoveredfactory.net</div>
-      <div style="font-size:12px;font-weight:400;color:#94a3b8;letter-spacing:0.02em;">Data as of ${asOf} &middot; CC BY-ND 4.0</div>
+      <div style="font-size:20px;font-weight:600;color:#cbd5e1;letter-spacing:0.01em;">287g.recoveredfactory.net</div>
+      <div style="font-size:16px;font-weight:400;color:#94a3b8;letter-spacing:0.02em;">Data as of ${asOf} &middot; CC BY-ND 4.0</div>
     `;
     mapDiv.appendChild(wm);
 
