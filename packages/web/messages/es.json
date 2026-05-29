@@ -131,6 +131,8 @@
   "agency_breadcrumb_home": "Inicio",
   "agency_signed_date": "Acuerdo firmado",
   "agency_first_seen": "Primera aparición en los datos de ICE",
+  "agency_ended_heading": "Ya no figura en los datos de 287(g) de ICE",
+  "agency_ended_body": "{agency_name} ya no aparece en los datos públicos de 287(g) de ICE; figuró por última vez el {date}. ICE no anuncia las salidas, por lo que esto refleja su eliminación del registro público y no una terminación formal.",
   "agency_history_heading": "Historial del acuerdo",
   "agency_history_intro": "Cambios registrados desde que comenzó el seguimiento. Los espacios entre entradas indican que no se detectaron cambios.",
   "agency_population": "Población residencial",

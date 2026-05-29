@@ -81,6 +81,9 @@ export type HomeAgency = {
   models: string[];
   primary_model: string;
   signed_date?: string;
+  // Set only on terminated agencies (the separate terminatedAgencies payload),
+  // so the map can fade their dots out as the cursor crosses this date.
+  terminated_date?: string | null;
   population?: number;
   lat?: number;
   lng?: number;
@@ -91,6 +94,10 @@ export type HomeAgency = {
 
 export type PageData = {
   agencies: HomeAgency[];
+  // Once-active agencies that have since left 287(g). Kept OUT of `agencies`
+  // (and every topline count) so the headline stays active-only; the map
+  // renders them as dots that fade out at their terminated_date. See #118.
+  terminatedAgencies: HomeAgency[];
   agencyCount: number;
   // Headline count deduplicated by FBI ORI. Several "agencies" in the upstream
   // sheet share an ORI (a sheriff's office and the same county's corrections
@@ -112,9 +119,10 @@ export type PageData = {
 export const load = async ({ fetch }): Promise<PageData> => {
   try {
     const url = "/data/dist/agency_index.json";
-    const [res, metaRes] = await Promise.all([
+    const [res, metaRes, terminatedRes] = await Promise.all([
       fetch(url),
       fetch("/data/dist/state_meta.json"),
+      fetch("/data/dist/terminated_agencies.json"),
     ]);
     if (!res.ok) throw new Error(`${res.status} ${url}`);
     const agencies: Agency[] = await res.json();
@@ -188,8 +196,31 @@ export const load = async ({ fetch }): Promise<PageData> => {
       lee: a.lee ? { officer_ct: a.lee.officer_ct } : null,
     }));
 
+    // Terminated agencies — separate slim payload, map-only. Optional file so
+    // older deploys (pre-#118 pipeline) still render (just without fade-outs).
+    const terminatedRaw: Agency[] = terminatedRes.ok ? await terminatedRes.json() : [];
+    const terminatedAgencies: HomeAgency[] = terminatedRaw.map((a) => ({
+      slug: a.slug,
+      name: a.name,
+      state: a.state,
+      county: a.county,
+      city: a.city,
+      agency_type: a.agency_type,
+      models: a.models,
+      primary_model: a.primary_model,
+      signed_date: a.signed_date,
+      terminated_date: a.terminated_date,
+      population: a.population,
+      lat: a.lat,
+      lng: a.lng,
+      moa_url: a.moa_url,
+      ori: a.ori,
+      lee: a.lee ? { officer_ct: a.lee.officer_ct } : null,
+    }));
+
     return {
       agencies: homeAgencies,
+      terminatedAgencies,
       agencyCount: agencies.length,
       agencyCountUnique,
       stateCount: states.size,
@@ -202,6 +233,7 @@ export const load = async ({ fetch }): Promise<PageData> => {
   } catch {
     return {
       agencies: [],
+      terminatedAgencies: [],
       agencyCount: 0,
       agencyCountUnique: 0,
       stateCount: 0,
