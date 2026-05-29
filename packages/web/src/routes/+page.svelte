@@ -116,10 +116,16 @@
   // live count. Smooth tween catches up with easing so the digits feel like
   // they're ticking up rather than slamming on each keystroke.
   let timelinePlaying = false;
+  // The video bake (scripts/bake-map-video.mjs) frame-steps the cursor and
+  // screenshots each frame after a tiny delay. The 280ms count tween never
+  // settles in that window, so the baked counter lags the map (it visibly
+  // winds up from a low number). When the bake hook drives the cursor it sets
+  // this flag so each frame's count snaps to the true value for its cursor.
+  let bakeInstant = false;
   const displayedCount = tweened(0, { duration: 280, easing: cubicOut });
   const displayedPop = tweened(0, { duration: 280, easing: cubicOut });
-  $: displayedCount.set(countAtCursor);
-  $: displayedPop.set(popAtCursor);
+  $: displayedCount.set(countAtCursor, bakeInstant ? { duration: 0 } : undefined);
+  $: displayedPop.set(popAtCursor, bakeInstant ? { duration: 0 } : undefined);
 
   // Card is a tap target: clicking it restarts the timeline animation from
   // Jan 2025 so readers can replay the sweep without scrolling to the
@@ -286,7 +292,7 @@
 
     // Hook for scripts/bake-map-video.mjs to drive cursorIdx deterministically
     // without racing the scrubber's rAF loop.
-    (window as any).__setCursor = (idx: number) => { cursorIdx = idx; };
+    (window as any).__setCursor = (idx: number) => { bakeInstant = true; cursorIdx = idx; };
     (window as any).__getTimelineBounds = () => ({ minIdx, maxIdx, todayIdx });
   });
 
@@ -549,6 +555,13 @@
         </div>
       </div>
     {/if}
+    <!-- Below the map: free download / licensing page (not in nav) -->
+    <div class="border-t border-slate-200 bg-stone-50 px-4 py-3 text-center sm:px-6">
+      <a
+        href={localizeHref("/use-the-map")}
+        class="text-sm font-semibold text-slate-700 underline-offset-2 hover:text-slate-900 hover:underline"
+      >{m.home_map_use_cta()}</a>
+    </div>
   </section>
 
   <!-- ── What each model authorizes ───────────────────────────────────────── -->
