@@ -10,7 +10,9 @@
     "diff:staging": "sst diff --stage staging",
     "diff:prod": "sst diff --stage prod",
     "remove:staging": "sst remove --stage staging",
-    "pipeline": "pnpm -F pipeline ingest"
+    "pipeline": "pnpm -F pipeline ingest",
+    "publish:map-assets:staging": "sst shell --stage staging node packages/web/scripts/publish-map-assets.mjs",
+    "publish:map-assets:prod": "sst shell --stage prod node packages/web/scripts/publish-map-assets.mjs"
   },
   "devDependencies": {
     "sst": "^3.17.25"

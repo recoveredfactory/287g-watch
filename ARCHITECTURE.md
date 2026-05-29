@@ -47,6 +47,8 @@ The map uses MapLibre GL with a CartoDB Positron basemap. Agencies are clustered
 
 SST v3 configuration for AWS deployment. The SvelteKit app runs as a Lambda-backed site behind CloudFront (`svelte-kit-sst` adapter); the JSON data file is served as a static asset from that same CloudFront distribution. Two stages — `prod` and `staging` — with custom domains configured via `.env`.
 
+Also defines `MapArchive`, a per-stage public S3 bucket for the downloadable map assets (see [Map assets & releasing](#map-assets--releasing)).
+
 ---
 
 ## Data flow
@@ -68,6 +70,30 @@ appelson/Tracking_287g (GitHub)
         ▼
   Browser — map + agency list
 ```
+
+---
+
+## Map assets & releasing
+
+The downloadable map video/gif/png (the baked homepage timeline) do **not** ride in the site deploy. They live in a per-stage public S3 bucket (`MapArchive`), served via direct S3 URLs — no CloudFront, no custom domain (keeps clear of the account's CloudFront cache-policy quota, and the big files out of the deploy). Each cut is baked **per language** (the title/labels/watermark are injected by the bake, not read from the page), and the licensing page (`/use-the-map`) offers both language downloads on every page version. It reads `PUBLIC_MAP_ASSETS_URL` (set by SST per stage) and links the bucket's `-latest-<lang>` copies, falling back to bundled `/video/` in local dev.
+
+Naming, per ICE release × language (`en`, `es`):
+
+- `map-latest-<lang>.{mp4,gif,png}` — overwritten each release; short cache; linked publicly.
+- `map-<release-date>-<hash8>-<lang>.{mp4,gif,png}` — immutable archive copy; long cache; **unlinked** (unguessable name).
+
+**Release flow, per stage** (`staging` shown; repeat with `:prod`):
+
+```
+pnpm pipeline                                       # regenerate agency_index.json + terminated_agencies.json (GITHUB_TOKEN)
+pnpm diff:staging                                   # sanity-check infra changes
+pnpm deploy:staging                                 # site + MapArchive bucket
+pnpm -F web bake:map-video --lang=en --url=…/en     # bake EN cut (add --still for a fast PNG-only check)
+pnpm -F web bake:map-video --lang=es --url=…/es     # bake ES cut
+pnpm publish:map-assets:staging                     # upload both langs: -latest + dated-hash archive
+```
+
+A warm xlsx cache makes the pipeline token-free and ~15s (`pnpm -F pipeline cache:warm`). The licensing-page video 404s in the window between `deploy` and `publish` (bucket is empty until published) — run them back-to-back.
 
 ---
 
