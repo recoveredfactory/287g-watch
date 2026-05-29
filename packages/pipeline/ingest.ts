@@ -5,9 +5,10 @@
  * Pulls from appelson/Tracking_287g sheets snapshots (xlsx):
  *   - Discovers the latest snapshot directory via GitHub API
  *   - Downloads and parses the xlsx file
- *   - Geocodes via Census Bureau gazetteers: municipalities → place / county-
- *     subdivision centroid (the town), others → county centroid; statewide
- *     agencies get no dot. Gazetteer misses fall back to Geocodio (cached).
+ *   - Geocodes via Census Bureau gazetteers (fully offline): municipalities →
+ *     place / county-subdivision centroid (the town), others → county centroid;
+ *     statewide agencies get no dot. A small curated override table fixes the
+ *     stragglers (campus/airport police, county-name typos).
  *   - Samples one snapshot per week to build per-agency agreement history
  *   - Joins FBI Law Enforcement Employees data (ORI, officer/civilian counts, population)
  *
@@ -32,14 +33,6 @@ const GAZETTEER_BASE =
 const COUNTY_GAZETTEER_URL = `${GAZETTEER_BASE}/2023_Gaz_counties_national.zip`
 const PLACE_GAZETTEER_URL = `${GAZETTEER_BASE}/2023_Gaz_place_national.zip`
 const COUSUB_GAZETTEER_URL = `${GAZETTEER_BASE}/2023_Gaz_cousubs_national.zip`
-
-// Geocodio is a paid fallback for the handful of agencies the offline Census
-// gazetteers can't resolve by name (universities, airports, oddly-named
-// constabularies). Results are cached to geocode_cache.json so reruns are free
-// and deterministic; the pipeline runs fine without the key, just with a few
-// ungeocoded stragglers.
-const GEOCODIO_API_KEY = process.env.GEOCODIO_API_KEY
-const GEOCODE_CACHE_PATH = resolve(__dirname, 'geocode_cache.json')
 
 const GH_TOKEN = process.env.GITHUB_TOKEN || process.env.GH_TOKEN
 const ghHeaders: Record<string, string> = GH_TOKEN
@@ -491,7 +484,8 @@ console.log(`  ${grouped.length} unique agencies`)
 //   • Municipality      → place / county-subdivision centroid keyed off the agency
 //                         name (the actual town), falling back to its county centroid
 //   • County (or other) → county centroid
-//   • anything still un-located → Geocodio fallback (§4b, below)
+//   • a curated override table (campus/airport police, county-typo sheriffs)
+//     redirects odd names to the right town/county
 //
 // Place names are matched case-insensitively with Saint/St. and &/and folded
 // together, indexed under both the full gazetteer name ("Lake City") and the
@@ -505,8 +499,54 @@ const normPlace = (s: string): string =>
     .replace(/\bSAINTE?\s+/g, (m) => (m.trim() === 'SAINTE' ? 'STE. ' : 'ST. '))
     .replace(/&/g, 'AND')
     .replace(/[.']/g, '')
+    .replace(/-/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
+
+// A few agencies don't geocode from their name alone — campus and airport
+// police, multi-county jail authorities, and county sheriffs whose county field
+// is a typo. Rather than hand-key coordinates, we map each to the town or county
+// we want its dot in and resolve THAT through the gazetteers above, so every dot
+// lands at a real, verifiable centroid. Keyed by normName(agency)|state.
+// (One straggler — Northwest Regional Police Department, PA — is genuinely
+// ambiguous and is intentionally left unplaced.)
+const normName = (s: string): string => s.toUpperCase().replace(/\s+/g, ' ').trim()
+
+const PLACE_OVERRIDES: Record<string, string> = {
+  // Florida campus police → host city
+  'FLORIDA A&M UNIVERSITY BOARD OF TRUSTEES|FL': 'Tallahassee',
+  'FLORIDA INTERNATIONAL UNIVERSITY POLICE DEPARTMENT|FL': 'Miami',
+  'FLORIDA POLYTECHNIC UNIVERSITY POLICE DEPARTMENT|FL': 'Lakeland',
+  'FLORIDA SOUTHWESTERN STATE COLLEGE POLICE DEPARTMENT|FL': 'Fort Myers',
+  'FLORIDA STATE COLLEGE AT JACKSONVILLE POLICE DEPARTMENT|FL': 'Jacksonville',
+  'NEW COLLEGE OF FLORIDA POLICE DEPARTMENT|FL': 'Sarasota',
+  'NORTHWEST FLORIDA STATE COLLEGE POLICE DEPARTMENT|FL': 'Niceville',
+  'TALLAHASSEE STATE COLLEGE POLICE DEPARTMENT|FL': 'Tallahassee',
+  'UNIVERSITY OF FLORIDA POLICE DEPARTMENT|FL': 'Gainesville',
+  'UNIVERSITY OF NORTH FLORIDA POLICE DEPARTMENT|FL': 'Jacksonville',
+  'UNIVERSITY OF WEST FLORIDA POLICE DEPARTMENT|FL': 'Pensacola',
+  // Florida airport police → host city
+  'MELBOURNE INTERNATIONAL AIRPORT POLICE DEPARTMENT|FL': 'Melbourne',
+  'SANFORD AIRPORT POLICE DEPARTMENT|FL': 'Sanford',
+  'SARASOTA MANATEE AIRPORT AUTHORITY POLICE DEPARTMENT|FL': 'Sarasota',
+  // Spelling / suffix the gazetteer disagrees on
+  'HOWEY IN THE HILLS POLICE DEPARTMENT|FL': 'Howey-in-the-Hills',
+  'SUNNY ISLES POLICE DEPARTMENT|FL': 'Sunny Isles Beach',
+  'PITTSBURGH POLICE DEPARTMENT|NH': 'Pittsburg',
+  // Multi-county authorities → the town they're headquartered in
+  'RAPPAHANNOCK, SHENANDOAH, WARREN REGIONAL JAIL AUTHORITY|VA': 'Front Royal',
+  'SOUTHWEST VIRGINIA REGIONAL JAIL AUTHORITY|VA': 'Abingdon',
+  'NORTH COUNTY POLICE COOPERATIVE|MO': 'Pagedale',
+}
+
+const COUNTY_OVERRIDES: Record<string, string> = {
+  "POPE COUNTY SHERIFF'S OFFICE|AR": 'Pope County', // sheet had "Pop County"
+  "CALCASIEU PARISH SHERIFF'S OFFICE|LA": 'Calcasieu Parish', // "Calacasieu"
+  "ST. BERNARD PARISH SHERIFF'S OFFICE|LA": 'St. Bernard Parish', // "Chalmette Parish"
+  "ST. CHARLES PARISH SHERIFF'S OFFICE|LA": 'St. Charles Parish', // "German Coast County"
+  "BERRIAN COUNTY SHERIFF'S OFFICE|MI": 'Berrien County', // misspelled in agency name
+  "CUSTER COUNTY SHERIFF'S OFFICE|OK": 'Custer County', // "Custer Countey"
+}
 
 const PLACE_SUFFIX =
   /\s+(city|town|village|borough|CDP|municipality|township|consolidated government|metro(politan)? government|unified government|urban county)$/i
@@ -584,8 +624,9 @@ function placeLatLng(name: string, state: string): [number, number] | null {
   return places.get(`${normPlace(placeNameFromAgency(name))}|${state}`) ?? null
 }
 
-// Deterministic (offline) geocode. Returns null when nothing matches — those
-// agencies go to the Geocodio fallback in §4b.
+// Fully deterministic, offline geocode. Returns null when nothing matches — a
+// handful of agencies (e.g. Northwest Regional PD, PA) are intentionally left
+// unplaced rather than dropped at a wrong location.
 function geocode(
   name: string,
   county: string | null,
@@ -593,6 +634,11 @@ function geocode(
   type: string | null,
 ): [number, number] | null {
   if (type === 'State Agency') return null // statewide → never a single map dot
+  const ovKey = `${normName(name)}|${state}`
+  const placeOverride = PLACE_OVERRIDES[ovKey]
+  if (placeOverride) return places.get(`${normPlace(placeOverride)}|${state}`) ?? null
+  const countyOverride = COUNTY_OVERRIDES[ovKey]
+  if (countyOverride) return countyLatLng(countyOverride, state)
   if (type === 'Municipality') return placeLatLng(name, state) ?? countyLatLng(county, state)
   return countyLatLng(county, state)
 }
@@ -645,59 +691,6 @@ for (const row of grouped) {
     agreement: null,
     notes: null,
   })
-}
-
-// ── 4b. Geocodio fallback for gazetteer misses ──────────────────────────────────
-//
-// A handful of agencies (universities, airports, oddly-named constabularies)
-// don't resolve against the Census gazetteers. Geocodio geocodes them by name.
-// Responses — including misses, cached as null — persist to geocode_cache.json so
-// reruns don't re-bill the API and the offline output stays reproducible. State
-// Agencies are excluded by design (they get no dot), so they're never queried.
-
-interface GeocodeCache {
-  [query: string]: { lat: number; lng: number } | null
-}
-
-const geocodeCache: GeocodeCache = existsSync(GEOCODE_CACHE_PATH)
-  ? JSON.parse(readFileSync(GEOCODE_CACHE_PATH, 'utf8'))
-  : {}
-
-async function geocodio(query: string): Promise<[number, number] | null> {
-  if (query in geocodeCache) {
-    const hit = geocodeCache[query]
-    return hit ? [hit.lat, hit.lng] : null
-  }
-  if (!GEOCODIO_API_KEY) return null // not cached and no key → leave ungeocoded
-  const url = `https://api.geocod.io/v1.7/geocode?q=${encodeURIComponent(query)}&limit=1&api_key=${GEOCODIO_API_KEY}`
-  const resp = await fetch(url)
-  if (!resp.ok) {
-    console.warn(`  Geocodio ${resp.status} for "${query}"`)
-    return null
-  }
-  const data = (await resp.json()) as { results?: Array<{ location?: { lat: number; lng: number } }> }
-  const loc = data.results?.[0]?.location ?? null
-  geocodeCache[query] = loc ? { lat: loc.lat, lng: loc.lng } : null
-  return loc ? [loc.lat, loc.lng] : null
-}
-
-const fallbackTargets = agencies.filter((a) => a.lat === null && a.agency_type !== 'State Agency')
-if (fallbackTargets.length) {
-  const cachedCount = fallbackTargets.filter((a) => `${a.name}, ${a.state}` in geocodeCache).length
-  console.log(
-    `\nGeocodio fallback: ${fallbackTargets.length} agencies unresolved by gazetteer` +
-      ` (${cachedCount} cached${GEOCODIO_API_KEY ? '' : ', no API key — uncached will stay ungeocoded'})`,
-  )
-  let resolved = 0
-  for (const a of fallbackTargets) {
-    const hit = await geocodio(`${a.name}, ${a.state}`)
-    if (hit) {
-      ;[a.lat, a.lng] = hit
-      resolved++
-    }
-  }
-  writeFileSync(GEOCODE_CACHE_PATH, JSON.stringify(geocodeCache, null, 2))
-  console.log(`  Resolved ${resolved}/${fallbackTargets.length} via Geocodio`)
 }
 
 // ── 5. Join FBI / upstream agency metadata ────────────────────────────────────
