@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Bake the homepage timeline animation to a high-quality .mp4 and a .gif.
+// Bake the homepage timeline animation to a high-quality .mp4 and .gif, plus
+// the final frame as a standalone .png (the peak-data static image).
 //
 // Pipeline:
 //   playwright   → load the live homepage, strip chrome, inject a title bar
@@ -21,7 +22,7 @@
 
 import { chromium } from "playwright";
 import { spawn } from "node:child_process";
-import { mkdir, rm, access } from "node:fs/promises";
+import { mkdir, rm, access, copyFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -433,9 +434,20 @@ await run("ffmpeg", [
   GIF_PATH,
 ]);
 
+// Also emit the final frame as a standalone static image — the climax of the
+// animation (full data, peak count), offered as a download alongside the clip.
+// Copied straight from the captured PNG so it stays lossless (not the h264 mp4).
+const PNG_PATH = path.join(OUT_DIR, "map.png");
+const lastFramePath = path.join(
+  FRAMES_DIR,
+  `frame_${String(TOTAL_FRAMES - 1).padStart(5, "0")}.png`,
+);
+await copyFile(lastFramePath, PNG_PATH);
+
 await rm(PALETTE_PATH, { force: true });
 if (!KEEP_FRAMES) await rm(FRAMES_DIR, { recursive: true, force: true });
 
 console.log(`\n✓ ${MP4_PATH}`);
 console.log(`✓ ${GIF_PATH}`);
+console.log(`✓ ${PNG_PATH}`);
 process.exit(0);

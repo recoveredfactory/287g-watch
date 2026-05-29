@@ -77,6 +77,13 @@
       >
         {m.usemap_download_gif()}
       </a>
+      <a
+        href="/video/map.png"
+        download
+        class="inline-flex items-center gap-2 rounded border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-900 hover:border-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+      >
+        {m.usemap_download_image()}
+      </a>
     </div>
     <p class="mt-3 text-sm text-slate-500">{m.usemap_download_note()}</p>
     <p class="mt-2 text-sm text-slate-500">{m.usemap_aspect_note()}</p>
@@ -95,7 +102,7 @@
     <h2 class="mt-8 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.usemap_custom_heading()}</h2>
     <p class="mt-3">
       {m.usemap_custom_body_prefix()}
-      <a href="mailto:{LICENSE_EMAIL}">{LICENSE_EMAIL}</a>
+      <a href="mailto:{LICENSE_EMAIL}">{m.usemap_custom_link()}</a>
       {m.usemap_custom_body_suffix()}
     </p>
   </div>
