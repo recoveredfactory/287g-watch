@@ -41,7 +41,18 @@ const argValue = (flag) => {
   return i >= 0 ? args[i + 1] : null;
 };
 
-const URL = argValue("--url") ?? "https://287g.recoveredfactory.net/en";
+// Language of the cut. Controls the baked-in title/label/watermark text and the
+// output filename suffix (map-en.*, map-es.*) — the video text is injected by
+// this script, not read from the localized page, so each language is a separate
+// bake. Point --url at the matching locale (…/en or …/es).
+const LANG = argValue("--lang") ?? "en";
+const STRINGS_BY_LANG = {
+  en: { title: "Active 287(g) agreements", countLabel: "active 287(g) agreements", popLabel: "Pop. covered", dataAsOf: "Data as of", cardWidth: "32rem" },
+  es: { title: "Acuerdos 287(g) activos", countLabel: "acuerdos 287(g) activos", popLabel: "Pob. cubierta", dataAsOf: "Datos al", cardWidth: "37rem" },
+};
+const STRINGS = STRINGS_BY_LANG[LANG] ?? STRINGS_BY_LANG.en;
+
+const URL = argValue("--url") ?? `https://287g.recoveredfactory.net/${LANG}`;
 const FPS = Number(argValue("--fps") ?? 30);
 const DURATION = Number(argValue("--duration") ?? 6);
 // Defaults give a roughly square output (good for social): 1080 viewport
@@ -51,10 +62,13 @@ const VIEWPORT_W = Number(argValue("--width") ?? 1080);
 // 750 keeps the US filling the frame vertically — its continental aspect is
 // roughly 1.65:1, so 1080×750 has only a thin band of dark above/below for
 // the count card and the legend's breathing room.
-const MAP_HEIGHT = Number(argValue("--map-height") ?? 750);
+const MAP_HEIGHT = Number(argValue("--map-height") ?? 780);
 const VIEWPORT_H = Number(argValue("--height") ?? MAP_HEIGHT + 200);
 const KEEP_FRAMES = args.includes("--keep-frames");
 const SKIP_FRAMES = args.includes("--skip-frames");
+// --still: snapshot just the final frame to map-<lang>.png and skip the video
+// encode entirely — a fast loop for checking composition.
+const STILL = args.includes("--still");
 const GIF_FPS = Math.min(FPS, 15);
 const GIF_WIDTH = Number(argValue("--gif-width") ?? 800);
 // Hold the final frame for this many seconds before the gif loops — gives
@@ -68,7 +82,7 @@ const GIF_HOLD = Number(argValue("--gif-hold") ?? 2);
 // --as-of defaults to today (re-cuts follow an ingest), override to pin it.
 const AS_OF =
   argValue("--as-of") ??
-  new Date().toLocaleDateString("en-US", {
+  new Date().toLocaleDateString(LANG === "es" ? "es-MX" : "en-US", {
     year: "numeric",
     month: "long",
     day: "numeric",
@@ -128,7 +142,7 @@ if (!SKIP_FRAMES) {
   // Strip chrome, scrubber, supporting banners; swap label; inject title bar
   // with legend; widen count card so the longer label fits.
   // Runs after the map mounts so .maplibregl-canvas and the scrubber DOM exist.
-  await page.evaluate(({ mapHeight, asOf }) => {
+  await page.evaluate(({ mapHeight, asOf, strings }) => {
     (window).__BAKE_MAP_HEIGHT__ = mapHeight;
     const kill = (sel) =>
       document.querySelectorAll(sel).forEach((el) => el.remove());
@@ -218,28 +232,46 @@ if (!SKIP_FRAMES) {
     // Swap count overlay label so the running counter is self-explanatory,
     // and widen / wrap the card so "active 287(g) agreements" doesn't
     // overflow on top of "Pop. covered". Bump type sizes for video legibility.
+    // Move the counter/month block to the lower-LEFT (over Alaska's inset —
+    // fine for now); brand + watermark stay lower-right, so no collision. Month
+    // goes ABOVE the card — count-date is a sibling AFTER the card in the
+    // overlay, so reorder it to the front.
+    mapSection.querySelectorAll(".count-overlay").forEach((el) => {
+      el.style.top = "auto";
+      el.style.right = "auto";
+      el.style.left = "1.6rem";
+      el.style.bottom = "14px"; // baseline-align with the watermark (bottom:14px)
+      el.style.alignItems = "flex-start";
+      const date = el.querySelector(".count-date");
+      const card = el.querySelector(".count-card");
+      if (date && card) el.insertBefore(date, card);
+    });
     mapSection.querySelectorAll(".count-card").forEach((el) => {
-      el.style.width = "26rem";
-      el.style.padding = "1.05rem 1.4rem 1.1rem";
-      el.style.borderRadius = "0.8rem";
+      el.style.width = strings.cardWidth; // wider for es so the label stays 2 lines
+      el.style.padding = "1.4rem 1.8rem 1.5rem";
+      el.style.borderRadius = "0.9rem";
     });
     mapSection.querySelectorAll(".count-number").forEach((el) => {
-      el.style.fontSize = "3.2rem";
+      el.style.fontSize = "4.2rem";
     });
     mapSection.querySelectorAll(".count-label").forEach((el) => {
       const txt = (el.textContent ?? "").trim();
       if (txt === "agencies") {
-        el.textContent = "active 287(g) agreements";
+        el.textContent = strings.countLabel;
+      } else if (txt === "Pop. covered") {
+        el.textContent = strings.popLabel;
       }
       el.style.whiteSpace = "normal";
       el.style.lineHeight = "1.15";
       el.style.minHeight = "2em"; // keep both stats vertically aligned
-      el.style.fontSize = "1.05rem";
+      el.style.fontSize = "1.35rem";
       el.style.marginTop = "0.5rem";
     });
+    // Month, now above the counter.
     mapSection.querySelectorAll(".count-date").forEach((el) => {
-      el.style.fontSize = "1.2rem";
-      el.style.marginTop = "0.65rem";
+      el.style.fontSize = "1.7rem";
+      el.style.fontWeight = "700";
+      el.style.margin = "0 0 0.55rem";
     });
 
     // Build the title bar: 287(g) Watch eyebrow + headline on the left,
@@ -261,9 +293,10 @@ if (!SKIP_FRAMES) {
     ].join(";");
     const titleCol = document.createElement("div");
     titleCol.style.cssText = "display:flex;flex-direction:column;gap:3px;";
+    // No eyebrow — the "287(g) Watch" brand moves to the lower-right (above the
+    // watermark). Headline ~25% bigger.
     titleCol.innerHTML = `
-      <div style="font-size:20px;font-weight:600;letter-spacing:0.22em;text-transform:uppercase;color:#BE6079;">287(g) Watch</div>
-      <div style="font-family:'Bitter',Georgia,serif;font-size:52px;font-weight:700;line-height:1.08;color:#ffffff;">Active 287(g) agreements</div>
+      <div style="font-family:'Bitter',Georgia,serif;font-size:65px;font-weight:700;line-height:1.06;color:#ffffff;">${strings.title}</div>
     `;
     bar.appendChild(titleCol);
     if (legendBlock) {
@@ -275,7 +308,7 @@ if (!SKIP_FRAMES) {
     // otherwise win over an inline style on the wrapper).
     const styleTag = document.createElement("style");
     styleTag.textContent = `
-      [data-bake-legend], [data-bake-legend] span { font-size: 20px !important; }
+      [data-bake-legend], [data-bake-legend] span { font-size: 26px !important; }
     `;
     document.head.appendChild(styleTag);
 
@@ -310,13 +343,14 @@ if (!SKIP_FRAMES) {
       "text-shadow: 0 1px 3px rgba(0,0,0,0.9)",
     ].join(";");
     wm.innerHTML = `
+      <div style="font-size:40px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#BE6079;text-shadow:0 2px 7px rgba(0,0,0,0.95),0 0 2px rgba(0,0,0,0.8);margin-bottom:6px;line-height:1;">287(g) Watch</div>
       <div style="font-size:20px;font-weight:600;color:#cbd5e1;letter-spacing:0.01em;">287g.recoveredfactory.net</div>
-      <div style="font-size:16px;font-weight:400;color:#94a3b8;letter-spacing:0.02em;">Data as of ${asOf} &middot; CC BY 4.0</div>
+      <div style="font-size:16px;font-weight:400;color:#94a3b8;letter-spacing:0.02em;">${strings.dataAsOf} ${asOf} &middot; CC BY 4.0</div>
     `;
     mapDiv.appendChild(wm);
 
     document.body.style.background = "#ffffff";
-  }, { mapHeight: MAP_HEIGHT, asOf: AS_OF });
+  }, { mapHeight: MAP_HEIGHT, asOf: AS_OF, strings: STRINGS });
 
   // Wait for MapLibre to reflow into the new container height. ResizeObserver
   // fires, the canvas resizes, then we need a paint before measuring.
@@ -358,6 +392,19 @@ if (!SKIP_FRAMES) {
   };
   console.log(`[snap] clip ${clip.width}x${clip.height} at (${clip.x},${clip.y})`);
 
+  // --still: just the final state (cursor at maxIdx) → PNG, then bail. Fast
+  // composition check without the frame sweep + encode.
+  if (STILL) {
+    await page.evaluate((v) => window.__setCursor(v), bounds.maxIdx);
+    await page.waitForTimeout(300);
+    const stillPath = path.join(OUT_DIR, `map-${LANG}.png`);
+    await page.screenshot({ path: stillPath, clip });
+    await browser.close();
+    await rm(FRAMES_DIR, { recursive: true, force: true });
+    console.log(`\n✓ ${stillPath} (still)`);
+    process.exit(0);
+  }
+
   // Frame-step. We sweep from minIdx to maxIdx evenly across TOTAL_FRAMES.
   // A small post-set delay lets the map repaint before we screenshot.
   const t0 = Date.now();
@@ -391,8 +438,8 @@ const run = (cmd, argv) =>
   });
 
 const FRAME_GLOB = path.join(FRAMES_DIR, "frame_%05d.png");
-const MP4_PATH = path.join(OUT_DIR, "map.mp4");
-const GIF_PATH = path.join(OUT_DIR, "map.gif");
+const MP4_PATH = path.join(OUT_DIR, `map-${LANG}.mp4`);
+const GIF_PATH = path.join(OUT_DIR, `map-${LANG}.gif`);
 const PALETTE_PATH = path.join(OUT_DIR, "_palette.png");
 
 console.log(`[mp4] encoding ${MP4_PATH}…`);
@@ -437,7 +484,7 @@ await run("ffmpeg", [
 // Also emit the final frame as a standalone static image — the climax of the
 // animation (full data, peak count), offered as a download alongside the clip.
 // Copied straight from the captured PNG so it stays lossless (not the h264 mp4).
-const PNG_PATH = path.join(OUT_DIR, "map.png");
+const PNG_PATH = path.join(OUT_DIR, `map-${LANG}.png`);
 const lastFramePath = path.join(
   FRAMES_DIR,
   `frame_${String(TOTAL_FRAMES - 1).padStart(5, "0")}.png`,
