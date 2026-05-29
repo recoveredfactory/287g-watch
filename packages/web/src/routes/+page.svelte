@@ -570,7 +570,7 @@
       <div class="bg-white">
         <div class="mx-auto max-w-6xl">
           <MapTimelineScrubber bind:this={scrubberRef} {minIdx} {maxIdx} labelMaxIdx={todayIdx} bind:cursorIdx bind:playing={timelinePlaying} {countAtCursor} />
-          <div class="px-4 pb-4 text-xs leading-relaxed text-slate-500 sm:px-6">
+          <div class="px-4 pb-4 text-[11px] italic leading-snug text-slate-500 sm:px-6 sm:text-xs">
             {#if statewideCount > 0}
               <p>{m.home_map_statewide_note({ count: statewideCount })}</p>
             {/if}
