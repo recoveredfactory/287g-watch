@@ -1,9 +1,17 @@
 <script lang="ts">
   import { localizeHref } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
+  import { env } from "$env/dynamic/public";
   import type { PageData } from "./$types";
 
   export let data: PageData;
+
+  // Downloadable assets come from the public archive bucket's `-latest` copies
+  // when configured (PUBLIC_MAP_ASSETS_URL, set by SST), else the bundled
+  // /video/ fallback for local dev. See scripts/publish-map-assets.mjs (#118).
+  const assetBase = env.PUBLIC_MAP_ASSETS_URL;
+  const asset = (ext: string) =>
+    assetBase ? `${assetBase}/map-latest.${ext}` : `/video/map.${ext}`;
 
   $: title = m.usemap_meta_title();
   $: description = m.usemap_meta_description();
@@ -45,7 +53,7 @@
   <figure class="mt-8">
     <video
       class="w-full rounded-lg border border-slate-200 shadow-sm"
-      src="/video/map.mp4"
+      src={asset("mp4")}
       autoplay
       loop
       muted
@@ -64,21 +72,21 @@
     <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">{m.usemap_download_heading()}</h2>
     <div class="mt-4 flex flex-wrap gap-3">
       <a
-        href="/video/map.mp4"
+        href={asset("mp4")}
         download
         class="inline-flex items-center gap-2 rounded bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
       >
         {m.usemap_download_mp4()}
       </a>
       <a
-        href="/video/map.gif"
+        href={asset("gif")}
         download
         class="inline-flex items-center gap-2 rounded border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-900 hover:border-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
       >
         {m.usemap_download_gif()}
       </a>
       <a
-        href="/video/map.png"
+        href={asset("png")}
         download
         class="inline-flex items-center gap-2 rounded border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-900 hover:border-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
       >
