@@ -597,8 +597,9 @@
       <div class="mt-5 grid items-stretch gap-4 sm:grid-cols-3">
         {#each ALL_MODELS as model}
           {@const desc = modelDesc(model)}
-          <div
-            class="flex flex-col overflow-hidden rounded border shadow-sm"
+          <a
+            href={localizeHref(`/model/${MODEL_SLUG[model]}`)}
+            class="group flex flex-col overflow-hidden rounded border no-underline shadow-sm transition hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
             style="border-color: {MODEL_COLORS[model]};"
           >
             <div class="px-4 py-3" style="background: {MODEL_COLORS[model]};">
@@ -610,11 +611,10 @@
             <div class="flex flex-1 flex-col gap-3 px-4 py-4" style="background: {MODEL_COLORS[model]}28;">
               <p class="text-sm leading-relaxed text-slate-700">{@html desc.short}</p>
               <div class="flex items-end justify-between gap-2">
-                <a
-                  href={localizeHref(`/model/${MODEL_SLUG[model]}`)}
-                  class="text-sm font-semibold no-underline hover:underline"
+                <span
+                  class="text-sm font-semibold group-hover:underline"
                   style="color: {MODEL_DARK_COLORS[model] ?? '#334155'};"
-                >Learn more →</a>
+                >Learn more →</span>
                 {#if data.modelCounts[model]}
                   <p
                     class="text-right text-xs italic text-slate-500"
@@ -623,7 +623,7 @@
                 {/if}
               </div>
             </div>
-          </div>
+          </a>
         {/each}
       </div>
     </div>
