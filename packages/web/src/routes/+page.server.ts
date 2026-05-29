@@ -37,6 +37,8 @@ export type Agency = {
   models: string[];
   primary_model: string;
   signed_date?: string;
+  first_seen_date?: string | null;
+  terminated_date?: string | null;
   population?: number;
   lat?: number;
   lng?: number;
