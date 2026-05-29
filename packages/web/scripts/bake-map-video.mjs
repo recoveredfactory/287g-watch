@@ -41,7 +41,17 @@ const argValue = (flag) => {
   return i >= 0 ? args[i + 1] : null;
 };
 
-const URL = argValue("--url") ?? "https://287g.recoveredfactory.net/en";
+// Language of the cut. Controls the baked-in title/label/watermark text and the
+// output filename suffix (map-en.*, map-es.*) — the video text is injected by
+// this script, not read from the localized page, so each language is a separate
+// bake. Point --url at the matching locale (…/en or …/es).
+const LANG = argValue("--lang") ?? "en";
+const STRINGS = {
+  en: { title: "Active 287(g) agreements", countLabel: "active 287(g) agreements", dataAsOf: "Data as of" },
+  es: { title: "Acuerdos 287(g) activos", countLabel: "acuerdos 287(g) activos", dataAsOf: "Datos al" },
+}[LANG] ?? { title: "Active 287(g) agreements", countLabel: "active 287(g) agreements", dataAsOf: "Data as of" };
+
+const URL = argValue("--url") ?? `https://287g.recoveredfactory.net/${LANG}`;
 const FPS = Number(argValue("--fps") ?? 30);
 const DURATION = Number(argValue("--duration") ?? 6);
 // Defaults give a roughly square output (good for social): 1080 viewport
@@ -128,7 +138,7 @@ if (!SKIP_FRAMES) {
   // Strip chrome, scrubber, supporting banners; swap label; inject title bar
   // with legend; widen count card so the longer label fits.
   // Runs after the map mounts so .maplibregl-canvas and the scrubber DOM exist.
-  await page.evaluate(({ mapHeight, asOf }) => {
+  await page.evaluate(({ mapHeight, asOf, strings }) => {
     (window).__BAKE_MAP_HEIGHT__ = mapHeight;
     const kill = (sel) =>
       document.querySelectorAll(sel).forEach((el) => el.remove());
@@ -218,28 +228,39 @@ if (!SKIP_FRAMES) {
     // Swap count overlay label so the running counter is self-explanatory,
     // and widen / wrap the card so "active 287(g) agreements" doesn't
     // overflow on top of "Pop. covered". Bump type sizes for video legibility.
+    // More breathing room below the card (it floats at the map's bottom edge).
+    mapSection.querySelectorAll(".count-overlay").forEach((el) => {
+      el.style.bottom = "2.6rem";
+    });
     mapSection.querySelectorAll(".count-card").forEach((el) => {
-      el.style.width = "26rem";
-      el.style.padding = "1.05rem 1.4rem 1.1rem";
-      el.style.borderRadius = "0.8rem";
+      el.style.width = "32rem";
+      el.style.padding = "1.4rem 1.8rem 1.5rem";
+      el.style.borderRadius = "0.9rem";
+      // Stack the month ABOVE the counter.
+      el.style.display = "flex";
+      el.style.flexDirection = "column";
+      const date = el.querySelector(".count-date");
+      if (date) el.insertBefore(date, el.firstChild);
     });
     mapSection.querySelectorAll(".count-number").forEach((el) => {
-      el.style.fontSize = "3.2rem";
+      el.style.fontSize = "4.2rem";
     });
     mapSection.querySelectorAll(".count-label").forEach((el) => {
       const txt = (el.textContent ?? "").trim();
       if (txt === "agencies") {
-        el.textContent = "active 287(g) agreements";
+        el.textContent = strings.countLabel;
       }
       el.style.whiteSpace = "normal";
       el.style.lineHeight = "1.15";
       el.style.minHeight = "2em"; // keep both stats vertically aligned
-      el.style.fontSize = "1.05rem";
+      el.style.fontSize = "1.35rem";
       el.style.marginTop = "0.5rem";
     });
+    // Month, now above the counter.
     mapSection.querySelectorAll(".count-date").forEach((el) => {
-      el.style.fontSize = "1.2rem";
-      el.style.marginTop = "0.65rem";
+      el.style.fontSize = "1.7rem";
+      el.style.fontWeight = "700";
+      el.style.margin = "0 0 0.55rem";
     });
 
     // Build the title bar: 287(g) Watch eyebrow + headline on the left,
@@ -261,9 +282,10 @@ if (!SKIP_FRAMES) {
     ].join(";");
     const titleCol = document.createElement("div");
     titleCol.style.cssText = "display:flex;flex-direction:column;gap:3px;";
+    // No eyebrow — the "287(g) Watch" brand moves to the lower-right (above the
+    // watermark). Headline ~25% bigger.
     titleCol.innerHTML = `
-      <div style="font-size:20px;font-weight:600;letter-spacing:0.22em;text-transform:uppercase;color:#BE6079;">287(g) Watch</div>
-      <div style="font-family:'Bitter',Georgia,serif;font-size:52px;font-weight:700;line-height:1.08;color:#ffffff;">Active 287(g) agreements</div>
+      <div style="font-family:'Bitter',Georgia,serif;font-size:65px;font-weight:700;line-height:1.06;color:#ffffff;">${strings.title}</div>
     `;
     bar.appendChild(titleCol);
     if (legendBlock) {
@@ -275,7 +297,7 @@ if (!SKIP_FRAMES) {
     // otherwise win over an inline style on the wrapper).
     const styleTag = document.createElement("style");
     styleTag.textContent = `
-      [data-bake-legend], [data-bake-legend] span { font-size: 20px !important; }
+      [data-bake-legend], [data-bake-legend] span { font-size: 26px !important; }
     `;
     document.head.appendChild(styleTag);
 
@@ -310,13 +332,14 @@ if (!SKIP_FRAMES) {
       "text-shadow: 0 1px 3px rgba(0,0,0,0.9)",
     ].join(";");
     wm.innerHTML = `
+      <div style="font-size:40px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#BE6079;text-shadow:0 2px 7px rgba(0,0,0,0.95),0 0 2px rgba(0,0,0,0.8);margin-bottom:6px;line-height:1;">287(g) Watch</div>
       <div style="font-size:20px;font-weight:600;color:#cbd5e1;letter-spacing:0.01em;">287g.recoveredfactory.net</div>
-      <div style="font-size:16px;font-weight:400;color:#94a3b8;letter-spacing:0.02em;">Data as of ${asOf} &middot; CC BY 4.0</div>
+      <div style="font-size:16px;font-weight:400;color:#94a3b8;letter-spacing:0.02em;">${strings.dataAsOf} ${asOf} &middot; CC BY 4.0</div>
     `;
     mapDiv.appendChild(wm);
 
     document.body.style.background = "#ffffff";
-  }, { mapHeight: MAP_HEIGHT, asOf: AS_OF });
+  }, { mapHeight: MAP_HEIGHT, asOf: AS_OF, strings: STRINGS });
 
   // Wait for MapLibre to reflow into the new container height. ResizeObserver
   // fires, the canvas resizes, then we need a paint before measuring.
@@ -391,8 +414,8 @@ const run = (cmd, argv) =>
   });
 
 const FRAME_GLOB = path.join(FRAMES_DIR, "frame_%05d.png");
-const MP4_PATH = path.join(OUT_DIR, "map.mp4");
-const GIF_PATH = path.join(OUT_DIR, "map.gif");
+const MP4_PATH = path.join(OUT_DIR, `map-${LANG}.mp4`);
+const GIF_PATH = path.join(OUT_DIR, `map-${LANG}.gif`);
 const PALETTE_PATH = path.join(OUT_DIR, "_palette.png");
 
 console.log(`[mp4] encoding ${MP4_PATH}…`);
@@ -437,7 +460,7 @@ await run("ffmpeg", [
 // Also emit the final frame as a standalone static image — the climax of the
 // animation (full data, peak count), offered as a download alongside the clip.
 // Copied straight from the captured PNG so it stays lossless (not the h264 mp4).
-const PNG_PATH = path.join(OUT_DIR, "map.png");
+const PNG_PATH = path.join(OUT_DIR, `map-${LANG}.png`);
 const lastFramePath = path.join(
   FRAMES_DIR,
   `frame_${String(TOTAL_FRAMES - 1).padStart(5, "0")}.png`,

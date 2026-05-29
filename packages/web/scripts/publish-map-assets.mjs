@@ -49,10 +49,11 @@ function releaseDate() {
   throw new Error(`No snapshot_date in ${INDEX_PATH} — run the pipeline first.`);
 }
 
-const ASSETS = [
-  { file: "map.mp4", ext: "mp4", type: "video/mp4" },
-  { file: "map.gif", ext: "gif", type: "image/gif" },
-  { file: "map.png", ext: "png", type: "image/png" },
+const LANGS = ["en", "es"];
+const FORMATS = [
+  { ext: "mp4", type: "video/mp4" },
+  { ext: "gif", type: "image/gif" },
+  { ext: "png", type: "image/png" },
 ];
 
 const bucket = await bucketName();
@@ -67,18 +68,20 @@ const put = (localPath, key, type, cacheControl) =>
     "--only-show-errors",
   ], { stdio: ["ignore", "inherit", "inherit"] });
 
-for (const { file, ext, type } of ASSETS) {
-  const path = resolve(VIDEO_DIR, file);
-  if (!existsSync(path)) {
-    throw new Error(`Missing ${path} — run \`pnpm bake:map-video\` first.`);
-  }
-  const hash = createHash("sha256").update(readFileSync(path)).digest("hex").slice(0, 8);
-  const latestKey = `map-latest.${ext}`;
-  const archiveKey = `map-${date}-${hash}.${ext}`;
+for (const lang of LANGS) {
+  for (const { ext, type } of FORMATS) {
+    const path = resolve(VIDEO_DIR, `map-${lang}.${ext}`);
+    if (!existsSync(path)) {
+      throw new Error(`Missing ${path} — run \`pnpm bake:map-video --lang=${lang} --url=…/${lang}\` first.`);
+    }
+    const hash = createHash("sha256").update(readFileSync(path)).digest("hex").slice(0, 8);
+    const latestKey = `map-latest-${lang}.${ext}`;
+    const archiveKey = `map-${date}-${hash}-${lang}.${ext}`;
 
-  put(path, latestKey, type, "public, max-age=300");
-  put(path, archiveKey, type, "public, max-age=31536000, immutable");
-  console.log(`  ${file} → ${latestKey} + ${archiveKey}`);
+    put(path, latestKey, type, "public, max-age=300");
+    put(path, archiveKey, type, "public, max-age=31536000, immutable");
+    console.log(`  map-${lang}.${ext} → ${latestKey} + ${archiveKey}`);
+  }
 }
 
-console.log(`\nDone. Latest: https://${bucket}.s3.amazonaws.com/map-latest.mp4`);
+console.log(`\nDone. Latest (en): https://${bucket}.s3.amazonaws.com/map-latest-en.mp4`);
