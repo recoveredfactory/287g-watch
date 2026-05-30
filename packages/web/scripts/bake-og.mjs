@@ -405,6 +405,7 @@ async function bakePages() {
     { slug: "glossary",    title: "287(g) terms, explained." },
     { slug: "about",       title: "Why we built 287(g) Watch." },
     { slug: "methodology", title: "How we built this dataset." },
+    { slug: "use-the-map", title: "Free videos and images about the growth of 287(g)." },
   ];
   for (const p of pages) {
     await bakeCard(path.join(OG_DIR, `${p.slug}.png`), p);
