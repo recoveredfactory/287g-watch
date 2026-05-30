@@ -38,8 +38,12 @@ import path from "node:path";
 const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const STATIC_DIR = path.resolve(__dirname, "..", "static");
-const OG_DIR = path.join(STATIC_DIR, "og");
-const SNAP_PATH = path.join(STATIC_DIR, "og-bg-map.png");
+// OG cards + the shared map snapshot go to .assets/ (NOT static/) — ~487MB of
+// per-agency cards must not ride the site deploy. publish:og uploads them to
+// the bucket. STATIC_DIR is still used to READ the agency index below. See #118.
+const ASSETS_DIR = path.resolve(__dirname, "..", ".assets");
+const OG_DIR = path.join(ASSETS_DIR, "og");
+const SNAP_PATH = path.join(ASSETS_DIR, "og-bg-map.png");
 const AGENCY_INDEX_PATH = path.join(
   STATIC_DIR,
   "data",

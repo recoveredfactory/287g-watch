@@ -2,6 +2,7 @@
   import type { ModelPageData } from "./+page.server";
   import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_DARK_COLORS, MODEL_SLUG } from "$lib/colors";
   import { localizeHref } from "$lib/paraglide/runtime";
+  import { ogImage } from "$lib/ogImage";
   import Gloss from "$lib/components/Gloss.svelte";
   import { termSlug, TERMS_MAP } from "$lib/glossary/terms";
   import {
@@ -48,11 +49,11 @@
   <meta property="og:title" content={title} />
   <meta property="og:description" content={definition} />
   <meta property="og:url" content={canonicalUrl} />
-  <meta property="og:image" content="{siteUrl}/og/model/{slug}.png" />
+  <meta property="og:image" content={ogImage(`model/${slug}.png`)} />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta property="twitter:card" content="summary_large_image" />
-  <meta property="twitter:image" content="{siteUrl}/og/model/{slug}.png" />
+  <meta property="twitter:image" content={ogImage(`model/${slug}.png`)} />
 </svelte:head>
 
 <main id="main-content" class="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">

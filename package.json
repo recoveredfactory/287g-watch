@@ -12,7 +12,9 @@
     "remove:staging": "sst remove --stage staging",
     "pipeline": "pnpm -F pipeline ingest",
     "publish:map-assets:staging": "sst shell --stage staging node packages/web/scripts/publish-map-assets.mjs",
-    "publish:map-assets:prod": "sst shell --stage prod node packages/web/scripts/publish-map-assets.mjs"
+    "publish:map-assets:prod": "sst shell --stage prod node packages/web/scripts/publish-map-assets.mjs",
+    "publish:og:staging": "sst shell --stage staging node packages/web/scripts/publish-og.mjs",
+    "publish:og:prod": "sst shell --stage prod node packages/web/scripts/publish-og.mjs"
   },
   "devDependencies": {
     "sst": "^3.17.25"

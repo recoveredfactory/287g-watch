@@ -27,8 +27,9 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const STATIC_DIR = path.resolve(__dirname, "..", "static");
-const OUT_DIR = path.join(STATIC_DIR, "video");
+// Output to .assets/ (NOT static/) — these are big and belong in the asset
+// bucket, not the site deploy. publish:map-assets uploads them. See #118.
+const OUT_DIR = path.resolve(__dirname, "..", ".assets", "video");
 
 // ---------- args ----------
 
