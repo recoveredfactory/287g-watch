@@ -4,8 +4,8 @@
   import { getLocale } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
 
-  // Range is fractional months relative to Jan 2025 (idx 0). minIdx is usually
-  // 0; maxIdx includes a small headroom past today so the last batch of
+  // Range is fractional months relative to Jan 2025 (idx 0). minIdx is the
+  // animation start (May 2025, idx 4); maxIdx includes a small headroom past today so the last batch of
   // signings can fully fade in. labelMaxIdx is the value used to format the
   // displayed month — clamped to today so the label never reads "Jun 2026"
   // for headroom that doesn't correspond to real data.

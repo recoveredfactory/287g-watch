@@ -99,18 +99,21 @@
 
   $: selectedStates, fitToSelection();
 
-  // Fractional month index from Jan 2025 (idx 0). Pre-2025 signings (and any
-  // missing dates) get a deeply negative value so they're always past the
-  // fade-in window — i.e. shown unconditionally as the baseline.
+  // Fractional month index from Jan 2025 (idx 0). The animation begins May 2025
+  // (TIMELINE_START_IDX) — the first month with a complete dataset — so any
+  // signing on or before then (and any missing date) gets a deeply negative
+  // value, always past the fade-in window — i.e. shown unconditionally as the
+  // baseline. Must match TIMELINE_START_IDX in routes/+page.svelte.
   const BASELINE_IDX = -10000;
   const TIMELINE_EPOCH_YEAR = 2025;
+  const TIMELINE_START_IDX = 4; // May 2025, relative to the Jan 2025 epoch
   const signedDateIdx = (d?: string | null): number => {
     if (!d || d.length < 10) return BASELINE_IDX;
     const y = Number(d.slice(0, 4));
     const m = Number(d.slice(5, 7));
     const day = Number(d.slice(8, 10));
-    if (y < TIMELINE_EPOCH_YEAR) return BASELINE_IDX;
-    return (y - TIMELINE_EPOCH_YEAR) * 12 + (m - 1) + (day - 1) / 31;
+    const idx = (y - TIMELINE_EPOCH_YEAR) * 12 + (m - 1) + (day - 1) / 31;
+    return idx < TIMELINE_START_IDX ? BASELINE_IDX : idx;
   };
 
   // Termination index in the same fractional-month space. Active agencies (no

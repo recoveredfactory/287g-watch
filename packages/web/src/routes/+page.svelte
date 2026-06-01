@@ -29,18 +29,21 @@
   const popFmtOverlay = new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 0 });
 
   // ── Timeline cursor (experimental, #76) ────────────────────────────────────
-  // Continuous fractional-month index relative to Jan 2025. The map fades and
-  // pops each dot in as the cursor passes its signing date; pre-2025 signings
-  // are pinned as a baseline. See caveat in MapTimelineScrubber.svelte.
+  // Continuous fractional-month index relative to Jan 2025 (idx 0). The map
+  // fades and pops each dot in as the cursor passes its signing date. The
+  // animation begins May 2025 (TIMELINE_START_IDX) — the first month we have a
+  // complete dataset — so every signing on or before May 2025 is pinned as the
+  // baseline (always shown at frame 0). See caveat in MapTimelineScrubber.svelte.
   const TIMELINE_EPOCH_YEAR = 2025;
+  const TIMELINE_START_IDX = 4; // May 2025, relative to the Jan 2025 epoch
   const BASELINE_IDX = -10000;
   const signedIdx = (d: string | null | undefined): number => {
     if (!d || d.length < 10) return BASELINE_IDX;
     const y = Number(d.slice(0, 4));
     const m = Number(d.slice(5, 7));
     const day = Number(d.slice(8, 10));
-    if (y < TIMELINE_EPOCH_YEAR) return BASELINE_IDX;
-    return (y - TIMELINE_EPOCH_YEAR) * 12 + (m - 1) + (day - 1) / 31;
+    const idx = (y - TIMELINE_EPOCH_YEAR) * 12 + (m - 1) + (day - 1) / 31;
+    return idx < TIMELINE_START_IDX ? BASELINE_IDX : idx;
   };
   $: signedIndices = data.agencies.map((a) => signedIdx(a.signed_date));
   $: agencyPops = data.agencies.map((a) => a.population ?? 0);
@@ -114,7 +117,7 @@
     (today.getUTCFullYear() - TIMELINE_EPOCH_YEAR) * 12 +
     today.getUTCMonth() +
     (today.getUTCDate() - 1) / 31;
-  const minIdx = 0;
+  const minIdx = TIMELINE_START_IDX;
   $: maxIdx = Math.max(
     todayIdx,
     ...signedIndices.filter((i) => i > BASELINE_IDX),
@@ -152,7 +155,7 @@
   $: displayedPop.set(popAtCursor, bakeInstant ? { duration: 0 } : undefined);
 
   // Card is a tap target: clicking it restarts the timeline animation from
-  // Jan 2025 so readers can replay the sweep without scrolling to the
+  // May 2025 so readers can replay the sweep without scrolling to the
   // scrubber.
   let scrubberRef: { restart: () => void } | null = null;
   const restartTimeline = () => scrubberRef?.restart();
@@ -160,7 +163,7 @@
   // Month label for the overlay's date ticker. Clamped to today so the label
   // doesn't read "Jun 2026" during the small headroom past maxIdx.
   const overlayMonthLabel = (idx: number): string => {
-    const clamped = Math.min(Math.max(0, idx), todayIdx);
+    const clamped = Math.min(Math.max(TIMELINE_START_IDX, idx), todayIdx);
     const month = Math.floor(clamped);
     const y = TIMELINE_EPOCH_YEAR + Math.floor(month / 12);
     const mm = (month % 12) + 1;
