@@ -21,8 +21,8 @@
   // takes ~PLAY_DURATION seconds regardless of how many months the range
   // spans, so the per-month step slows as the span shrinks (e.g. a May-2025
   // start covers fewer months than a Jan-2025 one but plays for the same time).
-  // ~10s matches the prior feel for the full span.
-  const PLAY_DURATION = 10;
+  // 8s to match the baked map video's runtime.
+  const PLAY_DURATION = 8;
   $: playSpeed = maxIdx > minIdx ? (maxIdx - minIdx) / PLAY_DURATION : 1;
 
   // Exported so the parent can drive a map overlay (visible while playing).
