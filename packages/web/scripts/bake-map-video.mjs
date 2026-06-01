@@ -59,7 +59,7 @@ const FRAMES_DIR = path.join(OUT_DIR, `frames-${LANG}`);
 
 const URL = argValue("--url") ?? `https://287g.recoveredfactory.net/${LANG}`;
 const FPS = Number(argValue("--fps") ?? 30);
-const DURATION = Number(argValue("--duration") ?? 6);
+const DURATION = Number(argValue("--duration") ?? 8);
 // Defaults give a roughly square output (good for social): 1080 viewport
 // width × map-height 1010 + title bar ~70 = ~1080 tall. Override either to
 // push toward portrait (e.g. --map-height=1350) or landscape (--width=1440).
