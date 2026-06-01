@@ -75,25 +75,26 @@ appelson/Tracking_287g (GitHub)
 
 ## Map assets & releasing
 
-The downloadable map video/gif/png (the baked homepage timeline) do **not** ride in the site deploy. They live in a per-stage public S3 bucket (`MapArchive`), served via direct S3 URLs — no CloudFront, no custom domain (keeps clear of the account's CloudFront cache-policy quota, and the big files out of the deploy). Each cut is baked **per language** (the title/labels/watermark are injected by the bake, not read from the page), and the licensing page (`/use-the-map`) offers both language downloads on every page version. It reads `PUBLIC_MAP_ASSETS_URL` (set by SST per stage) and links the bucket's `-latest-<lang>` copies, falling back to bundled `/video/` in local dev.
+The baked assets — the map video/gif/png **and** the OG/social cards (~1,600 per-agency PNGs, ~487MB) — do **not** ride in the site deploy. They're baked to `packages/web/.assets/` (never `static/`, so `sst deploy` doesn't bundle them) and live in a per-stage public S3 bucket (`MapArchive`), served via direct S3 URLs — no CloudFront, no custom domain (keeps clear of the account's CloudFront cache-policy quota; and keeps the deploy small/fast as the agency count grows).
 
-Naming, per ICE release × language (`en`, `es`):
-
-- `map-latest-<lang>.{mp4,gif,png}` — overwritten each release; short cache; linked publicly.
-- `map-<release-date>-<hash8>-<lang>.{mp4,gif,png}` — immutable archive copy; long cache; **unlinked** (unguessable name).
+- **Map cuts** are baked **per language** (title/labels/watermark injected by the bake, not read from the page). The licensing page (`/use-the-map`) offers both language downloads on every page version, reading `PUBLIC_MAP_ASSETS_URL` (set by SST per stage) and linking the bucket's `-latest-<lang>` copies.
+  - `map-latest-<lang>.{mp4,gif,png}` — overwritten each release; short cache; linked publicly.
+  - `map-<release-date>-<hash8>-<lang>.{mp4,gif,png}` — immutable archive copy; long cache; **unlinked** (unguessable name).
+- **OG cards** mirror to the bucket under `og/`; every page's `og:image`/`twitter:image` points at `${PUBLIC_MAP_ASSETS_URL}/og/…` via `$lib/ogImage.ts` (falls back to the site origin in local dev).
 
 **Release flow, per stage** (`staging` shown; repeat with `:prod`):
 
 ```
 pnpm pipeline                                       # regenerate agency_index.json + terminated_agencies.json (GITHUB_TOKEN)
-pnpm diff:staging                                   # sanity-check infra changes
-pnpm deploy:staging                                 # site + MapArchive bucket
+pnpm diff:staging && pnpm deploy:staging            # site + MapArchive bucket (sets PUBLIC_MAP_ASSETS_URL)
 pnpm -F web bake:map-video --lang=en --url=…/en     # bake EN cut (add --still for a fast PNG-only check)
-pnpm -F web bake:map-video --lang=es --url=…/es     # bake ES cut
-pnpm publish:map-assets:staging                     # upload both langs: -latest + dated-hash archive
+pnpm -F web bake:map-video --lang=es --url=…/es     # bake ES cut (en/es safe to run in parallel)
+pnpm -F web bake:og --url=…/en                      # bake all OG cards (incl. per-agency)
+pnpm publish:map-assets:staging                     # video cuts → bucket
+pnpm publish:og:staging                             # OG cards → bucket/og
 ```
 
-A warm xlsx cache makes the pipeline token-free and ~15s (`pnpm -F pipeline cache:warm`). The licensing-page video 404s in the window between `deploy` and `publish` (bucket is empty until published) — run them back-to-back.
+A warm xlsx cache makes the pipeline token-free and ~15s (`pnpm -F pipeline cache:warm`). Assets must be **published after each deploy** — they're not in the deploy. In the window between `deploy` and `publish`, the licensing video and OG cards 404 (bucket empty until published) — run them back-to-back.
 
 ---
 

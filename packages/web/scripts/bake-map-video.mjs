@@ -27,9 +27,9 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const STATIC_DIR = path.resolve(__dirname, "..", "static");
-const OUT_DIR = path.join(STATIC_DIR, "video");
-const FRAMES_DIR = path.join(OUT_DIR, "frames");
+// Output to .assets/ (NOT static/) — these are big and belong in the asset
+// bucket, not the site deploy. publish:map-assets uploads them. See #118.
+const OUT_DIR = path.resolve(__dirname, "..", ".assets", "video");
 
 // ---------- args ----------
 
@@ -51,6 +51,11 @@ const STRINGS_BY_LANG = {
   es: { title: "Acuerdos 287(g) activos", countLabel: "acuerdos 287(g) activos", popLabel: "Pob. cubierta", dataAsOf: "Datos al", cardWidth: "37rem" },
 };
 const STRINGS = STRINGS_BY_LANG[LANG] ?? STRINGS_BY_LANG.en;
+
+// Per-language temp dirs/files so `en` and `es` bakes can run simultaneously
+// without clobbering each other's frames or palette. Output files are already
+// map-<lang>.{mp4,gif,png}.
+const FRAMES_DIR = path.join(OUT_DIR, `frames-${LANG}`);
 
 const URL = argValue("--url") ?? `https://287g.recoveredfactory.net/${LANG}`;
 const FPS = Number(argValue("--fps") ?? 30);
@@ -117,6 +122,11 @@ if (!SKIP_FRAMES) {
       "--use-gl=angle",
       "--enable-webgl",
       "--ignore-gpu-blocklist",
+      // Headless Chromium (esp. WSL/containers) gives /dev/shm only ~64MB; the
+      // WebGL map + per-frame screenshots overrun it and the renderer dies with
+      // "Target crashed". Route shared memory to /tmp instead.
+      "--disable-dev-shm-usage",
+      "--no-sandbox",
     ],
   });
   const context = await browser.newContext({
@@ -440,7 +450,7 @@ const run = (cmd, argv) =>
 const FRAME_GLOB = path.join(FRAMES_DIR, "frame_%05d.png");
 const MP4_PATH = path.join(OUT_DIR, `map-${LANG}.mp4`);
 const GIF_PATH = path.join(OUT_DIR, `map-${LANG}.gif`);
-const PALETTE_PATH = path.join(OUT_DIR, "_palette.png");
+const PALETTE_PATH = path.join(OUT_DIR, `_palette-${LANG}.png`);
 
 console.log(`[mp4] encoding ${MP4_PATH}…`);
 await run("ffmpeg", [

@@ -4,6 +4,7 @@
   import { STATE_NAMES } from "$lib/states";
   import { localizeHref, getLocale } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
+  import { ogImage } from "$lib/ogImage";
   import AgencySearch from "$lib/components/AgencySearch.svelte";
   import AgencyMap from "$lib/components/AgencyMap.svelte";
   import Gloss from "$lib/components/Gloss.svelte";
@@ -101,13 +102,13 @@
   <meta property="og:title" content={title} />
   <meta property="og:description" content={description} />
   <meta property="og:url" content={canonicalUrl} />
-  <meta property="og:image" content="{siteUrl}/og/agency/{agency.slug}.png" />
+  <meta property="og:image" content={ogImage(`agency/${agency.slug}.png`)} />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta property="twitter:card" content="summary_large_image" />
   <meta property="twitter:title" content={title} />
   <meta property="twitter:description" content={description} />
-  <meta property="twitter:image" content="{siteUrl}/og/agency/{agency.slug}.png" />
+  <meta property="twitter:image" content={ogImage(`agency/${agency.slug}.png`)} />
   {@html `<script type="application/ld+json">${jsonLd}</script>`}
 </svelte:head>
 
