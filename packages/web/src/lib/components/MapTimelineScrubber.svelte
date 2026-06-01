@@ -17,9 +17,13 @@
   // Count of agreements visible at the current cursor (baseline + matched).
   export let countAtCursor: number;
 
-  // 1.7 idx/sec → ~10s to play the full 17-month span. Tuned to give the busy
-  // months breathing room without dragging.
-  const PLAY_SPEED = 1.7;
+  // Constant playback DURATION rather than constant speed: the sweep always
+  // takes ~PLAY_DURATION seconds regardless of how many months the range
+  // spans, so the per-month step slows as the span shrinks (e.g. a May-2025
+  // start covers fewer months than a Jan-2025 one but plays for the same time).
+  // ~10s matches the prior feel for the full span.
+  const PLAY_DURATION = 10;
+  $: playSpeed = maxIdx > minIdx ? (maxIdx - minIdx) / PLAY_DURATION : 1;
 
   // Exported so the parent can drive a map overlay (visible while playing).
   export let playing = false;
@@ -37,7 +41,7 @@
   const tick = (now: number) => {
     const dt = lastTimestamp ? (now - lastTimestamp) / 1000 : 0;
     lastTimestamp = now;
-    const next = cursorIdx + PLAY_SPEED * dt;
+    const next = cursorIdx + playSpeed * dt;
     if (next >= maxIdx) {
       cursorIdx = maxIdx;
       stop();
