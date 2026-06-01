@@ -38,8 +38,12 @@ import path from "node:path";
 const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const STATIC_DIR = path.resolve(__dirname, "..", "static");
-const OG_DIR = path.join(STATIC_DIR, "og");
-const SNAP_PATH = path.join(STATIC_DIR, "og-bg-map.png");
+// OG cards + the shared map snapshot go to .assets/ (NOT static/) — ~487MB of
+// per-agency cards must not ride the site deploy. publish:og uploads them to
+// the bucket. STATIC_DIR is still used to READ the agency index below. See #118.
+const ASSETS_DIR = path.resolve(__dirname, "..", ".assets");
+const OG_DIR = path.join(ASSETS_DIR, "og");
+const SNAP_PATH = path.join(ASSETS_DIR, "og-bg-map.png");
 const AGENCY_INDEX_PATH = path.join(
   STATIC_DIR,
   "data",
@@ -65,9 +69,13 @@ const LIMIT = Number(argValue("--limit"));
 const SIZE = { width: 1200, height: 630 };
 const CONCURRENCY = Math.max(2, Math.min(8, Number(process.env.BAKE_OG_CONCURRENCY) || 4));
 
-await mkdir(OG_DIR, { recursive: true });
-await mkdir(path.join(OG_DIR, "model"), { recursive: true });
-await mkdir(path.join(OG_DIR, "agency"), { recursive: true });
+// Cards are baked per locale into og/<locale>/… so /es pages get Spanish
+// social cards. The page <head> picks the locale via $lib/ogImage.ts.
+const LOCALES = ["en", "es"];
+for (const locale of LOCALES) {
+  await mkdir(path.join(OG_DIR, locale, "model"), { recursive: true });
+  await mkdir(path.join(OG_DIR, locale, "agency"), { recursive: true });
+}
 
 // ---------- snapshot ----------
 
@@ -374,6 +382,43 @@ const MODEL_DEFINITIONS = {
   "Warrant Service Officer":
     "Officers serve administrative immigration warrants on people in custody.",
 };
+const MODEL_DEFINITIONS_ES = {
+  "Jail Enforcement Model":
+    "Los oficiales investigan el estatus migratorio de personas ya ingresadas en la cárcel.",
+  "Task Force Model":
+    "Los oficiales aplican la ley migratoria durante el patrullaje rutinario.",
+  "Warrant Service Officer":
+    "Los oficiales entregan órdenes migratorias administrativas a personas bajo custodia.",
+};
+
+// Per-locale card copy. Model NAMES stay in English (program-specific terms,
+// as elsewhere on the site); only the sentence/definition text is localized.
+const STR = {
+  en: {
+    home: "Every active agreement between local police and ICE.",
+    glossary: "287(g) terms, explained.",
+    about: "Why we built 287(g) Watch.",
+    methodology: "How we built this dataset.",
+    "use-the-map": "Free videos and images about the growth of 287(g).",
+    modelDef: MODEL_DEFINITIONS,
+    signed: "Signed",
+    also: "Also",
+    months: ["January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"],
+  },
+  es: {
+    home: "Cada acuerdo activo entre la policía local e ICE.",
+    glossary: "Términos de 287(g), explicados.",
+    about: "Por qué creamos 287(g) Watch.",
+    methodology: "Cómo construimos estos datos.",
+    "use-the-map": "Videos e imágenes gratuitos sobre el crecimiento de 287(g).",
+    modelDef: MODEL_DEFINITIONS_ES,
+    signed: "Firmado",
+    also: "También",
+    months: ["enero", "febrero", "marzo", "abril", "mayo", "junio",
+      "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"],
+  },
+};
 
 // US state names (subset of $lib/states.ts — duplicated here so the bake
 // script stays a plain .mjs without bringing in the SvelteKit module graph).
@@ -393,54 +438,42 @@ const STATE_NAMES = {
 
 // ---------- per-group bakes ----------
 
-async function bakeHome() {
-  await bakeCard(path.join(OG_DIR, "home.png"), {
-    title: "Every active agreement between local police and ICE.",
-  });
-  console.log(`✓ home.png`);
+async function bakeHome(locale) {
+  await bakeCard(path.join(OG_DIR, locale, "home.png"), { title: STR[locale].home });
+  console.log(`✓ ${locale}/home.png`);
 }
 
-async function bakePages() {
-  const pages = [
-    { slug: "glossary",    title: "287(g) terms, explained." },
-    { slug: "about",       title: "Why we built 287(g) Watch." },
-    { slug: "methodology", title: "How we built this dataset." },
-    { slug: "use-the-map", title: "Free videos and images about the growth of 287(g)." },
-  ];
-  for (const p of pages) {
-    await bakeCard(path.join(OG_DIR, `${p.slug}.png`), p);
-    console.log(`✓ ${p.slug}.png`);
+async function bakePages(locale) {
+  for (const slug of ["glossary", "about", "methodology", "use-the-map"]) {
+    await bakeCard(path.join(OG_DIR, locale, `${slug}.png`), { title: STR[locale][slug] });
+    console.log(`✓ ${locale}/${slug}.png`);
   }
 }
 
-async function bakeModels() {
+async function bakeModels(locale) {
   for (const [model, slug] of Object.entries(MODEL_SLUG)) {
-    await bakeCard(path.join(OG_DIR, "model", `${slug}.png`), {
+    await bakeCard(path.join(OG_DIR, locale, "model", `${slug}.png`), {
       title: `${MODEL_SHORT[model]} Model`,
-      subtitle: MODEL_DEFINITIONS[model],
+      subtitle: STR[locale].modelDef[model],
       subtitleSize: 38,
       subtitleAccent: MODEL_COLORS[model],
     });
-    console.log(`✓ model/${slug}.png`);
+    console.log(`✓ ${locale}/model/${slug}.png`);
   }
 }
 
-const MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
-const formatSignedDate = (iso) => {
+const formatSignedDate = (iso, locale) => {
   if (!iso || iso.length < 7) return null;
   const y = Number(iso.slice(0, 4));
   const m = Number(iso.slice(5, 7));
   if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) return null;
-  return `Signed ${MONTH_NAMES[m - 1]} ${y}`;
+  return `${STR[locale].signed} ${STR[locale].months[m - 1]} ${y}`;
 };
 
 // "#NA" creeps in for some agencies — treat it the same as null.
 const cleanLoc = (s) => (s && s !== "#NA" ? s : null);
 
-async function bakeAgencies() {
+async function bakeAgencies(locale) {
   const raw = JSON.parse(await readFile(AGENCY_INDEX_PATH, "utf8"));
   let agencies = SLUG_FILTER ? raw.filter((a) => a.slug === SLUG_FILTER) : raw;
   if (Number.isFinite(LIMIT) && LIMIT > 0) agencies = agencies.slice(0, LIMIT);
@@ -470,18 +503,18 @@ async function bakeAgencies() {
 
       // Meta line: "Place · Signed Feb 2025" — plus any additional models
       // beyond the primary, e.g. "· Also Task Force".
-      const dateLabel = formatSignedDate(a.signed_date);
+      const dateLabel = formatSignedDate(a.signed_date, locale);
       const extraModels = (a.models ?? [])
         .filter((m) => m !== model)
         .map((m) => MODEL_SHORT[m] ?? m);
       const metaParts = [place];
       if (dateLabel) metaParts.push(dateLabel);
       if (extraModels.length) {
-        metaParts.push(`Also ${extraModels.join(" + ")}`);
+        metaParts.push(`${STR[locale].also} ${extraModels.join(" + ")}`);
       }
       const meta = metaParts.join("  ·  ");
 
-      await bakeCard(path.join(OG_DIR, "agency", `${a.slug}.png`), {
+      await bakeCard(path.join(OG_DIR, locale, "agency", `${a.slug}.png`), {
         title: a.name,
         subtitle,
         subtitleAccent,
@@ -505,10 +538,12 @@ async function bakeAgencies() {
 
 // ---------- run ----------
 
-if (!ONLY || ONLY === "home") await bakeHome();
-if (!ONLY || ONLY === "pages") await bakePages();
-if (!ONLY || ONLY === "models") await bakeModels();
-if (!ONLY || ONLY === "agencies") await bakeAgencies();
+for (const locale of LOCALES) {
+  if (!ONLY || ONLY === "home") await bakeHome(locale);
+  if (!ONLY || ONLY === "pages") await bakePages(locale);
+  if (!ONLY || ONLY === "models") await bakeModels(locale);
+  if (!ONLY || ONLY === "agencies") await bakeAgencies(locale);
+}
 
 console.log(`\nOutput: ${OG_DIR}`);
 process.exit(0);

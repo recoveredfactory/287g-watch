@@ -21,7 +21,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const VIDEO_DIR = resolve(__dirname, "../static/video");
+const VIDEO_DIR = resolve(__dirname, "../.assets/video");
 const INDEX_PATH = resolve(__dirname, "../static/data/dist/agency_index.json");
 
 // Bucket name: from the SST link when run via `sst shell`, else an env override.

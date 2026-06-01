@@ -2,6 +2,7 @@
   import { localizeHref } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
   import Gloss from "$lib/components/Gloss.svelte";
+  import { ogImage } from "$lib/ogImage";
   $: title = m.methodology_meta_title();
   $: description = m.methodology_meta_description();
   const siteUrl = import.meta.env.PUBLIC_SITE_URL ?? "https://287g.recoveredfactory.net";
@@ -13,11 +14,11 @@
   <meta name="description" content={description} />
   <meta property="og:title" content={title} />
   <meta property="og:description" content={description} />
-  <meta property="og:image" content="{siteUrl}/og/methodology.png" />
+  <meta property="og:image" content={ogImage('methodology.png')} />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta property="twitter:card" content="summary_large_image" />
-  <meta property="twitter:image" content="{siteUrl}/og/methodology.png" />
+  <meta property="twitter:image" content={ogImage('methodology.png')} />
 </svelte:head>
 
 <main id="main-content" class="mx-auto max-w-3xl px-4 py-8 sm:py-12 sm:px-6">
