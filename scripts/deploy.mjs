@@ -58,8 +58,11 @@ if ((bakeOg || bakeVideo) && !["prod", "staging"].includes(stage))
 function baseUrl() {
   const override = valueOf("--url");
   if (override) return override.replace(/\/+$/, "");
+  // Base on process.env so CI (no .env file) still resolves WEB_DOMAIN from the
+  // workflow `env:` block; a local .env file overlays/wins, matching how
+  // sst.config.ts builds its env ({ ...process.env, ...localEnv }).
   const envPath = resolve(ROOT, ".env");
-  const env = {};
+  const env = { ...process.env };
   if (existsSync(envPath)) {
     for (const line of readFileSync(envPath, "utf8").split(/\r?\n/)) {
       const t = line.trim();

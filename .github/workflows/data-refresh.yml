@@ -1,0 +1,136 @@
+# Data refresh: re-run the ingest pipeline, and if the dataset actually changed,
+# redeploy the site and re-bake/publish the map video + OG cards. Mirrors the
+# manual release flow in ARCHITECTURE.md ("Map assets & releasing").
+#
+# Trigger: manual for now (workflow_dispatch). The daily `schedule` below is
+# wired but commented out — enable it once a few manual runs are green.
+#
+# Required repo config (Settings → Secrets and variables → Actions):
+#   Secret   AWS_ROLE_ARN        IAM role for GitHub OIDC to assume (sst deploy + s3)
+#   Variable WEB_DOMAIN          e.g. 287g.recoveredfactory.net   (prod site host)
+#   Variable WEB_STAGING_DOMAIN  e.g. staging.287g.recoveredfactory.net
+#   Variable AWS_REGION          optional; defaults to us-east-1
+# GITHUB_TOKEN is the built-in Actions token — the pipeline uses it for the
+# (public) appelson/Tracking_287g GitHub API reads.
+
+name: Data refresh
+
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: Deploy stage
+        type: choice
+        options: [staging, prod]
+        # Manual runs default to staging (de-risk the bake). The schedule/push
+        # triggers below have no inputs, so they fall through to the `|| 'prod'`
+        # defaults further down — cron still lands on prod.
+        default: staging
+      force:
+        description: Deploy + re-bake even if the data is unchanged
+        type: boolean
+        default: false
+  # Daily, shortly after the upstream snapshots land. Uncomment to enable.
+  # schedule:
+  #   - cron: "30 12 * * *" # 12:30 UTC daily
+
+# Don't let two refreshes for the same stage clobber each other mid-deploy.
+concurrency:
+  group: data-refresh-${{ inputs.stage || 'prod' }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write # OIDC: assume the AWS role
+  contents: read
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      STAGE: ${{ inputs.stage || 'prod' }}
+      FORCE: ${{ inputs.force || 'false' }}
+      WEB_DOMAIN: ${{ vars.WEB_DOMAIN }}
+      WEB_STAGING_DOMAIN: ${{ vars.WEB_STAGING_DOMAIN }}
+    steps:
+      # Actions are pinned to commit SHAs (not mutable tags) so a hijacked tag
+      # can't inject code that exfiltrates GITHUB_TOKEN or abuses the OIDC step.
+      # Bump deliberately (Dependabot or by hand); trailing comment is the tag.
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Run ingest pipeline
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm pipeline
+
+      # Hash the freshly-built JSON against what's live. If every file matches,
+      # the upstream snapshot didn't move — skip the (slow) deploy + bake.
+      - name: Change gate
+        id: gate
+        run: |
+          case "$STAGE" in
+            prod) HOST="$WEB_DOMAIN" ;;
+            staging) HOST="$WEB_STAGING_DOMAIN" ;;
+            *) echo "Unknown stage: $STAGE" >&2; exit 1 ;;
+          esac
+          changed=false
+          for f in agency_index state_meta terminated_agencies; do
+            local_hash=$(sha256sum "packages/web/static/data/dist/$f.json" | awk '{print $1}')
+            if curl -fsSL --retry 3 "https://$HOST/data/dist/$f.json" -o /tmp/remote.json; then
+              remote_hash=$(sha256sum /tmp/remote.json | awk '{print $1}')
+            else
+              remote_hash=missing
+            fi
+            echo "$f: local=$local_hash remote=$remote_hash"
+            [ "$local_hash" != "$remote_hash" ] && changed=true
+          done
+          if [ "$FORCE" = "true" ]; then
+            echo "force=true → deploying regardless of change gate"
+            changed=true
+          fi
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
+          echo "### Data refresh ($STAGE): changed=$changed" >> "$GITHUB_STEP_SUMMARY"
+
+      # Everything below only runs when the dataset moved (or --force).
+      - name: Install chromium for bakes
+        if: steps.gate.outputs.changed == 'true'
+        # playwright-chromium auto-download is disabled in pnpm-workspace.yaml
+        # (allowBuilds), so fetch the browser + system libs explicitly.
+        run: pnpm --filter web exec playwright install --with-deps chromium
+
+      - name: Ensure ffmpeg
+        if: steps.gate.outputs.changed == 'true'
+        run: ffmpeg -version >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y ffmpeg)
+
+      - name: Deploy + bake + publish assets
+        if: steps.gate.outputs.changed == 'true'
+        run: pnpm "deploy:${STAGE}:assets"
+
+      - name: Summary
+        if: always()
+        env:
+          CHANGED: ${{ steps.gate.outputs.changed }}
+        run: |
+          if [ "$CHANGED" = "true" ]; then
+            echo "Deployed $STAGE and refreshed map video + OG cards." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No change in the upstream snapshot — nothing deployed." >> "$GITHUB_STEP_SUMMARY"
+          fi
