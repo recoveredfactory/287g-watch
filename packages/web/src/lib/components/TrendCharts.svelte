@@ -1,20 +1,15 @@
 <script lang="ts">
-  // ── National trend charts (experimental, #162) ─────────────────────────────
-  // Low-key growth charts for the home page. Selectors let us compare options
-  // before committing placement:
-  //   • variation — multi-series line (default) · small multiples · stacked area
-  //   • curve     — stepped (default) · linear. Cumulative counts are a step
-  //                 function by nature, so we don't offer smoothing — it would
-  //                 fabricate values between the dates agencies actually signed.
-  //   • state     — National, or a single state in isolation
-  //
-  // Series are cumulative agency counts by *primary model* — primary_model is
+  // ── National trend chart (#162) ────────────────────────────────────────────
+  // Low-key growth chart for the home page: a stepped multi-series line of
+  // cumulative agencies by *primary model*, since May 2025. primary_model is
   // exclusive (one per agency, same field the map colours its dots by), so the
-  // three series sum to the total and the stacked area is honest. Counting every
-  // model an agency holds would double-count and break the stack.
+  // three series are non-overlapping. Cumulative counts are a step function by
+  // nature — the line only moves on the dates agencies actually signed — so the
+  // curve is stepped rather than interpolated.
   //
   // The timeline begins May 2025 (first month with a complete dataset, same
   // TIMELINE_START as the map). Pre-May-2025 signings fold into the May baseline.
+  // A state selector scopes the chart to one state in isolation.
   import { MODEL_COLORS, MODEL_ORDER, MODEL_SHORT, MODEL_MINI } from "$lib/colors";
   import { STATE_NAMES } from "$lib/states";
 
@@ -25,27 +20,17 @@
   };
   export let agencies: Agency[] = [];
 
-  // ── Selectors ───────────────────────────────────────────────────────────────
-  type Variation = "lines" | "small" | "area";
-  let variation: Variation = "lines";
-  const VARIATIONS: { id: Variation; label: string }[] = [
-    { id: "lines", label: "Multi-series" },
-    { id: "small", label: "Small multiples" },
-    { id: "area", label: "Stacked area" },
-  ];
-
-  type Curve = "step" | "linear";
-  let curve: Curve = "step";
-  const CURVES: { id: Curve; label: string }[] = [
-    { id: "step", label: "Stepped" },
-    { id: "linear", label: "Linear" },
-  ];
-
+  // ── State scope ─────────────────────────────────────────────────────────────
   let selectedState = ""; // "" = National
-  $: stateOptions = [...new Set(agencies.map((a) => a.state).filter(Boolean) as string[])].sort(
-    (a, b) => (STATE_NAMES[a] ?? a).localeCompare(STATE_NAMES[b] ?? b),
+  $: stateCounts = agencies.reduce<Record<string, number>>((acc, a) => {
+    if (a.state) acc[a.state] = (acc[a.state] ?? 0) + 1;
+    return acc;
+  }, {});
+  $: stateOptions = Object.keys(stateCounts).sort((a, b) =>
+    (STATE_NAMES[a] ?? a).localeCompare(STATE_NAMES[b] ?? b),
   );
   $: scoped = selectedState ? agencies.filter((a) => a.state === selectedState) : agencies;
+  $: scopeLabel = selectedState ? (STATE_NAMES[selectedState] ?? selectedState) : "National";
 
   // ── Time axis ───────────────────────────────────────────────────────────────
   const EPOCH_YEAR = 2025;
@@ -76,61 +61,32 @@
     const values = months.map((m) => signedMonths.filter((sm) => sm <= m).length);
     return { model, values, first: values[0] ?? 0, final: values[values.length - 1] ?? 0 };
   });
-  $: totals = months.map((_, i) => series.reduce((sum, s) => sum + s.values[i], 0));
-  $: maxTotal = Math.max(1, ...totals);
   $: maxModel = Math.max(1, ...series.flatMap((s) => s.values));
 
   // ── Geometry / scales (manual; keeps us off a charting dep) ─────────────────
-  // Taller-than-wide on purpose: the wide aspect flattened everything once the
-  // Task Force series dwarfed the others (#162 feedback). The line view gets
-  // wider side margins to hold the direct start/end labels.
+  // Taller-than-wide on purpose; wide margins hold the direct start/end labels.
   const W = 460;
   const H = 380;
-  $: pad = variation === "lines" ? { t: 14, r: 58, b: 26, l: 34 } : { t: 14, r: 14, b: 26, l: 36 };
-  $: innerW = W - pad.l - pad.r;
-  $: innerH = H - pad.t - pad.b;
-  $: xAt = (m: number) =>
-    pad.l + (endIdx === START_IDX ? innerW : ((m - START_IDX) / (endIdx - START_IDX)) * innerW);
-  $: baselineY = pad.t + innerH;
-  const yAtFor = (yMax: number) => (v: number) => pad.t + innerH - (v / yMax) * innerH;
+  const PAD = { t: 14, r: 58, b: 26, l: 34 };
+  const innerW = W - PAD.l - PAD.r;
+  const innerH = H - PAD.t - PAD.b;
+  const baselineY = PAD.t + innerH;
+  const xAt = (m: number) =>
+    PAD.l + (endIdx === START_IDX ? innerW : ((m - START_IDX) / (endIdx - START_IDX)) * innerW);
+  $: yAt = (v: number) => PAD.t + innerH - (v / maxModel) * innerH;
 
-  type Pt = [number, number];
-  // One path generator for both curve modes — reused by lines and by both edges
-  // of the stacked bands, so a curve change stays consistent everywhere.
-  const buildPath = (pts: Pt[], c: Curve): string => {
-    if (!pts.length) return "";
-    if (c === "step") {
-      let d = `M${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`;
-      for (let i = 1; i < pts.length; i++) {
-        d += ` L${pts[i][0].toFixed(1)} ${pts[i - 1][1].toFixed(1)} L${pts[i][0].toFixed(1)} ${pts[i][1].toFixed(1)}`;
-      }
-      return d;
+  // Stepped path: hold the previous value across the month, then jump.
+  const stepPath = (values: number[]): string => {
+    if (!values.length) return "";
+    let d = `M${xAt(months[0]).toFixed(1)} ${yAt(values[0]).toFixed(1)}`;
+    for (let i = 1; i < values.length; i++) {
+      d += ` L${xAt(months[i]).toFixed(1)} ${yAt(values[i - 1]).toFixed(1)} L${xAt(months[i]).toFixed(1)} ${yAt(values[i]).toFixed(1)}`;
     }
-    return "M" + pts.map((p) => `${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(" L");
+    return d;
   };
-  // Same shape, but as a continuation (swap leading M→L) so an area can run its
-  // top edge then trace the bottom edge back without lifting the pen.
-  const continuePath = (pts: Pt[], c: Curve): string => "L" + buildPath(pts, c).slice(1);
 
-  const ptsFor = (values: number[], yMax: number): Pt[] =>
-    values.map((v, i) => [xAt(months[i]), yAtFor(yMax)(v)]);
-
-  // Stacked bands: each model rides on the running total beneath it.
-  $: stacked = (() => {
-    const below = months.map(() => 0);
-    const yS = yAtFor(maxTotal);
-    return series.map((s) => {
-      const topVals = s.values.map((v, i) => below[i] + v);
-      const top: Pt[] = topVals.map((v, i) => [xAt(months[i]), yS(v)]);
-      const bottom: Pt[] = below.map((v, i) => [xAt(months[i]), yS(v)]);
-      const band = { model: s.model, top, bottom };
-      for (let i = 0; i < below.length; i++) below[i] = topVals[i];
-      return band;
-    });
-  })();
-
-  // Nudge a set of label anchor-ys apart so direct labels don't collide. Pushes
-  // downward from the topmost; preserves original order. (3 labels, so cheap.)
+  // Nudge label anchor-ys apart so direct labels don't collide. Pushes downward
+  // from the topmost; preserves original order. (3 labels, so cheap.)
   function spreadY(ys: number[], gap = 13): number[] {
     const order = ys.map((_, i) => i).sort((a, b) => ys[a] - ys[b]);
     const placed = order.map((i) => ys[i]);
@@ -141,8 +97,8 @@
     order.forEach((orig, k) => (out[orig] = placed[k]));
     return out;
   }
-  $: endLabelY = spreadY(series.map((s) => yAtFor(maxModel)(s.final)));
-  $: startLabelY = spreadY(series.map((s) => yAtFor(maxModel)(s.first)));
+  $: endLabelY = spreadY(series.map((s) => yAt(s.final)));
+  $: startLabelY = spreadY(series.map((s) => yAt(s.first)));
 
   // Sparse axis ticks.
   $: ticks = (() => {
@@ -153,15 +109,12 @@
     if (out[out.length - 1] !== months[months.length - 1]) out.push(months[months.length - 1]);
     return out;
   })();
-  const yTicks = (yMax: number) => {
-    const step = Math.max(1, Math.round(yMax / 3 / 50) * 50) || Math.ceil(yMax / 3);
+  $: gridTicks = (() => {
+    const step = Math.max(1, Math.round(maxModel / 3 / 50) * 50) || Math.ceil(maxModel / 3);
     const out: number[] = [];
-    for (let v = 0; v <= yMax; v += step) out.push(v);
-    if (out[out.length - 1] !== yMax) out.push(yMax);
+    for (let v = 0; v <= maxModel; v += step) out.push(v);
     return out;
-  };
-
-  $: scopeLabel = selectedState ? (STATE_NAMES[selectedState] ?? selectedState) : "National";
+  })();
 </script>
 
 <section class="border-b border-slate-200 bg-white px-4 py-10 sm:px-6 sm:py-12">
@@ -173,40 +126,19 @@
           Cumulative agencies by primary model, since May&nbsp;2025{selectedState ? ` — ${scopeLabel}` : ""}.
         </p>
       </div>
-      <!-- State scope -->
+      <!-- State scope; count in parens is the state’s total agreements -->
       <label class="flex shrink-0 items-center gap-2 text-sm text-slate-600">
         <span class="sr-only sm:not-sr-only">State</span>
         <select bind:value={selectedState} class="rounded border border-slate-300 bg-white px-2 py-1 text-slate-800">
-          <option value="">National</option>
+          <option value="">National ({agencies.length})</option>
           {#each stateOptions as st}
-            <option value={st}>{STATE_NAMES[st] ?? st}</option>
+            <option value={st}>{STATE_NAMES[st] ?? st} ({stateCounts[st]})</option>
           {/each}
         </select>
       </label>
     </div>
 
-    <!-- Variation + curve selectors — scaffolding for #162; we’re picking a direction. -->
-    <div class="mt-4 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm">
-      <div class="inline-flex rounded border border-slate-300 bg-stone-50 p-0.5" role="tablist" aria-label="Chart style">
-        {#each VARIATIONS as v}
-          <button type="button" role="tab" aria-selected={variation === v.id}
-            class="rounded px-3 py-1 font-medium transition {variation === v.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}"
-            on:click={() => (variation = v.id)}>{v.label}</button>
-        {/each}
-      </div>
-      <div class="inline-flex items-center gap-2">
-        <span class="text-slate-500">Curve</span>
-        <div class="inline-flex rounded border border-slate-300 bg-stone-50 p-0.5" role="tablist" aria-label="Curve style">
-          {#each CURVES as c}
-            <button type="button" role="tab" aria-selected={curve === c.id}
-              class="rounded px-3 py-1 font-medium transition {curve === c.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}"
-              on:click={() => (curve = c.id)}>{c.label}</button>
-          {/each}
-        </div>
-      </div>
-    </div>
-
-    <!-- Legend (shared across variations; mini codes match the in-chart labels) -->
+    <!-- Legend (full names; mini codes match the in-chart labels) -->
     <div class="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-sm">
       {#each series as s}
         <span class="inline-flex items-center gap-1.5">
@@ -219,62 +151,28 @@
     </div>
 
     <div class="mt-4">
-      {#if variation === "small"}
-        <!-- ── Small multiples: one mini panel per model, shared y-scale ──────── -->
-        <div class="grid gap-4 sm:grid-cols-3">
-          {#each series as s}
-            {@const pts = ptsFor(s.values, maxModel)}
-            <figure class="rounded border border-slate-200 bg-stone-50/60 p-3">
-              <figcaption class="mb-1 flex items-baseline justify-between">
-                <span class="text-sm font-semibold text-slate-800">{MODEL_SHORT[s.model] ?? s.model}</span>
-                <span class="text-xs text-slate-500">{s.final}</span>
-              </figcaption>
-              <svg viewBox="0 0 {W} {H}" class="block w-full" role="img" aria-label="{MODEL_SHORT[s.model]} cumulative trend">
-                <line x1={pad.l} y1={baselineY} x2={W - pad.r} y2={baselineY} stroke="#e2e8f0" />
-                <path d="{buildPath(pts, curve)} L{xAt(endIdx).toFixed(1)} {baselineY.toFixed(1)} L{xAt(START_IDX).toFixed(1)} {baselineY.toFixed(1)} Z" fill="{MODEL_COLORS[s.model]}" fill-opacity="0.12" />
-                <path d={buildPath(pts, curve)} fill="none" stroke="{MODEL_COLORS[s.model]}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
-                <text x={pad.l} y={H - 8} class="fill-slate-400" style="font-size: 12px;">{monthLabelShort(START_IDX)}</text>
-                <text x={W - pad.r} y={H - 8} text-anchor="end" class="fill-slate-400" style="font-size: 12px;">{monthLabelShort(endIdx)}</text>
-              </svg>
-            </figure>
+      <div class="mx-auto max-w-lg">
+        <svg viewBox="0 0 {W} {H}" class="block w-full" role="img" aria-label="Cumulative 287(g) agencies by model since May 2025">
+          <!-- faint gridlines; values live in the direct start/end labels -->
+          {#each gridTicks as t}
+            <line x1={PAD.l} y1={yAt(t)} x2={W - PAD.r} y2={yAt(t)} stroke="#eef2f6" />
           {/each}
-        </div>
-      {:else}
-        <!-- ── Multi-series line  /  Stacked area ─────────────────────────────── -->
-        <div class="mx-auto max-w-lg">
-          <svg viewBox="0 0 {W} {H}" class="block w-full" role="img" aria-label="Cumulative 287(g) agencies by model since May 2025">
-            <!-- gridlines; numeric y labels only on the area view (the line view
-                 carries its values in the direct start/end labels) -->
-            {#each yTicks(variation === "area" ? maxTotal : maxModel) as t}
-              {@const y = yAtFor(variation === "area" ? maxTotal : maxModel)(t)}
-              <line x1={pad.l} y1={y} x2={W - pad.r} y2={y} stroke="#eef2f6" />
-              {#if variation === "area"}
-                <text x={pad.l - 6} y={y + 3} text-anchor="end" class="fill-slate-400" style="font-size: 12px;">{t}</text>
-              {/if}
-            {/each}
-            {#each ticks as t}
-              <text x={xAt(t)} y={H - 8} text-anchor="middle" class="fill-slate-400" style="font-size: 12px;">{monthLabelShort(t)}</text>
-            {/each}
+          {#each ticks as t}
+            <text x={xAt(t)} y={H - 8} text-anchor="middle" class="fill-slate-400" style="font-size: 12px;">{monthLabelShort(t)}</text>
+          {/each}
 
-            {#if variation === "area"}
-              {#each stacked as band}
-                <path d="{buildPath(band.top, curve)} {continuePath([...band.bottom].reverse(), curve)} Z" fill="{MODEL_COLORS[band.model]}" fill-opacity="0.82" />
-              {/each}
-            {:else}
-              {#each series as s}
-                <path d={buildPath(ptsFor(s.values, maxModel), curve)} fill="none" stroke="{MODEL_COLORS[s.model]}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
-              {/each}
-              <!-- Direct labels: value at the start anchor, mini code + value at the end -->
-              {#each series as s, i}
-                <text x={xAt(START_IDX) - 5} y={startLabelY[i] + 4} text-anchor="end"
-                  style="font-size: 11px; font-weight: 600;" fill={MODEL_COLORS[s.model]}>{s.first}</text>
-                <text x={xAt(endIdx) + 5} y={endLabelY[i] + 4} text-anchor="start"
-                  style="font-size: 11px; font-weight: 600;" fill={MODEL_COLORS[s.model]}>{MODEL_MINI[s.model] ?? ""} {s.final}</text>
-              {/each}
-            {/if}
-          </svg>
-        </div>
-      {/if}
+          {#each series as s}
+            <path d={stepPath(s.values)} fill="none" stroke="{MODEL_COLORS[s.model]}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
+          {/each}
+          <!-- Direct labels: value at the start anchor, mini code + value at the end -->
+          {#each series as s, i}
+            <text x={xAt(START_IDX) - 5} y={startLabelY[i] + 4} text-anchor="end"
+              style="font-size: 11px; font-weight: 600;" fill={MODEL_COLORS[s.model]}>{s.first}</text>
+            <text x={xAt(endIdx) + 5} y={endLabelY[i] + 4} text-anchor="start"
+              style="font-size: 11px; font-weight: 600;" fill={MODEL_COLORS[s.model]}>{MODEL_MINI[s.model] ?? ""} {s.final}</text>
+          {/each}
+        </svg>
+      </div>
     </div>
 
     <p class="mt-3 text-xs italic text-slate-400">
