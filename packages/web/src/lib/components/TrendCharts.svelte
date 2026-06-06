@@ -68,7 +68,7 @@
   // Taller-than-wide on purpose; wide margins hold the direct start/end labels.
   const W = 460;
   const H = 370;
-  const PAD = { t: 14, r: 58, b: 26, l: 34 };
+  const PAD = { t: 14, r: 58, b: 26, l: 40 };
   const innerW = W - PAD.l - PAD.r;
   const innerH = H - PAD.t - PAD.b;
   const baselineY = PAD.t + innerH;
@@ -98,38 +98,48 @@
     order.forEach((orig, k) => (out[orig] = placed[k]));
     return out;
   }
-  $: endLabelY = spreadY(series.map((s) => yAt(s.final)));
-  $: startLabelY = spreadY(series.map((s) => yAt(s.first)));
-
-  // Sparse axis ticks.
-  $: ticks = (() => {
-    if (months.length <= 1) return months;
-    const step = Math.max(1, Math.ceil(months.length / 4));
-    const out: number[] = [];
-    for (let i = 0; i < months.length; i += step) out.push(months[i]);
-    if (out[out.length - 1] !== months[months.length - 1]) out.push(months[months.length - 1]);
-    return out;
-  })();
-  $: gridTicks = (() => {
-    const step = Math.max(1, Math.round(maxModel / 3 / 50) * 50) || Math.ceil(maxModel / 3);
+  // y-axis: a few round, integer ticks (a simple numeric axis, not a dense grid).
+  $: yTicks = (() => {
+    const raw = Math.max(1, maxModel / 3);
+    const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    const norm = raw / mag;
+    const step = Math.max(1, Math.round((norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10) * mag));
     const out: number[] = [];
     for (let v = 0; v <= maxModel; v += step) out.push(v);
     return out;
   })();
+  $: gridYs = yTicks.map((t) => yAt(t));
+
+  // x-axis: ~5 evenly spaced months including first and last, so a forced last
+  // tick never crowds its neighbour.
+  $: ticks = (() => {
+    const n = months.length;
+    if (n <= 1) return months;
+    const count = Math.min(n, 5);
+    const set = new Set<number>();
+    for (let i = 0; i < count; i++) set.add(months[Math.round((i * (n - 1)) / (count - 1))]);
+    return [...set];
+  })();
+
+  $: endLabelY = spreadY(series.map((s) => yAt(s.final)));
+  // Start labels only where a line begins above 0, and not where it would land
+  // on a y-axis number (the axis already carries that value).
+  $: startLabels = (() => {
+    const picked = series.filter(
+      (s) => s.first > 0 && !gridYs.some((gy) => Math.abs(yAt(s.first) - gy) < 9),
+    );
+    const ys = spreadY(picked.map((s) => yAt(s.first)));
+    return picked.map((s, i) => ({ model: s.model, value: s.first, y: ys[i] }));
+  })();
 </script>
 
 <section class="border-b border-slate-200 bg-white px-4 py-10 sm:px-6 sm:py-12">
-  <div class="mx-auto max-w-6xl">
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-      <div>
-        <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">How participation has grown</h2>
-        <p class="mt-1 text-sm text-slate-600">
-          Cumulative agencies by primary model, since May&nbsp;2025{selectedState ? ` — ${scopeLabel}` : ""}.
-        </p>
-      </div>
+  <div class="mx-auto max-w-[480px]">
+    <div class="flex flex-wrap items-end justify-between gap-x-3 gap-y-2">
+      <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">How participation has grown</h2>
       <!-- State scope; count in parens is the state’s total agreements -->
       <label class="flex shrink-0 items-center gap-2 text-sm text-slate-600">
-        <span class="sr-only sm:not-sr-only">State</span>
+        <span class="sr-only">State</span>
         <select bind:value={selectedState} class="rounded border border-slate-300 bg-white px-2 py-1 text-slate-800">
           <option value="">National ({agencies.length})</option>
           {#each stateOptions as st}
@@ -138,6 +148,9 @@
         </select>
       </label>
     </div>
+    <p class="mt-1 text-sm text-slate-600">
+      Cumulative agencies by primary model, since May&nbsp;2025{selectedState ? ` — ${scopeLabel}` : ""}.
+    </p>
 
     <!-- Legend (full names; mini codes match the in-chart labels) -->
     <div class="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-sm">
@@ -152,28 +165,29 @@
     </div>
 
     <div class="mt-4">
-      <div class="mx-auto max-w-[480px]">
-        <svg viewBox="0 0 {W} {H}" class="block w-full" role="img" aria-label="Cumulative 287(g) agencies by model since May 2025">
-          <!-- faint gridlines; values live in the direct start/end labels -->
-          {#each gridTicks as t}
-            <line x1={PAD.l} y1={yAt(t)} x2={W - PAD.r} y2={yAt(t)} stroke="#eef2f6" />
-          {/each}
-          {#each ticks as t}
-            <text x={xAt(t)} y={H - 8} text-anchor="middle" class="fill-slate-400" style="font-size: 12px;">{monthLabelShort(t)}</text>
-          {/each}
+      <svg viewBox="0 0 {W} {H}" class="block w-full" role="img" aria-label="Cumulative 287(g) agencies by model since May 2025">
+        <!-- simple numeric y-axis: a few round ticks + faint gridlines -->
+        {#each yTicks as t}
+          <line x1={PAD.l} y1={yAt(t)} x2={W - PAD.r} y2={yAt(t)} stroke="#eef2f6" />
+          <text x={PAD.l - 6} y={yAt(t) + 3} text-anchor="end" class="fill-slate-400" style="font-size: 11px;">{t}</text>
+        {/each}
+        {#each ticks as t, i}
+          <text x={xAt(t)} y={H - 8} text-anchor={i === 0 ? "start" : i === ticks.length - 1 ? "end" : "middle"} class="fill-slate-400" style="font-size: 11px;">{monthLabelShort(t)}</text>
+        {/each}
 
-          {#each series as s}
-            <path d={stepPath(s.values)} fill="none" stroke="{MODEL_COLORS[s.model]}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
-          {/each}
-          <!-- Direct labels: value at the start anchor, mini code + value at the end -->
-          {#each series as s, i}
-            <text x={xAt(START_IDX) - 5} y={startLabelY[i] + 4} text-anchor="end"
-              style="font-size: 11px; font-weight: 600;" fill={MODEL_COLORS[s.model]}>{s.first}</text>
-            <text x={xAt(endIdx) + 5} y={endLabelY[i] + 4} text-anchor="start"
-              style="font-size: 11px; font-weight: 600;" fill={MODEL_COLORS[s.model]}>{MODEL_MINI[s.model] ?? ""} {s.final}</text>
-          {/each}
-        </svg>
-      </div>
+        {#each series as s}
+          <path d={stepPath(s.values)} fill="none" stroke="{MODEL_COLORS[s.model]}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
+        {/each}
+        <!-- Direct labels: starting value (when above 0) at the left, mini code + total at the right -->
+        {#each startLabels as l}
+          <text x={xAt(START_IDX) - 5} y={l.y + 4} text-anchor="end"
+            style="font-size: 11px; font-weight: 600;" fill={MODEL_COLORS[l.model]}>{l.value}</text>
+        {/each}
+        {#each series as s, i}
+          <text x={xAt(endIdx) + 5} y={endLabelY[i] + 4} text-anchor="start"
+            style="font-size: 11px; font-weight: 600;" fill={MODEL_COLORS[s.model]}>{MODEL_MINI[s.model] ?? ""} {s.final}</text>
+        {/each}
+      </svg>
     </div>
 
     <p class="mt-3 text-xs italic text-slate-400">
