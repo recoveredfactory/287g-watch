@@ -4,6 +4,7 @@
   import { STATE_NAMES } from "$lib/states";
   import NationalMap from "$lib/components/NationalMap.svelte";
   import MapTimelineScrubber from "$lib/components/MapTimelineScrubber.svelte";
+  import TrendCharts from "$lib/components/TrendCharts.svelte";
   import { browser } from "$app/environment";
   import { onMount } from "svelte";
   import { tweened } from "svelte/motion";
@@ -632,6 +633,9 @@
       </div>
     </div>
   </section>
+
+  <!-- ── National trend charts (experimental, #162) ───────────────────────── -->
+  <TrendCharts agencies={data.agencies} />
 
 
   <!-- ── Search + filter + browse ──────────────────────────────────────────── -->
