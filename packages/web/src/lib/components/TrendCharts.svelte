@@ -10,8 +10,9 @@
   // The timeline begins May 2025 (first month with a complete dataset, same
   // TIMELINE_START as the map). Pre-May-2025 signings fold into the May baseline.
   // A state selector scopes the chart to one state in isolation.
-  import { MODEL_COLORS, MODEL_ORDER, MODEL_SHORT, MODEL_MINI } from "$lib/colors";
+  import { MODEL_COLORS, MODEL_ORDER, MODEL_MINI } from "$lib/colors";
   import { STATE_NAMES } from "$lib/states";
+  import ModelLink from "$lib/components/ModelLink.svelte";
 
   type Agency = {
     primary_model?: string;
@@ -66,7 +67,7 @@
   // ── Geometry / scales (manual; keeps us off a charting dep) ─────────────────
   // Taller-than-wide on purpose; wide margins hold the direct start/end labels.
   const W = 460;
-  const H = 380;
+  const H = 370;
   const PAD = { t: 14, r: 58, b: 26, l: 34 };
   const innerW = W - PAD.l - PAD.r;
   const innerH = H - PAD.t - PAD.b;
@@ -141,9 +142,9 @@
     <!-- Legend (full names; mini codes match the in-chart labels) -->
     <div class="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-sm">
       {#each series as s}
-        <span class="inline-flex items-center gap-1.5">
+        <span class="inline-flex items-center gap-1.5 text-slate-700">
           <span class="inline-block h-2.5 w-2.5 rounded-sm" style="background: {MODEL_COLORS[s.model]};"></span>
-          <span class="text-slate-700">{MODEL_SHORT[s.model] ?? s.model}</span>
+          <ModelLink model={s.model} />
           <span class="text-slate-400">{MODEL_MINI[s.model] ?? ""}</span>
           <span class="font-semibold text-slate-900">{s.final}</span>
         </span>
@@ -151,7 +152,7 @@
     </div>
 
     <div class="mt-4">
-      <div class="mx-auto max-w-lg">
+      <div class="mx-auto max-w-[480px]">
         <svg viewBox="0 0 {W} {H}" class="block w-full" role="img" aria-label="Cumulative 287(g) agencies by model since May 2025">
           <!-- faint gridlines; values live in the direct start/end labels -->
           {#each gridTicks as t}

@@ -5,6 +5,7 @@
   import NationalMap from "$lib/components/NationalMap.svelte";
   import MapTimelineScrubber from "$lib/components/MapTimelineScrubber.svelte";
   import TrendCharts from "$lib/components/TrendCharts.svelte";
+  import ModelLink from "$lib/components/ModelLink.svelte";
   import { browser } from "$app/environment";
   import { onMount } from "svelte";
   import { tweened } from "svelte/motion";
@@ -489,13 +490,12 @@
         <div class="flex flex-col items-start gap-2 sm:items-end">
           <div class="flex flex-wrap items-center gap-x-4 gap-y-2 sm:gap-x-6">
             {#each MODEL_ORDER as full}
-              {@const short = MODEL_SHORT[full]}
               <span class="flex items-center gap-1.5 text-xs text-slate-600 sm:text-sm">
                 <span
                   class="inline-block h-2.5 w-2.5 rounded-full border border-white shadow-sm sm:h-3 sm:w-3"
                   style="background: {MODEL_COLORS[full]};"
                 ></span>
-                {short}
+                <ModelLink model={full} />
               </span>
             {/each}
           </div>
@@ -786,12 +786,11 @@
                   <td class="px-2 py-2 sm:px-3 sm:py-3">
                     <div class="flex flex-wrap gap-1">
                       {#each agency.models as model}
-                        <span
-                          class="model-badge"
-                          class:model-badge--jail={model.includes("Jail")}
-                          class:model-badge--taskforce={model.includes("Task")}
-                          class:model-badge--wso={model.includes("Warrant")}
-                        ><span class="sm:hidden">{MODEL_MINI[model] ?? model}</span><span class="hidden sm:inline">{MODEL_SHORT[model] ?? model}</span></span>
+                        <ModelLink
+                          {model}
+                          underline={false}
+                          class="model-badge model-badge--{MODEL_SLUG[model]}"
+                        ><span class="sm:hidden">{MODEL_MINI[model] ?? model}</span><span class="hidden sm:inline">{MODEL_SHORT[model] ?? model}</span></ModelLink>
                       {/each}
                     </div>
                   </td>
