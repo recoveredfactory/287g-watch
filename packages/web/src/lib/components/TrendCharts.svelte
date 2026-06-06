@@ -1,10 +1,11 @@
 <script lang="ts">
   // ── National trend charts (experimental, #162) ─────────────────────────────
-  // Low-key growth charts for the home page. Everything here is behind selectors
-  // so we can play with what reads best before committing to placement:
-  //   • variation — multi-series line · small multiples · stacked area
-  //   • curve     — stepped · linear · smooth (cumulative counts → stepped reads
-  //                 most honestly; the others are here to compare)
+  // Low-key growth charts for the home page. Selectors let us compare options
+  // before committing placement:
+  //   • variation — multi-series line (default) · small multiples · stacked area
+  //   • curve     — stepped (default) · linear. Cumulative counts are a step
+  //                 function by nature, so we don't offer smoothing — it would
+  //                 fabricate values between the dates agencies actually signed.
   //   • state     — National, or a single state in isolation
   //
   // Series are cumulative agency counts by *primary model* — primary_model is
@@ -14,7 +15,7 @@
   //
   // The timeline begins May 2025 (first month with a complete dataset, same
   // TIMELINE_START as the map). Pre-May-2025 signings fold into the May baseline.
-  import { MODEL_COLORS, MODEL_ORDER, MODEL_SHORT } from "$lib/colors";
+  import { MODEL_COLORS, MODEL_ORDER, MODEL_SHORT, MODEL_MINI } from "$lib/colors";
   import { STATE_NAMES } from "$lib/states";
 
   type Agency = {
@@ -33,12 +34,11 @@
     { id: "area", label: "Stacked area" },
   ];
 
-  type Curve = "step" | "linear" | "smooth";
+  type Curve = "step" | "linear";
   let curve: Curve = "step";
   const CURVES: { id: Curve; label: string }[] = [
     { id: "step", label: "Stepped" },
     { id: "linear", label: "Linear" },
-    { id: "smooth", label: "Smooth" },
   ];
 
   let selectedState = ""; // "" = National
@@ -74,7 +74,7 @@
       .filter((a) => a.primary_model === model)
       .map((a) => effectiveMonth(a.signed_date));
     const values = months.map((m) => signedMonths.filter((sm) => sm <= m).length);
-    return { model, values, final: values[values.length - 1] ?? 0 };
+    return { model, values, first: values[0] ?? 0, final: values[values.length - 1] ?? 0 };
   });
   $: totals = months.map((_, i) => series.reduce((sum, s) => sum + s.values[i], 0));
   $: maxTotal = Math.max(1, ...totals);
@@ -82,35 +82,21 @@
 
   // ── Geometry / scales (manual; keeps us off a charting dep) ─────────────────
   // Taller-than-wide on purpose: the wide aspect flattened everything once the
-  // Task Force series dwarfed the others (#162 feedback).
+  // Task Force series dwarfed the others (#162 feedback). The line view gets
+  // wider side margins to hold the direct start/end labels.
   const W = 460;
   const H = 380;
-  const PAD = { t: 14, r: 14, b: 26, l: 36 };
-  $: innerW = W - PAD.l - PAD.r;
-  $: innerH = H - PAD.t - PAD.b;
+  $: pad = variation === "lines" ? { t: 14, r: 58, b: 26, l: 34 } : { t: 14, r: 14, b: 26, l: 36 };
+  $: innerW = W - pad.l - pad.r;
+  $: innerH = H - pad.t - pad.b;
   $: xAt = (m: number) =>
-    PAD.l + (endIdx === START_IDX ? innerW : ((m - START_IDX) / (endIdx - START_IDX)) * innerW);
-  const yAtFor = (yMax: number) => (v: number) => PAD.t + innerH - (v / yMax) * innerH;
+    pad.l + (endIdx === START_IDX ? innerW : ((m - START_IDX) / (endIdx - START_IDX)) * innerW);
+  $: baselineY = pad.t + innerH;
+  const yAtFor = (yMax: number) => (v: number) => pad.t + innerH - (v / yMax) * innerH;
 
   type Pt = [number, number];
-  const catmullRom = (pts: Pt[]): string => {
-    if (pts.length < 3) return "M" + pts.map((p) => `${p[0]} ${p[1]}`).join(" L");
-    let d = `M${pts[0][0]} ${pts[0][1]}`;
-    for (let i = 0; i < pts.length - 1; i++) {
-      const p0 = pts[i - 1] ?? pts[i];
-      const p1 = pts[i];
-      const p2 = pts[i + 1];
-      const p3 = pts[i + 2] ?? p2;
-      const c1x = p1[0] + (p2[0] - p0[0]) / 6;
-      const c1y = p1[1] + (p2[1] - p0[1]) / 6;
-      const c2x = p2[0] - (p3[0] - p1[0]) / 6;
-      const c2y = p2[1] - (p3[1] - p1[1]) / 6;
-      d += ` C${c1x.toFixed(1)} ${c1y.toFixed(1)} ${c2x.toFixed(1)} ${c2y.toFixed(1)} ${p2[0].toFixed(1)} ${p2[1].toFixed(1)}`;
-    }
-    return d;
-  };
-  // One path generator for all three curve modes — reused by lines and by both
-  // edges of the stacked bands, so a curve change stays consistent everywhere.
+  // One path generator for both curve modes — reused by lines and by both edges
+  // of the stacked bands, so a curve change stays consistent everywhere.
   const buildPath = (pts: Pt[], c: Curve): string => {
     if (!pts.length) return "";
     if (c === "step") {
@@ -120,7 +106,6 @@
       }
       return d;
     }
-    if (c === "smooth") return catmullRom(pts);
     return "M" + pts.map((p) => `${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(" L");
   };
   // Same shape, but as a continuation (swap leading M→L) so an area can run its
@@ -143,6 +128,21 @@
       return band;
     });
   })();
+
+  // Nudge a set of label anchor-ys apart so direct labels don't collide. Pushes
+  // downward from the topmost; preserves original order. (3 labels, so cheap.)
+  function spreadY(ys: number[], gap = 13): number[] {
+    const order = ys.map((_, i) => i).sort((a, b) => ys[a] - ys[b]);
+    const placed = order.map((i) => ys[i]);
+    for (let i = 1; i < placed.length; i++) {
+      if (placed[i] - placed[i - 1] < gap) placed[i] = placed[i - 1] + gap;
+    }
+    const out = new Array(ys.length);
+    order.forEach((orig, k) => (out[orig] = placed[k]));
+    return out;
+  }
+  $: endLabelY = spreadY(series.map((s) => yAtFor(maxModel)(s.final)));
+  $: startLabelY = spreadY(series.map((s) => yAtFor(maxModel)(s.first)));
 
   // Sparse axis ticks.
   $: ticks = (() => {
@@ -206,12 +206,13 @@
       </div>
     </div>
 
-    <!-- Legend (shared across variations) -->
+    <!-- Legend (shared across variations; mini codes match the in-chart labels) -->
     <div class="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-sm">
       {#each series as s}
         <span class="inline-flex items-center gap-1.5">
           <span class="inline-block h-2.5 w-2.5 rounded-sm" style="background: {MODEL_COLORS[s.model]};"></span>
           <span class="text-slate-700">{MODEL_SHORT[s.model] ?? s.model}</span>
+          <span class="text-slate-400">{MODEL_MINI[s.model] ?? ""}</span>
           <span class="font-semibold text-slate-900">{s.final}</span>
         </span>
       {/each}
@@ -229,11 +230,11 @@
                 <span class="text-xs text-slate-500">{s.final}</span>
               </figcaption>
               <svg viewBox="0 0 {W} {H}" class="block w-full" role="img" aria-label="{MODEL_SHORT[s.model]} cumulative trend">
-                <line x1={PAD.l} y1={PAD.t + innerH} x2={W - PAD.r} y2={PAD.t + innerH} stroke="#e2e8f0" />
-                <path d="{buildPath(pts, curve)} L{xAt(endIdx).toFixed(1)} {(PAD.t + innerH).toFixed(1)} L{xAt(START_IDX).toFixed(1)} {(PAD.t + innerH).toFixed(1)} Z" fill="{MODEL_COLORS[s.model]}" fill-opacity="0.12" />
+                <line x1={pad.l} y1={baselineY} x2={W - pad.r} y2={baselineY} stroke="#e2e8f0" />
+                <path d="{buildPath(pts, curve)} L{xAt(endIdx).toFixed(1)} {baselineY.toFixed(1)} L{xAt(START_IDX).toFixed(1)} {baselineY.toFixed(1)} Z" fill="{MODEL_COLORS[s.model]}" fill-opacity="0.12" />
                 <path d={buildPath(pts, curve)} fill="none" stroke="{MODEL_COLORS[s.model]}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
-                <text x={PAD.l} y={H - 8} class="fill-slate-400" style="font-size: 12px;">{monthLabelShort(START_IDX)}</text>
-                <text x={W - PAD.r} y={H - 8} text-anchor="end" class="fill-slate-400" style="font-size: 12px;">{monthLabelShort(endIdx)}</text>
+                <text x={pad.l} y={H - 8} class="fill-slate-400" style="font-size: 12px;">{monthLabelShort(START_IDX)}</text>
+                <text x={W - pad.r} y={H - 8} text-anchor="end" class="fill-slate-400" style="font-size: 12px;">{monthLabelShort(endIdx)}</text>
               </svg>
             </figure>
           {/each}
@@ -242,10 +243,14 @@
         <!-- ── Multi-series line  /  Stacked area ─────────────────────────────── -->
         <div class="mx-auto max-w-lg">
           <svg viewBox="0 0 {W} {H}" class="block w-full" role="img" aria-label="Cumulative 287(g) agencies by model since May 2025">
+            <!-- gridlines; numeric y labels only on the area view (the line view
+                 carries its values in the direct start/end labels) -->
             {#each yTicks(variation === "area" ? maxTotal : maxModel) as t}
               {@const y = yAtFor(variation === "area" ? maxTotal : maxModel)(t)}
-              <line x1={PAD.l} y1={y} x2={W - PAD.r} y2={y} stroke="#eef2f6" />
-              <text x={PAD.l - 6} y={y + 3} text-anchor="end" class="fill-slate-400" style="font-size: 12px;">{t}</text>
+              <line x1={pad.l} y1={y} x2={W - pad.r} y2={y} stroke="#eef2f6" />
+              {#if variation === "area"}
+                <text x={pad.l - 6} y={y + 3} text-anchor="end" class="fill-slate-400" style="font-size: 12px;">{t}</text>
+              {/if}
             {/each}
             {#each ticks as t}
               <text x={xAt(t)} y={H - 8} text-anchor="middle" class="fill-slate-400" style="font-size: 12px;">{monthLabelShort(t)}</text>
@@ -258,6 +263,13 @@
             {:else}
               {#each series as s}
                 <path d={buildPath(ptsFor(s.values, maxModel), curve)} fill="none" stroke="{MODEL_COLORS[s.model]}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
+              {/each}
+              <!-- Direct labels: value at the start anchor, mini code + value at the end -->
+              {#each series as s, i}
+                <text x={xAt(START_IDX) - 5} y={startLabelY[i] + 4} text-anchor="end"
+                  style="font-size: 11px; font-weight: 600;" fill={MODEL_COLORS[s.model]}>{s.first}</text>
+                <text x={xAt(endIdx) + 5} y={endLabelY[i] + 4} text-anchor="start"
+                  style="font-size: 11px; font-weight: 600;" fill={MODEL_COLORS[s.model]}>{MODEL_MINI[s.model] ?? ""} {s.final}</text>
               {/each}
             {/if}
           </svg>
