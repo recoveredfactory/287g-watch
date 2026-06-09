@@ -31,11 +31,12 @@
   // ── Timeline cursor (experimental, #76) ────────────────────────────────────
   // Continuous fractional-month index relative to Jan 2025 (idx 0). The map
   // fades and pops each dot in as the cursor passes its signing date. The
-  // animation begins May 2025 (TIMELINE_START_IDX) — the first month we have a
-  // complete dataset — so every signing on or before May 2025 is pinned as the
-  // baseline (always shown at frame 0). See caveat in MapTimelineScrubber.svelte.
+  // animation begins Dec 18 2024 (TIMELINE_START_IDX) — the most recent pre-2025
+  // archived snapshot (#169), a clean pre-Trump baseline — so every signing on or
+  // before then is pinned as the baseline (always shown at frame 0). See caveat
+  // in MapTimelineScrubber.svelte.
   const TIMELINE_EPOCH_YEAR = 2025;
-  const TIMELINE_START_IDX = 4; // May 2025, relative to the Jan 2025 epoch
+  const TIMELINE_START_IDX = -1 + 17 / 31; // Dec 18 2024, relative to the Jan 2025 epoch
   const BASELINE_IDX = -10000;
   const signedIdx = (d: string | null | undefined): number => {
     if (!d || d.length < 10) return BASELINE_IDX;
@@ -165,8 +166,10 @@
   const overlayMonthLabel = (idx: number): string => {
     const clamped = Math.min(Math.max(TIMELINE_START_IDX, idx), todayIdx);
     const month = Math.floor(clamped);
+    // Floored-division year + non-negative modulo month, so a pre-2025 (negative)
+    // index maps back correctly (e.g. month -1 → Dec 2024, not Dec 2023).
     const y = TIMELINE_EPOCH_YEAR + Math.floor(month / 12);
-    const mm = (month % 12) + 1;
+    const mm = (((month % 12) + 12) % 12) + 1;
     const localeTag = getLocale() === "es" ? "es-MX" : "en-US";
     return new Intl.DateTimeFormat(localeTag, { month: "short", year: "numeric", timeZone: "UTC" })
       .format(new Date(Date.UTC(y, mm - 1, 1)));
@@ -579,6 +582,14 @@
               <p>{m.home_map_statewide_note({ count: statewideCount })}</p>
             {/if}
             <p class="mt-1">{m.home_map_boundaries_note()}</p>
+            <p class="mt-1">
+              <a
+                href="https://github.com/appelson/Tracking_287g"
+                target="_blank"
+                rel="noreferrer"
+                class="underline hover:text-slate-900"
+              >{m.home_map_download()} ↗</a>
+            </p>
           </div>
         </div>
       </div>
