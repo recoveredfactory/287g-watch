@@ -79,9 +79,12 @@
   onDestroy(stop);
 
   const monthLabel = (idx: number): string => {
-    const month = Math.max(0, Math.floor(idx));
+    // idx is months relative to Jan 2025 (idx 0); it can go negative once the
+    // timeline reaches the pre-2025 era (e.g. Dec 2024 ≈ -0.45). Use a real
+    // floored-division month so negatives map back to the right year/month.
+    const month = Math.floor(idx);
     const y = 2025 + Math.floor(month / 12);
-    const m = (month % 12) + 1;
+    const m = (((month % 12) + 12) % 12) + 1;
     const localeTag = getLocale() === "es" ? "es-MX" : "en-US";
     return new Intl.DateTimeFormat(localeTag, { month: "short", year: "numeric", timeZone: "UTC" })
       .format(new Date(Date.UTC(y, m - 1, 1)));
