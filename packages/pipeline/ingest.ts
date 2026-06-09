@@ -32,6 +32,17 @@ const CACHE_DIR = resolve(__dirname, '.cache/sheets')
 
 const GITHUB_SHEETS_API =
   'https://api.github.com/repos/appelson/Tracking_287g/contents/sheets'
+// Wayback-archived snapshots that predate the live `sheets/` stream. The
+// after_2025 folder fills the Mar–mid-May 2025 gap (same dir naming, xlsx, but
+// no COUNTY column). We ingest only the dirs BEFORE the live stream starts, so
+// there's no overlap to dedup and the live folder stays canonical for any shared
+// date. before_2025 (CSV/HTML era, 2021→2024) is deferred — see #169/#170.
+const GITHUB_AFTER2025_API =
+  'https://api.github.com/repos/appelson/Tracking_287g/contents/archived_data/after_2025/sheets'
+// Pre-2025 HTML era (CSV per dir, 2021→2024, ~150 agencies declining to ~133).
+// State name + agency + support + signed only — no county/agency-type. #169
+const GITHUB_BEFORE2025_API =
+  'https://api.github.com/repos/appelson/Tracking_287g/contents/archived_data/before_2025/sheets'
 const GAZETTEER_BASE =
   'https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2023_Gazetteer'
 const COUNTY_GAZETTEER_URL = `${GAZETTEER_BASE}/2023_Gaz_counties_national.zip`
@@ -282,34 +293,83 @@ interface SnapshotAgency {
   signed_date: string | null
 }
 
-// Parse an xlsx buffer into a map of historyKey → SnapshotAgency
-function parseSnapshot(buf: Buffer): Map<string, SnapshotAgency> {
+// One snapshot row, normalized across the two upstream formats: the xlsx era
+// (STATE/AGENCY/TYPE/COUNTY/SUPPORT TYPE/SIGNED columns) and the pre-2025 HTML
+// era (CSV: state/agency/support/signed, no TYPE or COUNTY). See #169.
+interface SnapRow {
+  stateFull: string
+  name: string
+  model: string
+  signedRaw: unknown
+  county: string | null
+  agencyType: string | null
+}
+
+function xlsxSnapRows(buf: Buffer): SnapRow[] {
   const wb = xlsxRead(buf, { type: 'buffer', cellDates: true })
   const ws = wb.Sheets[wb.SheetNames[0]]
   const rows = xlsxUtils.sheet_to_json<RawRow>(ws, { defval: null })
+  return rows.map((r) => ({
+    stateFull: str(r.STATE).toUpperCase(),
+    name: str(r['LAW ENFORCEMENT AGENCY']),
+    model: str(r['SUPPORT TYPE']),
+    signedRaw: r.SIGNED,
+    county: str(r.COUNTY) || null,
+    agencyType: str(r.TYPE) || null,
+  }))
+}
+
+// before_2025 CSV header: capture_date, capture_file, state, agency, support,
+// signed, link, addendum, date_only. State is the full name ("ALABAMA"); there
+// is no county or agency-type column.
+function csvSnapRows(buf: Buffer): SnapRow[] {
+  const rows = parseCSV(buf.toString('utf8'))
+  if (rows.length < 2) return []
+  const header = rows[0].map((h) => h.trim().toLowerCase())
+  const col = (name: string) => header.indexOf(name)
+  const iState = col('state'), iAgency = col('agency'), iSupport = col('support'), iSigned = col('signed')
+  if (iState < 0 || iAgency < 0 || iSupport < 0) return []
+  const out: SnapRow[] = []
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i]
+    if (!row.length) continue
+    out.push({
+      stateFull: str(row[iState]).toUpperCase(),
+      name: str(row[iAgency]),
+      model: str(row[iSupport]),
+      signedRaw: iSigned >= 0 ? row[iSigned] : null,
+      county: null,
+      agencyType: null,
+    })
+  }
+  return out
+}
+
+// Parse a snapshot buffer (xlsx OR csv, detected by the zip magic bytes) into a
+// map of historyKey → SnapshotAgency.
+function parseSnapshot(buf: Buffer): Map<string, SnapshotAgency> {
+  const isXlsx = buf.length >= 2 && buf[0] === 0x50 && buf[1] === 0x4b // "PK" zip header
+  const rows = isXlsx ? xlsxSnapRows(buf) : csvSnapRows(buf)
   const result = new Map<string, SnapshotAgency>()
   for (const row of rows) {
-    const stateFull = str(row.STATE).toUpperCase()
-    const state = STATE_ABBREVS[stateFull]
+    const state = STATE_ABBREVS[row.stateFull]
     if (!state) continue
-    const name = str(row['LAW ENFORCEMENT AGENCY'])
-    if (!name) continue
-    const model = str(row['SUPPORT TYPE'])
-    if (!model) continue
-    const key = historyKey(name, state)
+    if (!row.name) continue
+    if (!row.model) continue
+    const key = historyKey(row.name, state)
     let e = result.get(key)
     if (!e) {
       e = {
         models: new Set(),
-        name,
+        name: row.name,
         state,
-        county: str(row.COUNTY) || null,
-        agency_type: str(row.TYPE) || null,
-        signed_date: parseSignedDate(row.SIGNED),
+        county: row.county,
+        agency_type: row.agencyType,
+        signed_date: parseSignedDate(row.signedRaw),
       }
       result.set(key, e)
     }
-    e.models.add(model)
+    e.models.add(row.model)
   }
   return result
 }
@@ -318,21 +378,35 @@ function parseSnapshot(buf: Buffer): Map<string, SnapshotAgency> {
 // this makes no network calls at all; on a miss it lists the dir, downloads the
 // xlsx, and caches it. Returns null if the dir has no xlsx.
 async function snapshotBuffer(dir: GHEntry): Promise<Buffer | null> {
-  const cachePath = resolve(CACHE_DIR, `${dir.name}.xlsx`)
-  if (existsSync(cachePath)) return readFileSync(cachePath)
+  // Cache key is the dir name; the era determines the extension (xlsx for the
+  // 2025+ sheets, csv for the pre-2025 HTML era). Check both on a warm run.
+  const xlsxPath = resolve(CACHE_DIR, `${dir.name}.xlsx`)
+  const csvPath = resolve(CACHE_DIR, `${dir.name}.csv`)
+  if (existsSync(xlsxPath)) return readFileSync(xlsxPath)
+  if (existsSync(csvPath)) return readFileSync(csvPath)
 
   const filesResp = await ghFetch(dir.url)
   if (!filesResp.ok) return null
   type GHFile = { name: string; download_url: string }
   const files = (await filesResp.json()) as GHFile[]
-  const xlsxFile = files.find((f) => f.name.endsWith('.xlsx'))
-  if (!xlsxFile) return null
+  // Both live and after_2025 dirs carry a participating AND a pending xlsx.
+  // We only ingest the participating sheet. (The old "first xlsx" worked only
+  // because GitHub lists "participating" before "pending" alphabetically — pick
+  // it explicitly so a listing-order change can't silently grab pending.) The
+  // pre-2025 HTML era has neither, just a single CSV — fall back to that.
+  const xlsxFiles = files.filter((f) => f.name.toLowerCase().endsWith('.xlsx'))
+  const dataFile =
+    xlsxFiles.find((f) => /participat/i.test(f.name)) ??
+    xlsxFiles.find((f) => !/pending/i.test(f.name)) ??
+    files.find((f) => f.name.toLowerCase().endsWith('.csv'))
+  if (!dataFile) return null
 
-  const dataResp = await ghFetch(xlsxFile.download_url)
+  const dataResp = await ghFetch(dataFile.download_url)
   if (!dataResp.ok) return null
   const buf = Buffer.from(await dataResp.arrayBuffer())
   mkdirSync(CACHE_DIR, { recursive: true })
-  writeFileSync(cachePath, buf)
+  const ext = dataFile.name.toLowerCase().endsWith('.csv') ? 'csv' : 'xlsx'
+  writeFileSync(resolve(CACHE_DIR, `${dir.name}.${ext}`), buf)
   return buf
 }
 
@@ -379,7 +453,37 @@ const snapshotDate = dateMatch
 
 console.log('\nBuilding agreement history from weekly snapshots...')
 
-const allDirs = chronologicalSnapshots(snapshotDirs)
+const dirDate = (name: string): string | null => {
+  const m = name.match(/^sheets_(\d{4})(\d{2})(\d{2})/)
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : null
+}
+
+// Pull the archived snapshots that PREDATE the live stream — the pre-2025 HTML
+// era (before_2025, CSV) plus the Mar–mid-May 2025 gap fill (after_2025, xlsx).
+// Keeping only dirs before the live start means no overlap to dedup; the live
+// folder stays canonical for any shared date. See #169.
+const liveDirs = chronologicalSnapshots(snapshotDirs)
+const earliestLiveDate = liveDirs.map((d) => dirDate(d.name)).filter(Boolean).sort()[0] ?? null
+
+async function archiveDirsBefore(api: string, label: string, cutoff: string | null): Promise<GHEntry[]> {
+  const resp = await ghFetch(api)
+  if (!resp.ok) {
+    console.warn(`  ⚠ ${label} archive listing failed (${resp.status}) — skipping that era`)
+    return []
+  }
+  const entries = (await resp.json()) as GHEntry[]
+  return chronologicalSnapshots(entries.filter((e) => e.type === 'dir')).filter(
+    (d) => !cutoff || (dirDate(d.name) ?? '') < cutoff
+  )
+}
+
+const before2025Dirs = await archiveDirsBefore(GITHUB_BEFORE2025_API, 'before_2025', earliestLiveDate)
+const after2025Dirs = await archiveDirsBefore(GITHUB_AFTER2025_API, 'after_2025', earliestLiveDate)
+console.log(
+  `  + ${before2025Dirs.length} before_2025 (HTML era) + ${after2025Dirs.length} after_2025 (gap fill) archive snapshots before ${earliestLiveDate}`
+)
+
+const allDirs = chronologicalSnapshots([...before2025Dirs, ...after2025Dirs, ...liveDirs])
 console.log(`  Ingesting all ${allDirs.length} snapshots (oldest-first)`)
 
 interface SnapshotRecord {
@@ -426,7 +530,14 @@ const KNOWN_BAD_SNAPSHOTS = new Set([
   '2025-06-10', //   492 dropped, back by 2025-06-21
   '2026-02-28', //    55 dropped + re-added; too mild for the ratio test
 ])
-const MIN_AGENCIES = 500
+// The real malformed-snapshot detector is the RELATIVE gate (DROP_RATIO vs the
+// prior good count) — it scales across eras on its own: 287(g) was rare early on
+// (dozens of agencies in the 2021 HTML era), ~305 in Mar 2025, ~1,500 today, so
+// no single absolute count is meaningfully "too low" everywhere. MIN_AGENCIES is
+// therefore just an empty/near-empty-parse backstop for the FIRST snapshot (which
+// has no prior to compare against); keep it well below the sparsest real era so a
+// future before_2025 ingest drops in cleanly. See #169.
+const MIN_AGENCIES = 20
 const DROP_RATIO = 0.7
 const snapshots: SnapshotRecord[] = []
 const rejected: { date: string; count: number; reason: string }[] = []
