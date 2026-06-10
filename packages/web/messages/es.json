@@ -24,11 +24,11 @@
   "lang_es": "ES",
   "source_material_notice": "Los datos y documentos de origen (nombres de agencias, acuerdos MOA, registros oficiales) permanecen en inglés tal como se publicaron originalmente.",
 
-  "home_meta_title": "287(g) Explorer — Alianzas locales de cumplimiento de ICE",
+  "home_meta_title": "287(g) Watch — Alianzas locales de cumplimiento de ICE",
   "home_meta_description_with_count": "{count} agencias locales de seguridad pública han firmado acuerdos 287(g) con ICE que autorizan a sus oficiales a hacer cumplir la ley federal de inmigración. Las rastreamos todas.",
   "home_meta_description_no_data": "Rastreo de agencias locales de seguridad pública con acuerdos 287(g) que autorizan a sus oficiales a hacer cumplir la ley federal de inmigración.",
 
-  "home_hero_eyebrow": "287(g) Explorer",
+  "home_hero_eyebrow": "287(g) Watch",
   "home_hero_headline_line1": "Cada acuerdo 287(g) activo",
   "home_hero_headline_line2": "entre la policía local e ICE",
   "home_hero_lead": "Bajo la Sección 287(g) de la Ley de Inmigración y Nacionalidad, las agencias locales de policía pueden firmar acuerdos con ICE que autorizan a sus oficiales a realizar funciones de inmigración. El programa se ha expandido drásticamente desde 2025.",
@@ -79,13 +79,13 @@
   "home_pagination_next": "Siguiente",
   "home_pagination_range": "{start}–{end} de {total}",
 
-  "about_meta_title": "Acerca de — 287(g) Explorer",
+  "about_meta_title": "Acerca de — 287(g) Watch",
   "about_meta_description": "Acerca de este proyecto y cómo participar.",
   "about_heading": "Acerca de este proyecto",
   "about_intro_1_after_name": "es un proyecto periodístico de interés público que documenta a las agencias locales de seguridad pública que se han asociado con el Servicio de Inmigración y Control de Aduanas de EE. UU. (ICE) bajo la Sección 287(g) de la Ley de Inmigración y Nacionalidad.",
   "about_intro_2": "El programa 287(g) permite a ICE delegar autoridad de cumplimiento migratorio a agencias estatales y locales mediante un Memorando de Acuerdo formal. Los oficiales de las agencias participantes pueden ser capacitados y autorizados para realizar funciones de cumplimiento migratorio — incluyendo identificar, procesar y detener a personas para su deportación.",
   "about_why_heading": "Por qué importa",
-  "about_why_1": "287(g) Explorer se construye sobre un ecosistema de excelente trabajo que rastrea a ICE y los acuerdos 287(g). Nuestro objetivo es que estos datos sean fáciles de acceder y de utilizar, visibles para motores de búsqueda y la IA, y se traduzcan en visualizaciones potentes. Seguiremos enriqueciendo la herramienta con una historia más profunda, información de contacto y contexto clave desde fuentes en el terreno.",
+  "about_why_1": "287(g) Watch se construye sobre un ecosistema de excelente trabajo que rastrea a ICE y los acuerdos 287(g). Nuestro objetivo es que estos datos sean fáciles de acceder y de utilizar, visibles para motores de búsqueda y la IA, y se traduzcan en visualizaciones potentes. Seguiremos enriqueciendo la herramienta con una historia más profunda, información de contacto y contexto clave desde fuentes en el terreno.",
   "about_involve_heading": "Cómo participar",
   "about_involve_lead": "¿Sabes algo sobre una agencia? ¿Tienes registros? ¿Ves un error? Queremos saberlo.",
   "about_involve_corrections_prefix": "Envía correcciones o pistas vía",
@@ -94,7 +94,7 @@
   "about_involve_methodology_link": "nuestra metodología",
   "about_involve_methodology_suffix": "para fuentes de datos y limitaciones",
 
-  "methodology_meta_title": "Metodología — 287(g) Explorer",
+  "methodology_meta_title": "Metodología — 287(g) Watch",
   "methodology_meta_description": "Fuentes de datos, limitaciones y métodos utilizados en este proyecto.",
   "methodology_heading": "Metodología",
   "methodology_sources_heading": "Fuentes de datos",
@@ -118,7 +118,7 @@
   "methodology_updates_heading": "Actualizaciones",
   "methodology_updates_body": "El pipeline se ejecuta con regularidad para capturar nuevos anuncios de ICE. La fecha de la instantánea de datos se muestra en cada página.",
 
-  "glossary_meta_title": "Glosario — 287(g) Explorer",
+  "glossary_meta_title": "Glosario — 287(g) Watch",
   "glossary_meta_description": "Definiciones de términos clave usados en el reporteo sobre cumplimiento migratorio 287(g).",
   "glossary_heading": "Glosario",
   "glossary_subtitle": "Términos clave usados en el reporteo sobre el programa 287(g) y el cumplimiento migratorio.",
@@ -170,8 +170,8 @@
 
   "home_map_use_cta": "Descarga nuestros videos e imágenes gratuitos →",
 
-  "usemap_meta_title": "Usa nuestro mapa de 287(g) — libre para compartir | 287(g) Explorer",
-  "usemap_meta_description": "Descarga el mapa de 287(g) Explorer con todos los acuerdos 287(g) activos como video, GIF o imagen fija y úsalo gratis bajo una licencia Creative Commons.",
+  "usemap_meta_title": "Usa nuestro mapa de 287(g) — libre para compartir | 287(g) Watch",
+  "usemap_meta_description": "Descarga el mapa de 287(g) Watch con todos los acuerdos 287(g) activos como video, GIF o imagen fija y úsalo gratis bajo una licencia Creative Commons.",
   "usemap_heading": "Usa nuestro mapa gratis",
   "usemap_intro": "Nuestro mapa de los acuerdos 287(g) es gratuito para que lo uses y compartas como video, GIF o imagen fija. Solo acredítanos.",
   "usemap_video_label": "Mapa animado de los acuerdos 287(g) activos creciendo desde enero de 2025 hasta hoy",
@@ -185,7 +185,7 @@
   "usemap_license_heading": "Cómo puedes usarlo",
   "usemap_license_body_prefix": "El mapa está licenciado bajo",
   "usemap_license_link": "Creative Commons BY 4.0",
-  "usemap_license_body_suffix": "(Atribución). Puedes compartirlo, adaptarlo y reutilizarlo, incluso con fines comerciales, siempre que acredites a 287(g) Explorer — idealmente con un enlace a 287g.recoveredfactory.net.",
+  "usemap_license_body_suffix": "(Atribución). Puedes compartirlo, adaptarlo y reutilizarlo, incluso con fines comerciales, siempre que acredites a 287(g) Watch — idealmente con un enlace a 287g.recoveredfactory.net.",
   "usemap_license_ask": "No alteres las cifras. Los números provienen directamente de nuestro conjunto de datos, y cambiarlos tergiversaría la información.",
   "usemap_custom_heading": "¿Necesitas una versión personalizada?",
   "usemap_custom_body_prefix": "¿Quieres un mapa solo de tu estado o región, o una versión de marca blanca?",

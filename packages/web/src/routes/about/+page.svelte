@@ -6,6 +6,8 @@
   $: title = m.about_meta_title();
   $: description = m.about_meta_description();
   const siteUrl = import.meta.env.PUBLIC_SITE_URL ?? "https://287g.recoveredfactory.net";
+  // Page-wide first-mention tracker: gloss the first time each term appears
+  // anywhere on the page, not once per paragraph.
   const seen = new Set<string>();
 </script>
 
@@ -25,15 +27,13 @@
   <h1 class="text-2xl font-black text-slate-900 sm:text-4xl">{m.about_heading()}</h1>
 
   <div class="prose-editorial mt-6 sm:mt-8">
-    <p><strong>287(g) Explorer</strong> <Gloss text={m.about_intro_1_after_name()} {seen} /></p>
+    <p><strong>287(g) Watch</strong> <Gloss text={m.about_intro_1_after_name()} {seen} /></p>
 
     <p><Gloss text={m.about_intro_2()} {seen} /></p>
 
     <h2 class="mt-8 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.about_why_heading()}</h2>
 
     <p><Gloss text={m.about_why_1()} {seen} /></p>
-
-    <p><Gloss text={m.about_why_2()} {seen} /></p>
 
     <h2 class="mt-8 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.about_involve_heading()}</h2>
 

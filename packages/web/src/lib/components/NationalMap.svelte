@@ -264,7 +264,6 @@
       map.resize();
       map.fitBounds(FIT_BOUNDS, FIT_OPTIONS);
       map.setMinZoom(map.getZoom());
-      if (selectedStates.size > 0) fitToSelection();
 
       // Don't hijack page scroll at the locked-floor zoom — at full zoom-out
       // there's nothing to scroll-zoom into anyway, and a wheel over the map
