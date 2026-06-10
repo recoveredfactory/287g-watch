@@ -12,6 +12,7 @@
   import { m } from "$lib/paraglide/messages.js";
   import Gloss from "$lib/components/Gloss.svelte";
   import { ogImage } from "$lib/ogImage";
+  import TrendCharts from "$lib/components/TrendCharts.svelte";
 
   export let data: PageData;
 
@@ -644,6 +645,19 @@
     </div>
   </section>
 
+
+  <!-- ── Participation trends ─────────────────────────────────────────────── -->
+  {#if data.timeline.length > 1}
+    <section class="border-b border-slate-200 px-4 py-8 sm:px-6 sm:py-10">
+      <div class="mx-auto max-w-6xl">
+        <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">Program growth</h2>
+        <p class="mt-1 text-sm text-slate-500">Agencies in the 287(g) program over time, by model type</p>
+        <div class="mt-5">
+          <TrendCharts timeline={data.timeline} />
+        </div>
+      </div>
+    </section>
+  {/if}
 
   <!-- ── Search + filter + browse ──────────────────────────────────────────── -->
   <section class="px-4 py-10 sm:px-6 sm:py-12">
