@@ -1,15 +1,16 @@
 <script lang="ts">
   // ── National trend chart (#162) ────────────────────────────────────────────
   // Low-key growth chart for the home page: a stepped multi-series line of
-  // cumulative agency–model *agreements*, since May 2025. Each model an agency
+  // cumulative agency–model *agreements*, since Dec 2024. Each model an agency
   // holds is one agreement, so an agency with two models contributes to two
   // series — the lines multi-count and their totals match the model cards'
   // `modelCounts`. Cumulative counts are a step function by nature — the line
   // only moves on the dates agencies actually signed — so the curve is stepped
   // rather than interpolated.
   //
-  // The timeline begins May 2025 (first month with a complete dataset, same
-  // TIMELINE_START as the map). Pre-May-2025 signings fold into the May baseline.
+  // The timeline begins Dec 2024 (the last pre-2025 archived snapshot, #169 —
+  // a pre-Trump baseline, same TIMELINE_START as the map). Pre-Dec-2024
+  // signings fold into the Dec 2024 baseline.
   // A state selector (embedded in the headline) scopes the chart to one state.
   import { MODEL_COLORS, MODEL_ORDER, MODEL_MINI } from "$lib/colors";
   import { STATE_NAMES } from "$lib/states";
@@ -39,13 +40,13 @@
 
   // ── Time axis ───────────────────────────────────────────────────────────────
   const EPOCH_YEAR = 2025;
-  const START_IDX = 4; // May 2025, relative to the Jan 2025 epoch
+  const START_IDX = -1; // Dec 2024, relative to the Jan 2025 epoch
   const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const monthLabelShort = (idx: number) =>
     `${MONTH_NAMES[((idx % 12) + 12) % 12]} ’${String(EPOCH_YEAR + Math.floor(idx / 12)).slice(2)}`;
 
-  // Signing date → integer month index. Anything before May 2025 (or undated)
-  // folds into the May baseline so the line starts from the standing total.
+  // Signing date → integer month index. Anything before Dec 2024 (or undated)
+  // folds into the Dec 2024 baseline so the line starts from the standing total.
   const effectiveMonth = (d: string | null | undefined): number => {
     if (!d || d.length < 7) return START_IDX;
     const y = Number(d.slice(0, 4));
@@ -172,7 +173,7 @@
       </span>
     </h2>
     <p class="mt-1 text-sm text-slate-600">
-      Cumulative 287(g) agreements by model, since May&nbsp;2025.
+      Cumulative 287(g) agreements by model, since Dec&nbsp;2024.
     </p>
     <!-- Distinct figures: an agency can hold more than one model -->
     <p class="mt-2 text-sm text-slate-500">
@@ -194,7 +195,7 @@
     </div>
 
     <div class="mt-4">
-      <svg viewBox="0 0 {W} {H}" class="block w-full" role="img" aria-label="Cumulative 287(g) agreements by model since May 2025">
+      <svg viewBox="0 0 {W} {H}" class="block w-full" role="img" aria-label="Cumulative 287(g) agreements by model since December 2024">
         <!-- simple numeric y-axis: a few round ticks + faint gridlines -->
         {#each yTicks as t}
           <line x1={PAD.l} y1={yAt(t)} x2={W - PAD.r} y2={yAt(t)} stroke="#eef2f6" />
@@ -220,7 +221,7 @@
     </div>
 
     <p class="mt-3 text-xs italic text-slate-400">
-      Experimental (#162). Each line counts agency–model agreements, so an agency with two models counts once per model; pre-May-2025 signings fold into the May baseline.
+      Experimental (#162). Each line counts agency–model agreements, so an agency with two models counts once per model; pre-Dec-2024 signings fold into the Dec 2024 baseline.
     </p>
   </div>
 </section>
