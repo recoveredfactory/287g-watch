@@ -60,6 +60,9 @@ importers:
       pmtiles:
         specifier: ^4.3.2
         version: 4.4.1
+      svelte-virtual-list:
+        specifier: ^3.0.1
+        version: 3.0.1
       tailwindcss:
         specifier: ^4.1.18
         version: 4.3.0
@@ -1977,6 +1980,9 @@ packages:
   svelte-kit-sst@2.43.5:
     resolution: {integrity: sha512-tvWj/YiPCL3scFcHo/RSYZWtXIuX6g6Mib4MXmDw0JrOtZHzqOCG4kWstTbjnWH4i4XyLPPvxrgSkm35muj4uw==}
 
+  svelte-virtual-list@3.0.1:
+    resolution: {integrity: sha512-e7e+jn8VDjmdD8A1oOVBWmUi7jg+uugmiihkK0Cuk35JeeCR8ja40/B6DpCTHJFsQAZg6EVPjetN2ibgr25YCA==}
+
   svelte@5.55.9:
     resolution: {integrity: sha512-fTjjT8cHLDwigcu2j3pv7Jq04LklXevPB8uBgyHNiTXv+RMNvVnrjS4UEYrLMkhuq1vpCodHjiW+z/95SDs/fg==}
     engines: {node: '>=18'}
@@ -3824,6 +3830,8 @@ snapshots:
       - picomatch
 
   svelte-kit-sst@2.43.5: {}
+
+  svelte-virtual-list@3.0.1: {}
 
   svelte@5.55.9:
     dependencies:
