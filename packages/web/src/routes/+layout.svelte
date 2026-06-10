@@ -47,8 +47,50 @@
     return localizeHref(basePath, { locale: targetLocale });
   }
 
+  // Active-tab matcher for the header nav. "/" only matches the home page
+  // exactly; other paths match the page itself plus any nested route.
+  const isNavActive = (href: string, current: string): boolean =>
+    href === "/" ? current === "/" : current === href || current.startsWith(href + "/");
+
+  // Session-only dismissal (#93): user gets the banner once per browser
+  // session, not once-and-forever. localStorage was too sticky — we'd
+  // rather risk re-showing the banner across sessions than lose all
+  // visibility for someone who clicked × six months ago.
   const BANNER_KEY = "rf-banner-dismissed";
   let bannerVisible = false;
+
+  // RF banner A/B test (#93): random pick per page-view, equal weight,
+  // assigned client-side once the banner is about to render. Two complete
+  // pairs — different pitch + CTA + destination — testing which framing
+  // (commercial vs reader-support) converts better.
+  //   hire    → mailto, "Got messy data? / We'll turn the noise into signal."
+  //   support → /support, "This data belongs to you. / Help us keep it open."
+  // Fires conversion_impression_{variant} on mount + conversion_click_{variant}
+  // when the CTA is tapped.
+  type ConversionVariant = "hire" | "support";
+  const CONVERSION_VARIANTS: ConversionVariant[] = ["hire", "support"];
+  let conversionVariant: ConversionVariant = "hire";
+  $: bannerHref =
+    conversionVariant === "hire"
+      ? "mailto:davideads@recoveredfactory.net"
+      : `https://recoveredfactory.net/${locale}/support`;
+  $: bannerHook =
+    conversionVariant === "hire"
+      ? m.rf_banner_hire_hook()
+      : m.rf_banner_support_hook();
+  $: bannerFollow =
+    conversionVariant === "hire"
+      ? m.rf_banner_hire_follow()
+      : m.rf_banner_support_follow();
+  $: bannerCtaLabel =
+    conversionVariant === "hire"
+      ? m.rf_banner_hire_cta()
+      : m.rf_banner_support_cta();
+  function trackConversion(event: string) {
+    if (typeof window === "undefined") return;
+    const w = window as unknown as { umami?: { track?: (e: string) => void } };
+    w.umami?.track?.(event);
+  }
 
   // Language-mismatch banner: offers to switch when the browser's preferred
   // language differs from the URL locale. Dismissed once, never returns.
@@ -56,7 +98,14 @@
   let mismatchTarget: Locale | null = null;
 
   onMount(() => {
-    bannerVisible = !localStorage.getItem(BANNER_KEY);
+    bannerVisible = !sessionStorage.getItem(BANNER_KEY);
+    if (bannerVisible) {
+      conversionVariant =
+        CONVERSION_VARIANTS[
+          Math.floor(Math.random() * CONVERSION_VARIANTS.length)
+        ];
+      trackConversion(`conversion_impression_${conversionVariant}`);
+    }
 
     if (localStorage.getItem(MISMATCH_KEY)) return;
     if (hasLocaleCookie()) return; // user has already expressed a preference
@@ -68,7 +117,11 @@
 
   function dismissBanner() {
     bannerVisible = false;
-    localStorage.setItem(BANNER_KEY, "1");
+    sessionStorage.setItem(BANNER_KEY, "1");
+  }
+
+  function onBannerCta() {
+    trackConversion(`conversion_click_${conversionVariant}`);
   }
 
   function dismissMismatch() {
@@ -188,11 +241,27 @@
 
         <!-- Row 2 on mobile / middle+right on desktop -->
         <div class="mt-2.5 flex items-center sm:mt-0 sm:flex-1">
-          <nav class="flex items-center gap-5 text-sm font-semibold text-white sm:ml-8">
-            <a href={localizeHref("/")} class="no-underline hover:text-white/70">{m.nav_map()}</a>
-            <a href={localizeHref("/about")} class="no-underline hover:text-white/70">{m.nav_about()}</a>
-            <a href={localizeHref("/glossary")} class="no-underline hover:text-white/70">{m.nav_glossary()}</a>
-            <a href={localizeHref("/methodology")} class="no-underline hover:text-white/70">{m.nav_methodology()}</a>
+          <nav class="flex items-center gap-5 text-sm font-semibold sm:ml-8">
+            <a
+              href={localizeHref("/")}
+              class="no-underline {isNavActive('/', basePath) ? 'text-white underline underline-offset-4 decoration-2' : 'text-white/60 hover:text-white'}"
+              aria-current={isNavActive('/', basePath) ? 'page' : undefined}
+            >{m.nav_map()}</a>
+            <a
+              href={localizeHref("/about")}
+              class="no-underline {isNavActive('/about', basePath) ? 'text-white underline underline-offset-4 decoration-2' : 'text-white/60 hover:text-white'}"
+              aria-current={isNavActive('/about', basePath) ? 'page' : undefined}
+            >{m.nav_about()}</a>
+            <a
+              href={localizeHref("/glossary")}
+              class="no-underline {isNavActive('/glossary', basePath) ? 'text-white underline underline-offset-4 decoration-2' : 'text-white/60 hover:text-white'}"
+              aria-current={isNavActive('/glossary', basePath) ? 'page' : undefined}
+            >{m.nav_glossary()}</a>
+            <a
+              href={localizeHref("/methodology")}
+              class="no-underline {isNavActive('/methodology', basePath) ? 'text-white underline underline-offset-4 decoration-2' : 'text-white/60 hover:text-white'}"
+              aria-current={isNavActive('/methodology', basePath) ? 'page' : undefined}
+            >{m.nav_methodology()}</a>
           </nav>
           <!-- Lang switcher — hidden on mobile; visible on desktop -->
           <div class="ml-auto hidden items-center gap-2 border-l border-white/20 pl-5 text-xs uppercase tracking-wider sm:flex" aria-label={m.lang_toggle_aria()}>
@@ -258,21 +327,23 @@
     role="complementary"
     aria-label="Support Recovered Factory"
   >
-    <div class="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-4">
-      <p class="text-sm font-semibold text-white">{m.rf_banner_question()}</p>
+    <div class="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-2">
+      <p class="text-sm font-semibold text-white">{bannerHook}</p>
       <p class="text-sm text-white/80 sm:truncate">
-        {m.rf_banner_pitch()}
+        {bannerFollow}
       </p>
     </div>
     <div class="flex shrink-0 items-center gap-3">
       <a
-        href="https://vsr.recoveredfactory.net/en"
-        target="_blank"
-        rel="noreferrer"
+        href={bannerHref}
+        target={conversionVariant === "support" ? "_blank" : "_self"}
+        rel={conversionVariant === "support" ? "noreferrer" : null}
+        on:click={onBannerCta}
+        data-variant={conversionVariant}
         class="rounded px-3 py-1.5 text-sm font-semibold no-underline hover:no-underline"
         style="background-color: #BE6079; color: #ffffff;"
       >
-        {m.rf_banner_cta()}
+        {bannerCtaLabel}
       </a>
       <button
         on:click={dismissBanner}

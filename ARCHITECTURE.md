@@ -47,6 +47,8 @@ The map uses MapLibre GL with a CartoDB Positron basemap. Agencies are clustered
 
 SST v3 configuration for AWS deployment. The SvelteKit app runs as a Lambda-backed site behind CloudFront (`svelte-kit-sst` adapter); the JSON data file is served as a static asset from that same CloudFront distribution. Two stages — `prod` and `staging` — with custom domains configured via `.env`.
 
+Also defines `MapArchive`, a per-stage public S3 bucket for the downloadable map assets (see [Map assets & releasing](#map-assets--releasing)).
+
 ---
 
 ## Data flow
@@ -68,6 +70,31 @@ appelson/Tracking_287g (GitHub)
         ▼
   Browser — map + agency list
 ```
+
+---
+
+## Map assets & releasing
+
+The baked assets — the map video/gif/png **and** the OG/social cards (~1,600 per-agency PNGs, ~487MB) — do **not** ride in the site deploy. They're baked to `packages/web/.assets/` (never `static/`, so `sst deploy` doesn't bundle them) and live in a per-stage public S3 bucket (`MapArchive`), served via direct S3 URLs — no CloudFront, no custom domain (keeps clear of the account's CloudFront cache-policy quota; and keeps the deploy small/fast as the agency count grows).
+
+- **Map cuts** are baked **per language** (title/labels/watermark injected by the bake, not read from the page). The licensing page (`/use-the-map`) offers both language downloads on every page version, reading `PUBLIC_MAP_ASSETS_URL` (set by SST per stage) and linking the bucket's `-latest-<lang>` copies.
+  - `map-latest-<lang>.{mp4,gif,png}` — overwritten each release; short cache; linked publicly.
+  - `map-<release-date>-<hash8>-<lang>.{mp4,gif,png}` — immutable archive copy; long cache; **unlinked** (unguessable name).
+- **OG cards** mirror to the bucket under `og/`; every page's `og:image`/`twitter:image` points at `${PUBLIC_MAP_ASSETS_URL}/og/…` via `$lib/ogImage.ts` (falls back to the site origin in local dev).
+
+**Release flow, per stage** (`staging` shown; repeat with `:prod`):
+
+```
+pnpm pipeline                                       # regenerate agency_index.json + terminated_agencies.json (GITHUB_TOKEN)
+pnpm diff:staging && pnpm deploy:staging            # site + MapArchive bucket (sets PUBLIC_MAP_ASSETS_URL)
+pnpm -F web bake:map-video --lang=en --url=…/en     # bake EN cut (add --still for a fast PNG-only check)
+pnpm -F web bake:map-video --lang=es --url=…/es     # bake ES cut (en/es safe to run in parallel)
+pnpm -F web bake:og --url=…/en                      # bake all OG cards (incl. per-agency)
+pnpm publish:map-assets:staging                     # video cuts → bucket
+pnpm publish:og:staging                             # OG cards → bucket/og
+```
+
+A warm xlsx cache makes the pipeline token-free and ~15s (`pnpm -F pipeline cache:warm`). Assets must be **published after each deploy** — they're not in the deploy. In the window between `deploy` and `publish`, the licensing video and OG cards 404 (bucket empty until published) — run them back-to-back.
 
 ---
 

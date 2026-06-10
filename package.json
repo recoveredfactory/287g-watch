@@ -7,10 +7,17 @@
     "dev:web": "pnpm -F web dev",
     "deploy:staging": "sst deploy --stage staging",
     "deploy:prod": "sst deploy --stage prod",
+    "deploy": "node scripts/deploy.mjs",
+    "deploy:staging:assets": "node scripts/deploy.mjs --stage staging --bake-og --bake-video",
+    "deploy:prod:assets": "node scripts/deploy.mjs --stage prod --bake-og --bake-video",
     "diff:staging": "sst diff --stage staging",
     "diff:prod": "sst diff --stage prod",
     "remove:staging": "sst remove --stage staging",
-    "pipeline": "pnpm -F pipeline ingest"
+    "pipeline": "pnpm -F pipeline ingest",
+    "publish:map-assets:staging": "sst shell --stage staging node packages/web/scripts/publish-map-assets.mjs",
+    "publish:map-assets:prod": "sst shell --stage prod node packages/web/scripts/publish-map-assets.mjs",
+    "publish:og:staging": "sst shell --stage staging node packages/web/scripts/publish-og.mjs",
+    "publish:og:prod": "sst shell --stage prod node packages/web/scripts/publish-og.mjs"
   },
   "devDependencies": {
     "sst": "^3.17.25"

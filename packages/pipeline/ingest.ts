@@ -5,7 +5,10 @@
  * Pulls from appelson/Tracking_287g sheets snapshots (xlsx):
  *   - Discovers the latest snapshot directory via GitHub API
  *   - Downloads and parses the xlsx file
- *   - Geocodes via Census Bureau county centroid Gazetteer
+ *   - Geocodes via Census Bureau gazetteers (fully offline): municipalities →
+ *     place / county-subdivision centroid (the town), others → county centroid;
+ *     statewide agencies get no dot. A small curated override table fixes the
+ *     stragglers (campus/airport police, county-name typos).
  *   - Samples one snapshot per week to build per-agency agreement history
  *   - Joins FBI Law Enforcement Employees data (ORI, officer/civilian counts, population)
  *
@@ -22,11 +25,29 @@ import { parse as parseYaml } from 'yaml'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const OUT_DIR = resolve(__dirname, '../web/static/data/dist')
+// Snapshot xlsx files are immutable once published (each dir is a dated capture),
+// so we cache them on disk. Warm re-runs make zero GitHub API calls for already-
+// seen snapshots — fast and token-free. Delete .cache/sheets to force a refresh.
+const CACHE_DIR = resolve(__dirname, '.cache/sheets')
 
 const GITHUB_SHEETS_API =
   'https://api.github.com/repos/appelson/Tracking_287g/contents/sheets'
-const COUNTY_GAZETTEER_URL =
-  'https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2023_Gazetteer/2023_Gaz_counties_national.zip'
+// Wayback-archived snapshots that predate the live `sheets/` stream. The
+// after_2025 folder fills the Mar–mid-May 2025 gap (same dir naming, xlsx, but
+// no COUNTY column). We ingest only the dirs BEFORE the live stream starts, so
+// there's no overlap to dedup and the live folder stays canonical for any shared
+// date. before_2025 (CSV/HTML era, 2021→2024) is deferred — see #169/#170.
+const GITHUB_AFTER2025_API =
+  'https://api.github.com/repos/appelson/Tracking_287g/contents/archived_data/after_2025/sheets'
+// Pre-2025 HTML era (CSV per dir, 2021→2024, ~150 agencies declining to ~133).
+// State name + agency + support + signed only — no county/agency-type. #169
+const GITHUB_BEFORE2025_API =
+  'https://api.github.com/repos/appelson/Tracking_287g/contents/archived_data/before_2025/sheets'
+const GAZETTEER_BASE =
+  'https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2023_Gazetteer'
+const COUNTY_GAZETTEER_URL = `${GAZETTEER_BASE}/2023_Gaz_counties_national.zip`
+const PLACE_GAZETTEER_URL = `${GAZETTEER_BASE}/2023_Gaz_place_national.zip`
+const COUSUB_GAZETTEER_URL = `${GAZETTEER_BASE}/2023_Gaz_cousubs_national.zip`
 
 const GH_TOKEN = process.env.GITHUB_TOKEN || process.env.GH_TOKEN
 const ghHeaders: Record<string, string> = GH_TOKEN
@@ -125,6 +146,8 @@ interface Agency {
   models: string[]
   primary_model: string | null
   signed_date: string | null
+  first_seen_date: string | null
+  terminated_date: string | null
   population: number | null
   lat: number | null
   lng: number | null
@@ -184,48 +207,207 @@ function historyKey(name: string, state: string): string {
   return `${state.toUpperCase()}\x00${normalized}`
 }
 
-function getISOWeek(date: Date): string {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
-  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7))
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
-  const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
-  return `${d.getUTCFullYear()}-${String(weekNo).padStart(2, '0')}`
+// ── Rename resolution ───────────────────────────────────────────────────────
+//
+// The upstream sheet relabels agencies constantly — "Miami Dade" → "Miami-Dade",
+// "Ft. Myers" → "Fort Myers", "City of X PD" → "X PD", plus raw typos
+// ("Calacasieu" → "Calcasieu") and a campaign of state-prefixing ("Department of
+// Public Safety" → "Texas Department of Public Safety"). Under the naive
+// "absent from the latest snapshot = terminated" rule, every relabel reads as a
+// termination + a brand-new agency. These helpers fold a vanished agency back
+// into its surviving record so only GENUINE departures count as terminations.
+// Validated offline against all 144 clean snapshots (see #118): cleanly
+// separates 42 renames from 68 real terminations with zero false merges.
+
+const STATE_FULL_BY_ABBR: Record<string, string> = Object.fromEntries(
+  Object.entries(STATE_ABBREVS).map(([full, ab]) => [ab, full.toLowerCase()]),
+)
+
+// Aggressive canonical form for identity matching (more folding than historyKey):
+// hyphens → space, &/. /' normalized, common abbreviations expanded.
+function canonName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[.'’,/]/g, ' ')
+    .replace(/-/g, ' ')
+    .replace(/&/g, ' and ')
+    .replace(/\bft\b/g, 'fort')
+    .replace(/\bst\b/g, 'saint')
+    .replace(/\bste\b/g, 'sainte')
+    .replace(/\btwp\b/g, 'township')
+    .replace(/\bdept\b/g, 'department')
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+// Generic agency words dropped so the distinctive part (the place / qualifier)
+// can be compared on its own.
+const RENAME_FILLER = new Set([
+  'police', 'department', 'sheriffs', 'sheriff', 'office', 'of', 'the', 'county',
+  'city', 'town', 'village', 'borough', 'services', 'service', 'public', 'safety',
+  'division', 'corrections', 'correctional', 'board', 'commissioners', 'detention',
+  'center', 'dps', 'authority', 'and', 'district',
+])
+function distinctiveTokens(name: string): Set<string> {
+  return new Set(canonName(name).split(' ').filter((w) => w && !RENAME_FILLER.has(w)))
+}
+const sameSet = (a: Set<string>, b: Set<string>): boolean =>
+  a.size === b.size && [...a].every((x) => b.has(x))
+
+// Levenshtein edit distance (small strings; iterative two-row would be leaner
+// but agency names are short enough that the full matrix is fine).
+function editDistance(a: string, b: string): number {
+  const m = a.length, n = b.length
+  if (!m) return n
+  if (!n) return m
+  const d: number[][] = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)])
+  for (let j = 0; j <= n; j++) d[0][j] = j
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1))
+  return d[m][n]
 }
 
 type GHEntry = { name: string; type: string; url: string }
 
-// Pick the most recent snapshot directory for each calendar week
-function sampleWeekly(dirs: GHEntry[]): GHEntry[] {
-  const byWeek = new Map<string, GHEntry>()
-  for (const dir of dirs) { // dirs are sorted newest-first
-    const m = dir.name.match(/^sheets_(\d{4})(\d{2})(\d{2})/)
-    if (!m) continue
-    const date = new Date(`${m[1]}-${m[2]}-${m[3]}T12:00:00Z`)
-    const weekKey = getISOWeek(date)
-    if (!byWeek.has(weekKey)) byWeek.set(weekKey, dir)
-  }
-  return [...byWeek.values()].sort((a, b) => a.name.localeCompare(b.name))
+// All snapshot dirs, oldest-first, that carry a parseable date. The upstream
+// repo publishes every-other-day, so this is ~170 snapshots since May 2025 —
+// we ingest all of them and filter out the broken ones below (see #118).
+function chronologicalSnapshots(dirs: GHEntry[]): GHEntry[] {
+  return dirs
+    .filter((d) => /^sheets_\d{8}/.test(d.name))
+    .sort((a, b) => a.name.localeCompare(b.name))
 }
 
-// Parse an xlsx buffer into a map of historyKey → Set<model>
-function parseSnapshot(buf: Buffer): Map<string, Set<string>> {
+// One agency as observed in a single snapshot: its models plus the raw row
+// fields we need to emit a record for it even after it later disappears (a
+// terminated agency is never in the latest snapshot, so it never reaches the
+// normalize/group pass — we rebuild it from its last-seen observation instead).
+interface SnapshotAgency {
+  models: Set<string>
+  name: string
+  state: string
+  county: string | null
+  agency_type: string | null
+  signed_date: string | null
+}
+
+// One snapshot row, normalized across the two upstream formats: the xlsx era
+// (STATE/AGENCY/TYPE/COUNTY/SUPPORT TYPE/SIGNED columns) and the pre-2025 HTML
+// era (CSV: state/agency/support/signed, no TYPE or COUNTY). See #169.
+interface SnapRow {
+  stateFull: string
+  name: string
+  model: string
+  signedRaw: unknown
+  county: string | null
+  agencyType: string | null
+}
+
+function xlsxSnapRows(buf: Buffer): SnapRow[] {
   const wb = xlsxRead(buf, { type: 'buffer', cellDates: true })
   const ws = wb.Sheets[wb.SheetNames[0]]
   const rows = xlsxUtils.sheet_to_json<RawRow>(ws, { defval: null })
-  const result = new Map<string, Set<string>>()
+  return rows.map((r) => ({
+    stateFull: str(r.STATE).toUpperCase(),
+    name: str(r['LAW ENFORCEMENT AGENCY']),
+    model: str(r['SUPPORT TYPE']),
+    signedRaw: r.SIGNED,
+    county: str(r.COUNTY) || null,
+    agencyType: str(r.TYPE) || null,
+  }))
+}
+
+// before_2025 CSV header: capture_date, capture_file, state, agency, support,
+// signed, link, addendum, date_only. State is the full name ("ALABAMA"); there
+// is no county or agency-type column.
+function csvSnapRows(buf: Buffer): SnapRow[] {
+  const rows = parseCSV(buf.toString('utf8'))
+  if (rows.length < 2) return []
+  const header = rows[0].map((h) => h.trim().toLowerCase())
+  const col = (name: string) => header.indexOf(name)
+  const iState = col('state'), iAgency = col('agency'), iSupport = col('support'), iSigned = col('signed')
+  if (iState < 0 || iAgency < 0 || iSupport < 0) return []
+  const out: SnapRow[] = []
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i]
+    if (!row.length) continue
+    out.push({
+      stateFull: str(row[iState]).toUpperCase(),
+      name: str(row[iAgency]),
+      model: str(row[iSupport]),
+      signedRaw: iSigned >= 0 ? row[iSigned] : null,
+      county: null,
+      agencyType: null,
+    })
+  }
+  return out
+}
+
+// Parse a snapshot buffer (xlsx OR csv, detected by the zip magic bytes) into a
+// map of historyKey → SnapshotAgency.
+function parseSnapshot(buf: Buffer): Map<string, SnapshotAgency> {
+  const isXlsx = buf.length >= 2 && buf[0] === 0x50 && buf[1] === 0x4b // "PK" zip header
+  const rows = isXlsx ? xlsxSnapRows(buf) : csvSnapRows(buf)
+  const result = new Map<string, SnapshotAgency>()
   for (const row of rows) {
-    const stateFull = str(row.STATE).toUpperCase()
-    const state = STATE_ABBREVS[stateFull]
+    const state = STATE_ABBREVS[row.stateFull]
     if (!state) continue
-    const name = str(row['LAW ENFORCEMENT AGENCY'])
-    if (!name) continue
-    const model = str(row['SUPPORT TYPE'])
-    if (!model) continue
-    const key = historyKey(name, state)
-    if (!result.has(key)) result.set(key, new Set())
-    result.get(key)!.add(model)
+    if (!row.name) continue
+    if (!row.model) continue
+    const key = historyKey(row.name, state)
+    let e = result.get(key)
+    if (!e) {
+      e = {
+        models: new Set(),
+        name: row.name,
+        state,
+        county: row.county,
+        agency_type: row.agencyType,
+        signed_date: parseSignedDate(row.signedRaw),
+      }
+      result.set(key, e)
+    }
+    e.models.add(row.model)
   }
   return result
+}
+
+// Return a snapshot dir's xlsx bytes, disk-cached by dir name. On a cache hit
+// this makes no network calls at all; on a miss it lists the dir, downloads the
+// xlsx, and caches it. Returns null if the dir has no xlsx.
+async function snapshotBuffer(dir: GHEntry): Promise<Buffer | null> {
+  // Cache key is the dir name; the era determines the extension (xlsx for the
+  // 2025+ sheets, csv for the pre-2025 HTML era). Check both on a warm run.
+  const xlsxPath = resolve(CACHE_DIR, `${dir.name}.xlsx`)
+  const csvPath = resolve(CACHE_DIR, `${dir.name}.csv`)
+  if (existsSync(xlsxPath)) return readFileSync(xlsxPath)
+  if (existsSync(csvPath)) return readFileSync(csvPath)
+
+  const filesResp = await ghFetch(dir.url)
+  if (!filesResp.ok) return null
+  type GHFile = { name: string; download_url: string }
+  const files = (await filesResp.json()) as GHFile[]
+  // Both live and after_2025 dirs carry a participating AND a pending xlsx.
+  // We only ingest the participating sheet. (The old "first xlsx" worked only
+  // because GitHub lists "participating" before "pending" alphabetically — pick
+  // it explicitly so a listing-order change can't silently grab pending.) The
+  // pre-2025 HTML era has neither, just a single CSV — fall back to that.
+  const xlsxFiles = files.filter((f) => f.name.toLowerCase().endsWith('.xlsx'))
+  const dataFile =
+    xlsxFiles.find((f) => /participat/i.test(f.name)) ??
+    xlsxFiles.find((f) => !/pending/i.test(f.name)) ??
+    files.find((f) => f.name.toLowerCase().endsWith('.csv'))
+  if (!dataFile) return null
+
+  const dataResp = await ghFetch(dataFile.download_url)
+  if (!dataResp.ok) return null
+  const buf = Buffer.from(await dataResp.arrayBuffer())
+  mkdirSync(CACHE_DIR, { recursive: true })
+  const ext = dataFile.name.toLowerCase().endsWith('.csv') ? 'csv' : 'xlsx'
+  writeFileSync(resolve(CACHE_DIR, `${dir.name}.${ext}`), buf)
+  return buf
 }
 
 // ── 1. Fetch latest snapshot ───────────────────────────────────────────────────
@@ -245,18 +427,10 @@ let latestBuf: Buffer | null = null
 let snapshotName = ''
 
 for (const dir of snapshotDirs.slice(0, 5)) {
-  const filesResp = await ghFetch(dir.url)
-  if (!filesResp.ok) continue
-  type GHFile = { name: string; download_url: string }
-  const files = (await filesResp.json()) as GHFile[]
-  const xlsxFile = files.find((f) => f.name.endsWith('.xlsx'))
-  if (!xlsxFile) continue
+  const buf = await snapshotBuffer(dir)
+  if (!buf) continue
 
-  console.log(`  Fetching ${xlsxFile.download_url}`)
-  const dataResp = await ghFetch(xlsxFile.download_url)
-  if (!dataResp.ok) throw new Error(`xlsx fetch: ${dataResp.status}`)
-
-  latestBuf = Buffer.from(await dataResp.arrayBuffer())
+  latestBuf = buf
   snapshotName = dir.name
   const wb = xlsxRead(latestBuf, { type: 'buffer', cellDates: true })
   const ws = wb.Sheets[wb.SheetNames[0]]
@@ -279,20 +453,50 @@ const snapshotDate = dateMatch
 
 console.log('\nBuilding agreement history from weekly snapshots...')
 
-const sampledDirs = sampleWeekly(snapshotDirs)
-console.log(`  Sampling ${sampledDirs.length} weekly snapshots`)
+const dirDate = (name: string): string | null => {
+  const m = name.match(/^sheets_(\d{4})(\d{2})(\d{2})/)
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : null
+}
+
+// Pull the archived snapshots that PREDATE the live stream — the pre-2025 HTML
+// era (before_2025, CSV) plus the Mar–mid-May 2025 gap fill (after_2025, xlsx).
+// Keeping only dirs before the live start means no overlap to dedup; the live
+// folder stays canonical for any shared date. See #169.
+const liveDirs = chronologicalSnapshots(snapshotDirs)
+const earliestLiveDate = liveDirs.map((d) => dirDate(d.name)).filter(Boolean).sort()[0] ?? null
+
+async function archiveDirsBefore(api: string, label: string, cutoff: string | null): Promise<GHEntry[]> {
+  const resp = await ghFetch(api)
+  if (!resp.ok) {
+    console.warn(`  ⚠ ${label} archive listing failed (${resp.status}) — skipping that era`)
+    return []
+  }
+  const entries = (await resp.json()) as GHEntry[]
+  return chronologicalSnapshots(entries.filter((e) => e.type === 'dir')).filter(
+    (d) => !cutoff || (dirDate(d.name) ?? '') < cutoff
+  )
+}
+
+const before2025Dirs = await archiveDirsBefore(GITHUB_BEFORE2025_API, 'before_2025', earliestLiveDate)
+const after2025Dirs = await archiveDirsBefore(GITHUB_AFTER2025_API, 'after_2025', earliestLiveDate)
+console.log(
+  `  + ${before2025Dirs.length} before_2025 (HTML era) + ${after2025Dirs.length} after_2025 (gap fill) archive snapshots before ${earliestLiveDate}`
+)
+
+const allDirs = chronologicalSnapshots([...before2025Dirs, ...after2025Dirs, ...liveDirs])
+console.log(`  Ingesting all ${allDirs.length} snapshots (oldest-first)`)
 
 interface SnapshotRecord {
   date: string
-  agencies: Map<string, Set<string>>
+  agencies: Map<string, SnapshotAgency>
 }
 
 // Fetch snapshots in small batches to respect GitHub API rate limits
 const BATCH = 5
-const snapshots: SnapshotRecord[] = []
+const rawSnapshots: SnapshotRecord[] = []
 
-for (let i = 0; i < sampledDirs.length; i += BATCH) {
-  const batch = sampledDirs.slice(i, i + BATCH)
+for (let i = 0; i < allDirs.length; i += BATCH) {
+  const batch = allDirs.slice(i, i + BATCH)
   const results = await Promise.all(
     batch.map(async (dir): Promise<SnapshotRecord | null> => {
       const m = dir.name.match(/^sheets_(\d{4})(\d{2})(\d{2})/)
@@ -304,31 +508,101 @@ for (let i = 0; i < sampledDirs.length; i += BATCH) {
         return { date, agencies: parseSnapshot(latestBuf) }
       }
 
-      const filesResp = await ghFetch(dir.url)
-      if (!filesResp.ok) return null
-      type GHFile = { name: string; download_url: string }
-      const files = (await filesResp.json()) as GHFile[]
-      const xlsxFile = files.find((f) => f.name.endsWith('.xlsx'))
-      if (!xlsxFile) return null
-
-      const dataResp = await ghFetch(xlsxFile.download_url)
-      if (!dataResp.ok) return null
-
-      const buf = Buffer.from(await dataResp.arrayBuffer())
+      const buf = await snapshotBuffer(dir)
+      if (!buf) return null
       return { date, agencies: parseSnapshot(buf) }
     })
   )
-  for (const r of results) if (r) snapshots.push(r)
-  process.stdout.write(`  ${Math.min(i + BATCH, sampledDirs.length)}/${sampledDirs.length} fetched\r`)
+  for (const r of results) if (r) rawSnapshots.push(r)
+  process.stdout.write(`  ${Math.min(i + BATCH, allDirs.length)}/${allDirs.length} fetched\r`)
 }
 console.log()
 
-// Derive per-agency history: only record dates where models changed
-function buildHistory(key: string): HistoryEvent[] {
+// Reject broken snapshots. A handful of upstream dates return malformed xlsx
+// that parse as a mass phantom-removal and bounce back days later. We pin the
+// known-bad dates outright (some, like 2026-02-28, drop too few agencies to
+// trip the ratio test below). The pipeline is run attended, so the count
+// heuristic additionally FLAGS any new suspicious snapshot — verify it and add
+// it to KNOWN_BAD_SNAPSHOTS. See #118.
+const KNOWN_BAD_SNAPSHOTS = new Set([
+  '2026-01-01', // 1,012 of ~1,582 dropped, back by 2026-01-10
+  '2025-10-25', //   870 dropped, back by 2025-11-01
+  '2025-06-10', //   492 dropped, back by 2025-06-21
+  '2026-02-28', //    55 dropped + re-added; too mild for the ratio test
+])
+// The real malformed-snapshot detector is the RELATIVE gate (DROP_RATIO vs the
+// prior good count) — it scales across eras on its own: 287(g) was rare early on
+// (dozens of agencies in the 2021 HTML era), ~305 in Mar 2025, ~1,500 today, so
+// no single absolute count is meaningfully "too low" everywhere. MIN_AGENCIES is
+// therefore just an empty/near-empty-parse backstop for the FIRST snapshot (which
+// has no prior to compare against); keep it well below the sparsest real era so a
+// future before_2025 ingest drops in cleanly. See #169.
+const MIN_AGENCIES = 20
+const DROP_RATIO = 0.7
+const snapshots: SnapshotRecord[] = []
+const rejected: { date: string; count: number; reason: string }[] = []
+let lastGoodCount = 0
+for (const snap of rawSnapshots) {
+  const count = snap.agencies.size
+  if (KNOWN_BAD_SNAPSHOTS.has(snap.date)) {
+    rejected.push({ date: snap.date, count, reason: 'known-bad' })
+    continue
+  }
+  // Heuristic detector for *new* broken snapshots: an implausible count drop.
+  // Reject and warn loudly so an attended run can confirm and pin it above.
+  if (count < MIN_AGENCIES || (lastGoodCount && count < DROP_RATIO * lastGoodCount)) {
+    const reason = count < MIN_AGENCIES ? `<${MIN_AGENCIES}` : `<${DROP_RATIO * 100}% of ${lastGoodCount}`
+    rejected.push({ date: snap.date, count, reason: `SUSPECT (${reason})` })
+    console.warn(`  ⚠ SUSPECT snapshot ${snap.date}: ${count} agencies (${reason}) — verify and add to KNOWN_BAD_SNAPSHOTS if broken`)
+    continue
+  }
+  snapshots.push(snap)
+  lastGoodCount = count
+}
+console.log(`  ${snapshots.length} snapshots accepted, ${rejected.length} rejected`)
+for (const r of rejected) {
+  console.log(`    rejected ${r.date}: ${r.count} agencies (${r.reason})`)
+}
+
+// Observed window per agency across the clean snapshot sequence. snapshots are
+// oldest-first, so firstIdx is set once and lastIdx advances. We also keep the
+// last-seen row so a since-terminated agency can be rebuilt from it (it never
+// reaches the latest-snapshot normalize/group pass). first_seen/terminated date
+// derivation moves below, after rename resolution merges aliases (#118).
+const N = snapshots.length
+const dateAt = (i: number): string => snapshots[i].date
+const observed = new Map<string, { firstIdx: number; lastIdx: number; lastRow: SnapshotAgency }>()
+// Earliest non-blank signed date ICE ever reported for each agency. ICE revises
+// the SIGNED cell forward over time (and sometimes lists an agency before
+// assigning any date), which would otherwise push an agency's timeline position
+// months past when it actually appeared. We pin the EARLIEST claim as the
+// baseline so the timeline reflects first intent, not the latest revision. #118
+const earliestSigned = new Map<string, string>()
+snapshots.forEach((snap, i) => {
+  for (const [key, obs] of snap.agencies) {
+    const e = observed.get(key)
+    if (!e) observed.set(key, { firstIdx: i, lastIdx: i, lastRow: obs })
+    else { e.lastIdx = i; e.lastRow = obs }
+    if (obs.signed_date) {
+      const prev = earliestSigned.get(key)
+      if (!prev || obs.signed_date < prev) earliestSigned.set(key, obs.signed_date)
+    }
+  }
+})
+
+// Derive per-agency history: only record dates where the model set changed.
+// Takes an alias group (one canonical key plus any pre-rename keys merged into
+// it) and unions their models per snapshot, so a relabel doesn't read as a
+// drop-then-re-add. The groups never overlap in time, so the union is clean.
+function buildHistory(keys: Set<string>): HistoryEvent[] {
   const events: HistoryEvent[] = []
   let prev = new Set<string>()
   for (const snap of snapshots) {
-    const curr = snap.agencies.get(key) ?? new Set()
+    const curr = new Set<string>()
+    for (const k of keys) {
+      const obs = snap.agencies.get(k)
+      if (obs) for (const m of obs.models) curr.add(m)
+    }
     const added = [...curr].filter((m) => !prev.has(m))
     const removed = [...prev].filter((m) => !curr.has(m))
     if (added.length || removed.length) {
@@ -415,50 +689,277 @@ for (const rows of byAgency.values()) {
 
 console.log(`  ${grouped.length} unique agencies`)
 
-// ── 4. Geocode via county centroid ─────────────────────────────────────────────
+// ── 4. Geocode via Census gazetteers ────────────────────────────────────────────
+//
+// Cascade per agency:
+//   • State Agency      → no dot (statewide bodies aren't a single point; surfaced
+//                         in lists/counts instead, never on the map)
+//   • Municipality      → place / county-subdivision centroid keyed off the agency
+//                         name (the actual town), falling back to its county centroid
+//   • County (or other) → county centroid
+//   • a curated override table (campus/airport police, county-typo sheriffs)
+//     redirects odd names to the right town/county
+//
+// Place names are matched case-insensitively with Saint/St. and &/and folded
+// together, indexed under both the full gazetteer name ("Lake City") and the
+// suffix-stripped form ("Apopka" from "Apopka city") so "X City"-style names and
+// bare names both resolve.
 
-console.log('\nFetching county centroids from Census Bureau Gazetteer...')
+// Fold the spelling variants the upstream sheet and the Census files disagree on.
+const normPlace = (s: string): string =>
+  s
+    .toUpperCase()
+    .replace(/\bSAINTE?\s+/g, (m) => (m.trim() === 'SAINTE' ? 'STE. ' : 'ST. '))
+    .replace(/&/g, 'AND')
+    .replace(/[.']/g, '')
+    .replace(/-/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
 
-const gazResp = await fetch(COUNTY_GAZETTEER_URL)
-if (!gazResp.ok) throw new Error(`Census Gazetteer: ${gazResp.status}`)
+// A few agencies don't geocode from their name alone — campus and airport
+// police, multi-county jail authorities, and county sheriffs whose county field
+// is a typo. Rather than hand-key coordinates, we map each to the town or county
+// we want its dot in and resolve THAT through the gazetteers above, so every dot
+// lands at a real, verifiable centroid. Keyed by normName(agency)|state.
+// (One straggler — Northwest Regional Police Department, PA — is genuinely
+// ambiguous and is intentionally left unplaced.)
+const normName = (s: string): string => s.toUpperCase().replace(/\s+/g, ' ').trim()
 
-const zip = new AdmZip(Buffer.from(await gazResp.arrayBuffer()))
-const txtEntry = zip.getEntries().find((e) => e.entryName.endsWith('.txt'))
-if (!txtEntry) throw new Error('No .txt in Census Gazetteer zip')
-
-const [headerLine, ...dataLines] = txtEntry.getData().toString('latin1').trim().split('\n')
-const headers = headerLine.split('\t').map((h) => h.trim())
-const col = (name: string) => headers.indexOf(name)
-
-const centroids = new Map<string, [number, number]>()
-for (const line of dataLines) {
-  const cols = line.split('\t')
-  const state = cols[col('USPS')]?.trim()
-  const name = cols[col('NAME')]?.trim()
-  const lat = parseFloat(cols[col('INTPTLAT')]?.trim())
-  const lng = parseFloat(cols[col('INTPTLONG')]?.trim())
-  if (!state || !name || isNaN(lat) || isNaN(lng)) continue
-
-  const nameUpper = name.toUpperCase()
-  const stripped = nameUpper.replace(COUNTY_SUFFIX, '').trim()
-  const key = (n: string) => `${n}|${state}`
-  centroids.set(key(nameUpper), [lat, lng])
-  if (!centroids.has(key(stripped))) centroids.set(key(stripped), [lat, lng])
+const PLACE_OVERRIDES: Record<string, string> = {
+  // Florida campus police → host city
+  'FLORIDA A&M UNIVERSITY BOARD OF TRUSTEES|FL': 'Tallahassee',
+  'FLORIDA INTERNATIONAL UNIVERSITY POLICE DEPARTMENT|FL': 'Miami',
+  'FLORIDA POLYTECHNIC UNIVERSITY POLICE DEPARTMENT|FL': 'Lakeland',
+  'FLORIDA SOUTHWESTERN STATE COLLEGE POLICE DEPARTMENT|FL': 'Fort Myers',
+  'FLORIDA STATE COLLEGE AT JACKSONVILLE POLICE DEPARTMENT|FL': 'Jacksonville',
+  'NEW COLLEGE OF FLORIDA POLICE DEPARTMENT|FL': 'Sarasota',
+  'NORTHWEST FLORIDA STATE COLLEGE POLICE DEPARTMENT|FL': 'Niceville',
+  'TALLAHASSEE STATE COLLEGE POLICE DEPARTMENT|FL': 'Tallahassee',
+  'UNIVERSITY OF FLORIDA POLICE DEPARTMENT|FL': 'Gainesville',
+  'UNIVERSITY OF NORTH FLORIDA POLICE DEPARTMENT|FL': 'Jacksonville',
+  'UNIVERSITY OF WEST FLORIDA POLICE DEPARTMENT|FL': 'Pensacola',
+  // Florida airport police → host city
+  'MELBOURNE INTERNATIONAL AIRPORT POLICE DEPARTMENT|FL': 'Melbourne',
+  'SANFORD AIRPORT POLICE DEPARTMENT|FL': 'Sanford',
+  'SARASOTA MANATEE AIRPORT AUTHORITY POLICE DEPARTMENT|FL': 'Sarasota',
+  // Spelling / suffix the gazetteer disagrees on
+  'HOWEY IN THE HILLS POLICE DEPARTMENT|FL': 'Howey-in-the-Hills',
+  'SUNNY ISLES POLICE DEPARTMENT|FL': 'Sunny Isles Beach',
+  'PITTSBURGH POLICE DEPARTMENT|NH': 'Pittsburg',
+  // Multi-county authorities → the town they're headquartered in
+  'RAPPAHANNOCK, SHENANDOAH, WARREN REGIONAL JAIL AUTHORITY|VA': 'Front Royal',
+  'SOUTHWEST VIRGINIA REGIONAL JAIL AUTHORITY|VA': 'Abingdon',
+  'NORTH COUNTY POLICE COOPERATIVE|MO': 'Pagedale',
 }
 
-console.log(`  Loaded ${centroids.size} county centroid entries`)
+const COUNTY_OVERRIDES: Record<string, string> = {
+  "POPE COUNTY SHERIFF'S OFFICE|AR": 'Pope County', // sheet had "Pop County"
+  "CALCASIEU PARISH SHERIFF'S OFFICE|LA": 'Calcasieu Parish', // "Calacasieu"
+  "ST. BERNARD PARISH SHERIFF'S OFFICE|LA": 'St. Bernard Parish', // "Chalmette Parish"
+  "ST. CHARLES PARISH SHERIFF'S OFFICE|LA": 'St. Charles Parish', // "German Coast County"
+  "BERRIAN COUNTY SHERIFF'S OFFICE|MI": 'Berrien County', // misspelled in agency name
+  "CUSTER COUNTY SHERIFF'S OFFICE|OK": 'Custer County', // "Custer Countey"
+}
 
-function getLatLng(county: string | null, state: string): [number | null, number | null] {
-  if (!county) return [null, null]
-  const upper = county.toUpperCase()
-  const stripped = upper.replace(COUNTY_SUFFIX, '').trim()
+const PLACE_SUFFIX =
+  /\s+(city|town|village|borough|CDP|municipality|township|consolidated government|metro(politan)? government|unified government|urban county)$/i
+
+// Trailing agency words to strip so an agency name collapses to its place name,
+// e.g. "Apopka Police Department" → "Apopka", "Manheim Borough PD" → "Manheim Borough".
+const AGENCY_TAIL =
+  /\s+(Police(\s+Services)?\s+Department|Police\s+Dept\.?|Department\s+of\s+Police|Police\s+Services|Marshal(?:'?s)?\s+Office|Constable(?:'?s)?(\s+Office)?|Department\s+of\s+Public\s+Safety|Public\s+Safety\s+Department|Public\s+Safety|Police|Department\s+of\s+Corrections)\s*$/i
+
+const placeNameFromAgency = (name: string): string =>
+  name.replace(/^(City|Town|Village|Borough)\s+of\s+/i, '').replace(AGENCY_TAIL, '').trim()
+
+async function loadGazetteer(url: string): Promise<Array<[string, string, number, number]>> {
+  const resp = await fetch(url)
+  if (!resp.ok) throw new Error(`Census Gazetteer ${url}: ${resp.status}`)
+  const zip = new AdmZip(Buffer.from(await resp.arrayBuffer()))
+  const txtEntry = zip.getEntries().find((e) => e.entryName.endsWith('.txt'))
+  if (!txtEntry) throw new Error(`No .txt in Census Gazetteer zip: ${url}`)
+  const [headerLine, ...dataLines] = txtEntry.getData().toString('latin1').trim().split('\n')
+  const headers = headerLine.split('\t').map((h) => h.trim())
+  const col = (name: string) => headers.indexOf(name)
+  const out: Array<[string, string, number, number]> = []
+  for (const line of dataLines) {
+    const cols = line.split('\t')
+    const state = cols[col('USPS')]?.trim()
+    const name = cols[col('NAME')]?.trim()
+    const lat = parseFloat(cols[col('INTPTLAT')]?.trim())
+    const lng = parseFloat(cols[col('INTPTLONG')]?.trim())
+    if (!state || !name || isNaN(lat) || isNaN(lng)) continue
+    out.push([state, name, lat, lng])
+  }
+  return out
+}
+
+console.log('\nFetching Census Bureau gazetteers (counties, places, county subdivisions)...')
+const [countyRows, placeRows, cousubRows] = await Promise.all([
+  loadGazetteer(COUNTY_GAZETTEER_URL),
+  loadGazetteer(PLACE_GAZETTEER_URL),
+  loadGazetteer(COUSUB_GAZETTEER_URL),
+])
+
+// County centroids: keyed by full ("Orange County") and stripped ("Orange") name.
+const counties = new Map<string, [number, number]>()
+for (const [state, name, lat, lng] of countyRows) {
+  const full = normPlace(name)
+  const stripped = normPlace(name.replace(COUNTY_SUFFIX, ''))
   const key = (n: string) => `${n}|${state}`
-  return centroids.get(key(upper)) ?? centroids.get(key(stripped)) ?? [null, null]
+  if (!counties.has(key(full))) counties.set(key(full), [lat, lng])
+  if (!counties.has(key(stripped))) counties.set(key(stripped), [lat, lng])
+}
+
+// Place + county-subdivision centroids share one index (a municipality may be
+// either an incorporated place or a New England-style town/township).
+const places = new Map<string, [number, number]>()
+for (const [state, name, lat, lng] of [...placeRows, ...cousubRows]) {
+  const full = normPlace(name)
+  const stripped = normPlace(name.replace(PLACE_SUFFIX, ''))
+  const key = (n: string) => `${n}|${state}`
+  if (!places.has(key(full))) places.set(key(full), [lat, lng])
+  if (!places.has(key(stripped))) places.set(key(stripped), [lat, lng])
+}
+
+console.log(
+  `  Loaded ${counties.size} county + ${places.size} place/cousub centroid keys`,
+)
+
+function countyLatLng(county: string | null, state: string): [number, number] | null {
+  if (!county) return null
+  const full = normPlace(county)
+  const stripped = normPlace(county.replace(COUNTY_SUFFIX, ''))
+  return counties.get(`${full}|${state}`) ?? counties.get(`${stripped}|${state}`) ?? null
+}
+
+function placeLatLng(name: string, state: string): [number, number] | null {
+  return places.get(`${normPlace(placeNameFromAgency(name))}|${state}`) ?? null
+}
+
+// Fully deterministic, offline geocode. Returns null when nothing matches — a
+// handful of agencies (e.g. Northwest Regional PD, PA) are intentionally left
+// unplaced rather than dropped at a wrong location.
+function geocode(
+  name: string,
+  county: string | null,
+  state: string,
+  type: string | null,
+): [number, number] | null {
+  if (type === 'State Agency') return null // statewide → never a single map dot
+  const ovKey = `${normName(name)}|${state}`
+  const placeOverride = PLACE_OVERRIDES[ovKey]
+  if (placeOverride) return places.get(`${normPlace(placeOverride)}|${state}`) ?? null
+  const countyOverride = COUNTY_OVERRIDES[ovKey]
+  if (countyOverride) return countyLatLng(countyOverride, state)
+  if (type === 'Municipality') return placeLatLng(name, state) ?? countyLatLng(county, state)
+  return countyLatLng(county, state)
 }
 
 // ── 5. Build output ────────────────────────────────────────────────────────────
 
 console.log('\nBuilding output...')
+
+// ── Rename resolution + termination detection (#118) ─────────────────────────
+//
+// Active keys = the agencies we emit (drawn from the latest snapshot). Anything
+// observed historically but absent from this set has "disappeared": it was
+// either relabeled (fold it into the surviving record) or it genuinely left.
+const activeKeys = new Set(grouped.map((g) => historyKey(g.name, g.state)))
+
+// Candidate active agencies per state, with their latest-known name + county.
+const activeByState = new Map<string, { key: string; name: string; county: string | null }[]>()
+for (const key of activeKeys) {
+  const e = observed.get(key)
+  if (!e) continue
+  const st = e.lastRow.state
+  const bucket = activeByState.get(st) ?? []
+  bucket.push({ key, name: e.lastRow.name, county: e.lastRow.county })
+  activeByState.set(st, bucket)
+}
+
+// Find the active agency a vanished one was renamed into, or null if it looks
+// like a genuine departure. Tiers, strictest first (validated in #118):
+//   1. exact canonical-name match
+//   2. state-prefix addition ("…" → "Texas …"): exact after stripping the state
+//   3. typo: full-string edit distance ≤ 2 (every real upstream typo is ≤2;
+//      every distinct-agency near-miss like Pike/Hale County is ≥3)
+//   4. identical distinctive tokens + same county (label drift)
+//   4b. identical distinctive tokens, ≥2 of them, county-agnostic
+function findRenameTarget(vanishedKey: string): string | null {
+  const e = observed.get(vanishedKey)!
+  const st = e.lastRow.state
+  const cands = activeByState.get(st) ?? []
+  const c = canonName(e.lastRow.name)
+  const dt = distinctiveTokens(e.lastRow.name)
+  const foldCounty = (x: string | null) => (x ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
+  const eCounty = foldCounty(e.lastRow.county)
+  for (const a of cands) if (canonName(a.name) === c) return a.key
+  const sn = STATE_FULL_BY_ABBR[st]
+  const strip = (s: string) => (sn && s.startsWith(sn + ' ') ? s.slice(sn.length + 1) : s)
+  const cs = strip(c)
+  for (const a of cands) if (strip(canonName(a.name)) === cs) return a.key
+  let best: string | null = null
+  let bestD = Infinity
+  for (const a of cands) {
+    const d = editDistance(c, canonName(a.name))
+    if (d < bestD) { bestD = d; best = a.key }
+  }
+  if (best && bestD <= 2) return best
+  for (const a of cands)
+    if (dt.size && sameSet(dt, distinctiveTokens(a.name)) && foldCounty(a.county) === eCounty) return a.key
+  for (const a of cands) if (dt.size >= 2 && sameSet(dt, distinctiveTokens(a.name))) return a.key
+  return null
+}
+
+// Walk every disappeared agency: merge renames into their survivor (carrying the
+// earlier first-seen + a unified history) and collect sustained departures.
+const TERMINATION_MIN_ABSENT_SNAPSHOTS = 3 // ~1 week at the every-other-day cadence
+const aliasGroups = new Map<string, Set<string>>() // active key → {self, ...pre-rename aliases}
+const mergedFirstIdx = new Map<string, number>()    // active key → earliest first-seen idx
+for (const key of activeKeys) {
+  const e = observed.get(key)
+  if (e) mergedFirstIdx.set(key, e.firstIdx)
+}
+const terminationKeys: string[] = []
+let renameCount = 0
+let blipCount = 0
+for (const [key, e] of observed) {
+  if (activeKeys.has(key)) continue // still active
+  const target = findRenameTarget(key)
+  if (target) {
+    renameCount++
+    const group = aliasGroups.get(target) ?? new Set([target])
+    group.add(key)
+    aliasGroups.set(target, group)
+    if (e.firstIdx < (mergedFirstIdx.get(target) ?? Infinity)) mergedFirstIdx.set(target, e.firstIdx)
+    continue
+  }
+  if (N - 1 - e.lastIdx >= TERMINATION_MIN_ABSENT_SNAPSHOTS) terminationKeys.push(key)
+  else blipCount++
+}
+console.log(
+  `  Rename resolution: ${renameCount} relabels merged, ${blipCount} brief blips ignored, ${terminationKeys.length} genuine terminations`,
+)
+
+// first_seen reflects the earliest alias in the group; an active agency is never
+// terminated, so terminated_date is set only on the separate terminated payload.
+function firstSeenDate(key: string): string | null {
+  const idx = mergedFirstIdx.get(key) ?? observed.get(key)?.firstIdx
+  return idx == null ? null : dateAt(idx)
+}
+const aliasGroupOf = (key: string): Set<string> => aliasGroups.get(key) ?? new Set([key])
+
+// Earliest signing date ICE ever reported across the alias group (so a relabel
+// doesn't reset the clock). Null if ICE never put a date on this agency.
+function earliestSignedDate(keys: Set<string>): string | null {
+  let best: string | null = null
+  for (const k of keys) {
+    const s = earliestSigned.get(k)
+    if (s && (!best || s < best)) best = s
+  }
+  return best
+}
 
 const seenSlugs = new Map<string, number>()
 const agencies: Agency[] = []
@@ -475,7 +976,7 @@ for (const row of grouped) {
   const slug = count === 0 ? base : `${base}-${count}`
   seenSlugs.set(base, count + 1)
 
-  const [lat, lng] = getLatLng(row.county, state)
+  const [lat, lng] = geocode(name, row.county, state, row.agency_type) ?? [null, null]
   const hKey = historyKey(row.name, state)
 
   agencies.push({
@@ -487,7 +988,9 @@ for (const row of grouped) {
     agency_type: row.agency_type ?? 'Unknown',
     models: row.models,
     primary_model: primary,
-    signed_date: row.signed_date,
+    signed_date: earliestSignedDate(aliasGroupOf(hKey)) ?? row.signed_date,
+    first_seen_date: firstSeenDate(hKey),
+    terminated_date: null,
     population: null,
     lat,
     lng,
@@ -497,12 +1000,62 @@ for (const row of grouped) {
     contact_website: null,
     contact_phone: null,
     contact_address: null,
-    history: buildHistory(hKey),
+    history: buildHistory(aliasGroupOf(hKey)),
     lee: null,
     agreement: null,
     notes: null,
   })
 }
+
+// Genuine terminations: rebuild each from its last-seen snapshot row (it never
+// reached the latest-snapshot pass above) and emit to a SEPARATE payload so the
+// active topline in agency_index.json is unchanged. The map animation reads
+// this file to fade agencies out at their terminated_date.
+const terminatedAgencies: Agency[] = []
+for (const key of terminationKeys) {
+  const e = observed.get(key)!
+  const row = e.lastRow
+  const name = titleAgency(row.name)
+  if (!name || !row.state) continue
+
+  const models = [...row.models].sort()
+  const primary = MODEL_PRIORITY.find((m) => models.includes(m)) ?? models[0] ?? null
+
+  const base = makeSlug(name, row.state)
+  const count = seenSlugs.get(base) ?? 0
+  const slug = count === 0 ? base : `${base}-${count}`
+  seenSlugs.set(base, count + 1)
+
+  const [lat, lng] = geocode(name, row.county, row.state, row.agency_type) ?? [null, null]
+
+  terminatedAgencies.push({
+    slug,
+    name,
+    state: row.state,
+    county: row.county,
+    city: null,
+    agency_type: row.agency_type ?? 'Unknown',
+    models,
+    primary_model: primary,
+    signed_date: earliestSignedDate(aliasGroupOf(key)) ?? row.signed_date,
+    first_seen_date: firstSeenDate(key),
+    terminated_date: dateAt(e.lastIdx),
+    population: null,
+    lat,
+    lng,
+    moa_url: null,
+    ori: null,
+    snapshot_date: snapshotDate,
+    contact_website: null,
+    contact_phone: null,
+    contact_address: null,
+    history: buildHistory(aliasGroupOf(key)),
+    lee: null,
+    agreement: null,
+    notes: null,
+  })
+}
+console.log(`  ${agencies.length} active agencies, ${terminatedAgencies.length} terminated`)
 
 // ── 5. Join FBI / upstream agency metadata ────────────────────────────────────
 
@@ -840,7 +1393,6 @@ for (const a of agencies) {
       a.ori = up.ori
       oriFromUpstream++
     }
-    if (up.population_policed != null) a.population = up.population_policed
   }
 
   if (!a.ori) {
@@ -858,8 +1410,21 @@ for (const a of agencies) {
       a.lee = leeToLeeData(lee)
       leeAttached++
       leeYearDist.set(lee.data_year, (leeYearDist.get(lee.data_year) ?? 0) + 1)
-      if (a.population == null) a.population = lee.population
+      // LEE reports population 0 (not null) for agencies that don't report it.
+      // Treat that as "no LEE population" so the MOA population_policed fallback
+      // below fills it — otherwise big agencies show 0 residents (e.g. Broward
+      // County: LEE 0, MOA 1,951,260). Real positive LEE values still win. #142
+      if (lee.population) a.population = lee.population
     }
+  }
+
+  // MOA's population_policed is a fallback when LEE has no row for the
+  // agency. We prefer LEE because its non-overlapping convention (sheriff
+  // = unincorporated only) avoids double-counting in state-level sums;
+  // MOA reports whole-county pop for sheriffs, which the agency page
+  // surfaces as a separate "Population policed" slot for transparency.
+  if (a.population == null && a.agreement?.population_policed != null) {
+    a.population = a.agreement.population_policed
   }
 }
 
@@ -886,43 +1451,7 @@ if (oriUnmatchedByType.size) {
   )
 }
 
-// ── 6. CSLLEA 2018 — fill missing operating budgets via ORI ──────────────────
-
-const CSLLEA_TSV = resolve(__dirname, 'data/csllea_2018.tsv')
-if (existsSync(CSLLEA_TSV)) {
-  const cslleaText = readFileSync(CSLLEA_TSV, 'utf8')
-  const cslleaRows = parseCSV(cslleaText.replace(/\t/g, ','))
-  const cslleaHeaders = cslleaRows[0]
-  const cc = Object.fromEntries(cslleaHeaders.map((h, i) => [h.trim(), i])) as Record<string, number>
-  const cslleaByOri = new Map<string, string[]>()
-  for (let i = 1; i < cslleaRows.length; i++) {
-    const r = cslleaRows[i]
-    const ori = r[cc.ORI9]?.trim()
-    if (ori) cslleaByOri.set(ori, r)
-  }
-
-  const MISSING_CODES = new Set(['-9', '-8', '-7', '0', ''])
-  let budgetFilled = 0
-  for (const a of agencies) {
-    if (!a.ori) continue
-    const existing = a.agreement?.operating_budget
-    if (existing != null) continue
-    const row = cslleaByOri.get(a.ori)
-    if (!row) continue
-    const raw = row[cc.OPBUDGET]?.trim()
-    if (!raw || MISSING_CODES.has(raw)) continue
-    const budget = Number(raw)
-    if (!Number.isFinite(budget) || budget <= 0) continue
-    if (!a.agreement) a.agreement = { population_policed: null, operating_budget: null, agency_type: null }
-    a.agreement.operating_budget = budget
-    budgetFilled++
-  }
-  console.log(`\nCSLLEA 2018: filled operating budget for ${budgetFilled} agencies`)
-} else {
-  console.log('\nCSLLEA 2018 not found — skipping budget fill')
-}
-
-// ── 7. Per-state coverage: % of local LE agencies with a 287(g) agreement ─────
+// ── 6. Per-state coverage: % of local LE agencies with a 287(g) agreement ─────
 //
 // Denominator: FBI LEE County + City agencies per state (these are the agencies
 // that could plausibly sign a 287(g) agreement). State DOCs, federal agencies,
@@ -962,11 +1491,22 @@ for (const r of leeRows) {
 // proper) so sums across the same county don't double-count. The agency-level
 // `population` field is fine for per-agency display, but uses upstream's
 // whole-county figure for sheriffs which would inflate state totals.
+//
+// Dedupe by ORI before tallying participation: several counties (Miami-Dade,
+// Orange, Pasco, Volusia, …) appear in the ICE sheet as both a sheriff's
+// office and a corrections department under the same FBI ORI. Both rows
+// match the same LEE record, so summing them double-counts the agency *and*
+// the people it serves. See #99.
 const participatingByState = new Map<string, number>()
 const popServedByState = new Map<string, number>()
+const seenOriByState = new Map<string, Set<string>>()
 for (const a of agencies) {
   if (!a.ori) continue
   if (a.agency_type !== 'County' && a.agency_type !== 'Municipality') continue
+  const seen = seenOriByState.get(a.state) ?? new Set<string>()
+  if (seen.has(a.ori)) continue
+  seen.add(a.ori)
+  seenOriByState.set(a.state, seen)
   participatingByState.set(a.state, (participatingByState.get(a.state) ?? 0) + 1)
   if (a.lee?.population) popServedByState.set(a.state, (popServedByState.get(a.state) ?? 0) + a.lee.population)
 }
@@ -1133,13 +1673,23 @@ if (existsSync(NOTES_PATH)) {
 mkdirSync(OUT_DIR, { recursive: true })
 writeFileSync(resolve(OUT_DIR, 'agency_index.json'), JSON.stringify(agencies, null, 2))
 writeFileSync(resolve(OUT_DIR, 'state_meta.json'), JSON.stringify(stateCoverage, null, 2))
+// Terminated agencies live in a separate payload so the active topline is
+// untouched; the homepage map reads this to fade departures out (#118).
+writeFileSync(resolve(OUT_DIR, 'terminated_agencies.json'), JSON.stringify(terminatedAgencies, null, 2))
+console.log(`Wrote ${terminatedAgencies.length} terminated agencies → ${resolve(OUT_DIR, 'terminated_agencies.json')}`)
 
 const geocoded = agencies.filter((a) => a.lat !== null).length
+const stateAgencies = agencies.filter((a) => a.agency_type === 'State Agency').length
+const mappable = agencies.length - stateAgencies // statewide bodies are off-map by design
+const ungeocoded = agencies.filter((a) => a.lat === null && a.agency_type !== 'State Agency').length
 const withHistory = agencies.filter((a) => a.history.length > 0).length
 console.log(`\nWrote ${agencies.length} agencies → ${resolve(OUT_DIR, 'agency_index.json')}`)
 console.log(`Snapshot: ${snapshotName}  (${snapshotDate})`)
 console.log(`States: ${new Set(agencies.map((a) => a.state)).size}`)
-console.log(`Geocoded: ${geocoded}/${agencies.length} (${Math.round((geocoded / agencies.length) * 100)}%)`)
+console.log(
+  `Geocoded: ${geocoded}/${mappable} mappable (${Math.round((geocoded / mappable) * 100)}%)` +
+    ` — ${stateAgencies} statewide agencies off-map by design, ${ungeocoded} still unresolved`,
+)
 console.log(`Agencies with history events: ${withHistory}`)
 
 const modelCounts = new Map<string, number>()

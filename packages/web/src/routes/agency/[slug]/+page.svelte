@@ -4,11 +4,13 @@
   import { STATE_NAMES } from "$lib/states";
   import { localizeHref, getLocale } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
+  import { ogImage } from "$lib/ogImage";
   import AgencySearch from "$lib/components/AgencySearch.svelte";
   import AgencyMap from "$lib/components/AgencyMap.svelte";
-  import MapPaletteSelector from "$lib/components/MapPaletteSelector.svelte";
+  import Gloss from "$lib/components/Gloss.svelte";
 
   export let data: PageData;
+  const seen = new Set<string>();
 
   // Reactive destructure so navigating between agencies via the sticky search
   // (same dynamic route, same component instance) actually refreshes content.
@@ -65,7 +67,7 @@
   });
 
   const intFmt = new Intl.NumberFormat();
-  const dateFmt = (d?: string) => {
+  const dateFmt = (d?: string | null) => {
     if (!d) return null;
     try {
       const localeTag = getLocale() === "es" ? "es-MX" : "en-US";
@@ -79,6 +81,17 @@
       return d;
     }
   };
+
+  // Show "First seen in ICE data" only when it actually diverges from the
+  // signing date. Since signed_date is now ICE's earliest reported date (#118),
+  // the two land within days for most agencies — the tile only earns its space
+  // for the cases where they genuinely differ (e.g. long-standing agreements
+  // first tracked in 2025). Threshold: more than two weeks apart.
+  const DAY_MS = 86_400_000;
+  $: showFirstSeen =
+    !!agency.first_seen_date &&
+    (!agency.signed_date ||
+      Math.abs(+new Date(agency.first_seen_date) - +new Date(agency.signed_date)) > 14 * DAY_MS);
 </script>
 
 <svelte:head>
@@ -89,9 +102,13 @@
   <meta property="og:title" content={title} />
   <meta property="og:description" content={description} />
   <meta property="og:url" content={canonicalUrl} />
-  <meta property="twitter:card" content="summary" />
+  <meta property="og:image" content={ogImage(`agency/${agency.slug}.png`)} />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="twitter:card" content="summary_large_image" />
   <meta property="twitter:title" content={title} />
   <meta property="twitter:description" content={description} />
+  <meta property="twitter:image" content={ogImage(`agency/${agency.slug}.png`)} />
   {@html `<script type="application/ld+json">${jsonLd}</script>`}
 </svelte:head>
 
@@ -174,10 +191,7 @@
   {/if}
 
   <!-- Location map -->
-  <div class="mt-6 flex items-center justify-end">
-    <MapPaletteSelector />
-  </div>
-  <div class="mt-2 h-[260px] overflow-hidden rounded-lg border border-slate-200 shadow-sm sm:h-[320px]">
+  <div class="mt-6 h-[260px] overflow-hidden rounded-lg border border-slate-200 shadow-sm sm:h-[320px]">
     {#key agency.slug}
       <AgencyMap
         lat={agency.lat}
@@ -212,6 +226,16 @@
     </div>
   {/if}
 
+  <!-- Ended notice (terminated agencies) -->
+  {#if agency.terminated_date}
+    <div class="mt-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+      <p class="text-sm font-bold uppercase tracking-wide text-amber-900">{m.agency_ended_heading()}</p>
+      <p class="mt-1 text-sm text-amber-800">
+        {m.agency_ended_body({ agency_name: agency.name, date: dateFmt(agency.terminated_date) ?? "" })}
+      </p>
+    </div>
+  {/if}
+
   <!-- Key facts -->
   <dl class="mt-8 grid gap-6 border-y border-slate-200 py-8 sm:grid-cols-3">
     {#if agency.signed_date}
@@ -220,53 +244,61 @@
         <dd class="mt-1 text-xl font-bold text-slate-900">{dateFmt(agency.signed_date)}</dd>
       </div>
     {/if}
-    {#if agency.population}
+    {#if showFirstSeen}
+      <div>
+        <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_first_seen()}</dt>
+        <dd class="mt-1 text-xl font-bold text-slate-900">{dateFmt(agency.first_seen_date)}</dd>
+      </div>
+    {/if}
+    {#if agency.lee?.population != null}
+      <div>
+        <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_population()}</dt>
+        <dd class="mt-1 text-xl font-bold text-slate-900">
+          {intFmt.format(agency.lee.population)}<a href="https://cde.ucr.cjis.gov/LATEST/webapp/#/pages/downloads" target="_blank" rel="noreferrer" title="FBI Law Enforcement Employees data, {agency.lee.data_year}" class="ml-1.5 text-xs font-normal text-slate-400 no-underline hover:text-slate-600 hover:underline">FBI {agency.lee.data_year}</a>
+        </dd>
+      </div>
+    {:else if agency.population != null}
       <div>
         <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_population()}</dt>
         <dd class="mt-1 text-xl font-bold text-slate-900">{intFmt.format(agency.population)}</dd>
-        {#if agency.lee?.data_year}<dd class="mt-0.5 text-xs text-slate-400">FBI LEE {agency.lee.data_year}</dd>{/if}
       </div>
     {/if}
     {#if agency.lee?.officer_ct != null}
       <div>
         <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_officers()}</dt>
-        <dd class="mt-1 text-xl font-bold text-slate-900">{intFmt.format(agency.lee.officer_ct)}</dd>
-        <dd class="mt-0.5 text-xs text-slate-400">FBI LEE {agency.lee.data_year}</dd>
+        <dd class="mt-1 text-xl font-bold text-slate-900">
+          {intFmt.format(agency.lee.officer_ct)}<a href="https://cde.ucr.cjis.gov/LATEST/webapp/#/pages/downloads" target="_blank" rel="noreferrer" title="FBI Law Enforcement Employees data, {agency.lee.data_year}" class="ml-1.5 text-xs font-normal text-slate-400 no-underline hover:text-slate-600 hover:underline">FBI {agency.lee.data_year}</a>
+        </dd>
       </div>
     {/if}
     {#if agency.lee?.civilian_ct != null}
       <div>
         <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_civilian_staff()}</dt>
-        <dd class="mt-1 text-xl font-bold text-slate-900">{intFmt.format(agency.lee.civilian_ct)}</dd>
-        <dd class="mt-0.5 text-xs text-slate-400">FBI LEE {agency.lee.data_year}</dd>
+        <dd class="mt-1 text-xl font-bold text-slate-900">
+          {intFmt.format(agency.lee.civilian_ct)}<a href="https://cde.ucr.cjis.gov/LATEST/webapp/#/pages/downloads" target="_blank" rel="noreferrer" title="FBI Law Enforcement Employees data, {agency.lee.data_year}" class="ml-1.5 text-xs font-normal text-slate-400 no-underline hover:text-slate-600 hover:underline">FBI {agency.lee.data_year}</a>
+        </dd>
       </div>
     {/if}
     {#if agency.lee?.total_pe_ct != null}
       <div>
         <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_total_personnel()}</dt>
-        <dd class="mt-1 text-xl font-bold text-slate-900">{intFmt.format(agency.lee.total_pe_ct)}</dd>
-        <dd class="mt-0.5 text-xs text-slate-400">FBI LEE {agency.lee.data_year}</dd>
-      </div>
-    {/if}
-    {#if agency.lee?.pe_ct_per_1000 != null}
-      <div>
-        <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">Officers per 1,000</dt>
-        <dd class="mt-1 text-xl font-bold text-slate-900">{agency.lee.pe_ct_per_1000.toFixed(2)}</dd>
-        <dd class="mt-0.5 text-xs text-slate-400">FBI LEE {agency.lee.data_year}</dd>
+        <dd class="mt-1 text-xl font-bold text-slate-900">
+          {intFmt.format(agency.lee.total_pe_ct)}<a href="https://cde.ucr.cjis.gov/LATEST/webapp/#/pages/downloads" target="_blank" rel="noreferrer" title="FBI Law Enforcement Employees data, {agency.lee.data_year}" class="ml-1.5 text-xs font-normal text-slate-400 no-underline hover:text-slate-600 hover:underline">FBI {agency.lee.data_year}</a>
+        </dd>
       </div>
     {/if}
     {#if agency.agreement?.population_policed != null}
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">Population policed</dt>
+        <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_population_policed()}</dt>
         <dd class="mt-1 text-xl font-bold text-slate-900">{intFmt.format(agency.agreement.population_policed)}</dd>
-        <dd class="mt-0.5 text-xs text-slate-400">As reported in MOA</dd>
+        <dd class="mt-0.5 text-xs text-slate-400">{m.agency_source_moa()}</dd>
       </div>
     {/if}
     {#if agency.agreement?.operating_budget != null}
       <div>
         <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_operating_budget()}</dt>
         <dd class="mt-1 text-xl font-bold text-slate-900">${intFmt.format(agency.agreement.operating_budget)}</dd>
-        <dd class="mt-0.5 text-xs text-slate-400">As reported in MOA</dd>
+        <dd class="mt-0.5 text-xs text-slate-400">{m.agency_source_moa()}</dd>
       </div>
     {/if}
     {#if agency.moa_url}
@@ -289,7 +321,7 @@
     <section class="mt-10">
       <h2 class="font-serif text-xl font-bold text-slate-900">{m.agency_moa_heading()}</h2>
       <p class="mt-2 text-slate-600">
-        {m.agency_moa_body({ agency_name: agency.name })}
+        <Gloss text={m.agency_moa_body({ agency_name: agency.name })} {seen} />
       </p>
       <a
         href={agency.moa_url}
@@ -337,29 +369,23 @@
     {/if}
   </section>
 
-  <!-- Data provenance -->
-  <p class="mt-6 text-xs text-slate-400">
-    {#if agency.snapshot_date}Data last updated {dateFmt(agency.snapshot_date)}.{/if}
-    {#if agency.ori} ORI: <span class="font-mono">{agency.ori}</span>.{/if}
-  </p>
-
-  <!-- Agreement history -->
+  <!-- Agreement history (restored in #118 Phase B-min, now on rename-resolved data) -->
   {#if agency.history && agency.history.length > 0}
     <section class="mt-10">
-      <h2 class="font-serif text-xl font-bold text-slate-900">Agreement History</h2>
-      <p class="mt-1 text-sm text-slate-600">Changes recorded since tracking began. Gaps between entries mean no changes were detected that week.</p>
+      <h2 class="font-serif text-xl font-bold text-slate-900">{m.agency_history_heading()}</h2>
+      <p class="mt-1 text-sm text-slate-600">{m.agency_history_intro()}</p>
       <ol class="mt-5 space-y-0 border-l-2 border-slate-200 pl-5">
-        {#each [...agency.history].reverse() as event, i}
+        {#each [...agency.history].reverse() as event}
           {@const isRemoved = event.removed.length > 0 && event.added.length === 0}
           {@const isAdded = event.added.length > 0}
           <li class="relative pb-5 last:pb-0">
             <!-- Timeline dot -->
             <span
-              class="absolute -left-[1.4375rem] top-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-white"
+              class="absolute -left-[1.8125rem] top-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-white"
               style={`background: ${isRemoved ? '#f87171' : isAdded ? '#4ade80' : '#94a3b8'}; box-shadow: 0 0 0 2px ${isRemoved ? '#fca5a5' : isAdded ? '#86efac' : '#cbd5e1'};`}
             ></span>
             <time class="block text-xs font-semibold uppercase tracking-wider text-slate-500">
-              {new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' }).format(new Date(event.date))}
+              {dateFmt(event.date)}
             </time>
             <ul class="mt-1 space-y-0.5">
               {#each event.added as model}
@@ -381,10 +407,16 @@
     </section>
   {/if}
 
+  <!-- Data provenance -->
+  <p class="mt-6 text-xs text-slate-400">
+    {#if agency.snapshot_date}Data last updated {dateFmt(agency.snapshot_date)}.{/if}
+    {#if agency.ori} ORI: <span class="font-mono">{agency.ori}</span>.{/if}
+  </p>
+
   <!-- Dive deeper -->
   <section class="mt-10">
     <h2 class="font-serif text-xl font-bold text-slate-900">{m.agency_records_heading()}</h2>
-    <p class="mt-2 text-slate-600">{m.agency_records_intro()}</p>
+    <p class="mt-2 text-slate-600"><Gloss text={m.agency_records_intro()} {seen} /></p>
 
     {#if muckrock.requests.length > 0}
       <div class="mt-5">
