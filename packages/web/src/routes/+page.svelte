@@ -8,16 +8,17 @@
   import { onMount } from "svelte";
   import { tweened } from "svelte/motion";
   import { cubicOut } from "svelte/easing";
-  import { localizeHref } from "$lib/paraglide/runtime";
+  import { localizeHref, getLocale } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
   import Gloss from "$lib/components/Gloss.svelte";
+  import { ogImage } from "$lib/ogImage";
 
   export let data: PageData;
 
   const siteUrl = import.meta.env.PUBLIC_SITE_URL ?? "https://287g.recoveredfactory.net";
   const title = m.home_meta_title();
-  $: description = data.agencyCount > 0
-    ? m.home_meta_description_with_count({ count: intFmt.format(data.agencyCount) })
+  $: description = data.agencyCountUnique > 0
+    ? m.home_meta_description_with_count({ count: intFmt.format(data.agencyCountUnique) })
     : m.home_meta_description_no_data();
 
   const intFmt = new Intl.NumberFormat();
@@ -27,72 +28,153 @@
   // flicker. Whole-million steps still feel like a counter ticking up.
   const popFmtOverlay = new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 0 });
 
-  // ── Map palette (user-toggleable, persisted across pages) ──────────────────
-  import { mapPalette } from "$lib/map/paletteStore";
-  import MapPaletteSelector from "$lib/components/MapPaletteSelector.svelte";
-
   // ── Timeline cursor (experimental, #76) ────────────────────────────────────
-  // Continuous fractional-month index relative to Jan 2025. The map fades and
-  // pops each dot in as the cursor passes its signing date; pre-2025 signings
-  // are pinned as a baseline. See caveat in MapTimelineScrubber.svelte.
+  // Continuous fractional-month index relative to Jan 2025 (idx 0). The map
+  // fades and pops each dot in as the cursor passes its signing date. The
+  // animation begins Dec 18 2024 (TIMELINE_START_IDX) — the most recent pre-2025
+  // archived snapshot (#169), a clean pre-Trump baseline — so every signing on or
+  // before then is pinned as the baseline (always shown at frame 0). See caveat
+  // in MapTimelineScrubber.svelte.
   const TIMELINE_EPOCH_YEAR = 2025;
+  const TIMELINE_START_IDX = -1 + 17 / 31; // Dec 18 2024, relative to the Jan 2025 epoch
   const BASELINE_IDX = -10000;
   const signedIdx = (d: string | null | undefined): number => {
     if (!d || d.length < 10) return BASELINE_IDX;
     const y = Number(d.slice(0, 4));
     const m = Number(d.slice(5, 7));
     const day = Number(d.slice(8, 10));
-    if (y < TIMELINE_EPOCH_YEAR) return BASELINE_IDX;
-    return (y - TIMELINE_EPOCH_YEAR) * 12 + (m - 1) + (day - 1) / 31;
+    const idx = (y - TIMELINE_EPOCH_YEAR) * 12 + (m - 1) + (day - 1) / 31;
+    return idx < TIMELINE_START_IDX ? BASELINE_IDX : idx;
   };
   $: signedIndices = data.agencies.map((a) => signedIdx(a.signed_date));
   $: agencyPops = data.agencies.map((a) => a.population ?? 0);
+
+  // ORI-deduped views for the map overlay counters. Two derivations because
+  // the hero shows two different unique-set semantics:
+  //   - count = all unique ORIs (state-level agencies still count as agencies)
+  //   - population sum = local-only (County + Municipality), because state-
+  //     level rows like state police report whole-state populations via LEE
+  //     and would compound with the city/county pops we're already summing
+  //     (see #99).
+  // Shared-ORI rows (sheriff + corrections under one FBI identifier) collapse
+  // to a single entry whose effective signed_date is the earliest of the
+  // group. Null-ORI rows pass through as singletons. See #92.
+  $: uniqueAgencyData = (() => {
+    const byOri = new Map<string, { idx: number }>();
+    const nullOri: { idx: number }[] = [];
+    for (const a of data.agencies) {
+      const idx = signedIdx(a.signed_date);
+      if (a.ori) {
+        const prev = byOri.get(a.ori);
+        if (!prev) byOri.set(a.ori, { idx });
+        else if (idx < prev.idx) byOri.set(a.ori, { idx });
+      } else {
+        nullOri.push({ idx });
+      }
+    }
+    return [...byOri.values(), ...nullOri];
+  })();
+  $: uniqueSignedIndices = uniqueAgencyData.map((d) => d.idx);
+
+  // Terminated agencies, ORI-deduped, with both their signing and termination
+  // indices — so the headline can show *net active at the cursor*: an agency
+  // counts once the cursor passes its signing date and is subtracted once the
+  // cursor passes its termination date. See #118.
+  $: uniqueTerminatedData = (() => {
+    const byOri = new Map<string, { signed: number; ended: number }>();
+    const nullOri: { signed: number; ended: number }[] = [];
+    for (const a of data.terminatedAgencies ?? []) {
+      const entry = { signed: signedIdx(a.signed_date), ended: signedIdx(a.terminated_date) };
+      if (a.ori) {
+        if (!byOri.has(a.ori)) byOri.set(a.ori, entry);
+      } else {
+        nullOri.push(entry);
+      }
+    }
+    return [...byOri.values(), ...nullOri];
+  })();
+
+  $: uniqueLocalPopData = (() => {
+    const byOri = new Map<string, { idx: number; pop: number }>();
+    const nullOri: { idx: number; pop: number }[] = [];
+    for (const a of data.agencies) {
+      if (a.agency_type !== "County" && a.agency_type !== "Municipality") continue;
+      const idx = signedIdx(a.signed_date);
+      const pop = a.population ?? 0;
+      if (a.ori) {
+        const prev = byOri.get(a.ori);
+        if (!prev) byOri.set(a.ori, { idx, pop });
+        else if (idx < prev.idx) byOri.set(a.ori, { idx, pop: prev.pop });
+      } else {
+        nullOri.push({ idx, pop });
+      }
+    }
+    return [...byOri.values(), ...nullOri];
+  })();
+  $: uniqueLocalSignedIndices = uniqueLocalPopData.map((d) => d.idx);
+  $: uniqueLocalPops = uniqueLocalPopData.map((d) => d.pop);
   const today = new Date();
   const todayIdx =
     (today.getUTCFullYear() - TIMELINE_EPOCH_YEAR) * 12 +
     today.getUTCMonth() +
     (today.getUTCDate() - 1) / 31;
-  const minIdx = 0;
+  const minIdx = TIMELINE_START_IDX;
   $: maxIdx = Math.max(
     todayIdx,
     ...signedIndices.filter((i) => i > BASELINE_IDX),
   ) + 0.5;
   let cursorIdx = NaN;
   $: if (Number.isNaN(cursorIdx) && Number.isFinite(maxIdx)) cursorIdx = maxIdx;
-  $: countAtCursor = signedIndices.filter((i) => i <= cursorIdx).length;
-  $: popAtCursor = signedIndices.reduce(
-    (sum, idx, i) => (idx <= cursorIdx ? sum + agencyPops[i] : sum),
+  // Net active at the cursor: active agencies signed by now, plus terminated
+  // agencies that were signed by now but haven't yet left — so the number dips
+  // as departures cross the cursor, instead of only ever climbing.
+  $: countAtCursor =
+    uniqueSignedIndices.filter((i) => i <= cursorIdx).length +
+    uniqueTerminatedData.filter((d) => d.signed <= cursorIdx && d.ended > cursorIdx).length;
+  // Statewide agencies (state police, corrections, etc.) are intentionally not
+  // plotted — a single dot would misrepresent a whole-state jurisdiction. We
+  // surface the count below the scrubber instead.
+  $: statewideCount = data.agencies.filter((a) => a.agency_type === "State Agency").length;
+  $: popAtCursor = uniqueLocalSignedIndices.reduce(
+    (sum, idx, i) => (idx <= cursorIdx ? sum + uniqueLocalPops[i] : sum),
     0,
   );
 
-  // Big number overlay on the map. Visible while the scrubber is playing or
-  // while the cursor is held away from "today" so the user always sees the
-  // live count change. Smooth tween catches up with easing — gives the digits
-  // that "ticking up" feel without per-keystroke jank.
+  // Big number overlay on the map. Always visible — readers always see the
+  // live count. Smooth tween catches up with easing so the digits feel like
+  // they're ticking up rather than slamming on each keystroke.
   let timelinePlaying = false;
+  // The video bake (scripts/bake-map-video.mjs) frame-steps the cursor and
+  // screenshots each frame after a tiny delay. The 280ms count tween never
+  // settles in that window, so the baked counter lags the map (it visibly
+  // winds up from a low number). When the bake hook drives the cursor it sets
+  // this flag so each frame's count snaps to the true value for its cursor.
+  let bakeInstant = false;
   const displayedCount = tweened(0, { duration: 280, easing: cubicOut });
   const displayedPop = tweened(0, { duration: 280, easing: cubicOut });
-  $: displayedCount.set(countAtCursor);
-  $: displayedPop.set(popAtCursor);
+  $: displayedCount.set(countAtCursor, bakeInstant ? { duration: 0 } : undefined);
+  $: displayedPop.set(popAtCursor, bakeInstant ? { duration: 0 } : undefined);
 
-  // Linger logic: when playback ends (or the user releases at the end), keep
-  // the overlay visible for 2s so the final tally has presence before it fades.
-  const LINGER_MS = 2000;
-  let lingerActive = false;
-  let lingerTimer: ReturnType<typeof setTimeout> | null = null;
-  let wasTimelinePlaying = false;
-  $: if (wasTimelinePlaying !== timelinePlaying) {
-    if (wasTimelinePlaying && !timelinePlaying) {
-      lingerActive = true;
-      if (lingerTimer) clearTimeout(lingerTimer);
-      lingerTimer = setTimeout(() => { lingerActive = false; }, LINGER_MS);
-    }
-    wasTimelinePlaying = timelinePlaying;
-  }
-  $: showCountOverlay =
-    timelinePlaying ||
-    lingerActive ||
-    (Number.isFinite(maxIdx) && cursorIdx < maxIdx - 0.05);
+  // Card is a tap target: clicking it restarts the timeline animation from
+  // May 2025 so readers can replay the sweep without scrolling to the
+  // scrubber.
+  let scrubberRef: { restart: () => void } | null = null;
+  const restartTimeline = () => scrubberRef?.restart();
+
+  // Month label for the overlay's date ticker. Clamped to today so the label
+  // doesn't read "Jun 2026" during the small headroom past maxIdx.
+  const overlayMonthLabel = (idx: number): string => {
+    const clamped = Math.min(Math.max(TIMELINE_START_IDX, idx), todayIdx);
+    const month = Math.floor(clamped);
+    // Floored-division year + non-negative modulo month, so a pre-2025 (negative)
+    // index maps back correctly (e.g. month -1 → Dec 2024, not Dec 2023).
+    const y = TIMELINE_EPOCH_YEAR + Math.floor(month / 12);
+    const mm = (((month % 12) + 12) % 12) + 1;
+    const localeTag = getLocale() === "es" ? "es-MX" : "en-US";
+    return new Intl.DateTimeFormat(localeTag, { month: "short", year: "numeric", timeZone: "UTC" })
+      .format(new Date(Date.UTC(y, mm - 1, 1)));
+  };
+  $: overlayDateLabel = overlayMonthLabel(cursorIdx);
 
   // ── Search + filter ────────────────────────────────────────────────────────
   let searchQuery = "";
@@ -115,25 +197,36 @@
   let mounted = false;
   let detectedState: string | null = null;
 
+  // States with at least one agreement of ANY kind (local or state-level).
+  // The "no 287(g)" callout keys off this, NOT stateMeta.participating —
+  // that field counts only local (County/Municipality) agencies, so a state
+  // like MA whose only agreement is state-level (Dept. of Corrections) has
+  // participating===0 yet is very much not 287(g)-free. See #138.
+  $: statesWithAnyAgreement = new Set(data.agencies.map((a) => a.state));
+
   // Geo-aware participation callout. Renders once client-side geo resolves.
-  // FL gets softened phrasing because participation is mandated by SB 168 (2019)
-  // and FBI LEE jurisdiction overlap pushes raw pop coverage above 100%.
+  // FL gets a distinct message because SB 168 (2019) mandates 287(g)
+  // cooperation — its high coverage isn't comparable to voluntary states.
   $: userStateCallout = (() => {
     if (!detectedState) return null;
     const stateName = STATE_NAMES[detectedState];
     const meta = data.stateMeta[detectedState];
     if (!stateName || !meta || !meta.local_le_agencies) return null;
     const boldState = `<b>${stateName}</b>`;
-    if (meta.participating === 0) {
+    if (!statesWithAnyAgreement.has(detectedState)) {
       return m.home_hero_state_callout_none({ state: boldState });
     }
     const agencyPct = Math.round((meta.participating / meta.local_le_agencies) * 100);
-    if (detectedState === "FL") {
-      return m.home_hero_state_callout_fl({ state: boldState, agency_pct: agencyPct });
-    }
     const popPct = meta.state_local_population > 0
       ? Math.round((meta.population_served / meta.state_local_population) * 100)
       : 0;
+    if (detectedState === "FL") {
+      return m.home_hero_state_callout_fl({
+        state: boldState,
+        agency_pct: agencyPct,
+        pop_pct: popPct,
+      });
+    }
     return m.home_hero_state_callout_standard({
       state: boldState,
       agency_pct: agencyPct,
@@ -141,30 +234,31 @@
     });
   })();
 
-  // localStorage-cached geo detection — avoids hitting /api/geo on every page load
+  // Per-session geo cache — dedupes /api/geo across a browsing session but
+  // re-checks on the next visit, so a wrong/stale geo lookup self-heals
+  // instead of being pinned for days. sessionStorage clears when the tab
+  // closes (also makes VPN/location testing trivial: new tab = fresh lookup).
   const GEO_KEY = "rf-geo-v1";
-  const GEO_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
   async function getCachedGeo(): Promise<{ country: string | null; state: string | null }> {
     try {
-      const raw = localStorage.getItem(GEO_KEY);
+      const raw = sessionStorage.getItem(GEO_KEY);
       if (raw) {
         const cached = JSON.parse(raw);
-        if (typeof cached.t === "number" && Date.now() - cached.t < GEO_TTL_MS) {
-          return { country: cached.c ?? null, state: cached.s ?? null };
-        }
+        return { country: cached.c ?? null, state: cached.s ?? null };
       }
     } catch {}
     try {
       const res = await fetch("/api/geo", { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
-        try {
-          localStorage.setItem(
-            GEO_KEY,
-            JSON.stringify({ c: data.country, s: data.state, t: Date.now() })
-          );
-        } catch {}
+        // Only cache a definitive answer; don't pin a transient null for the
+        // whole session.
+        if (data.country) {
+          try {
+            sessionStorage.setItem(GEO_KEY, JSON.stringify({ c: data.country, s: data.state }));
+          } catch {}
+        }
         return data;
       }
     } catch {}
@@ -207,9 +301,13 @@
     if (models)
       activeModels = new Set(models.split(",").map((s) => SLUG_TO_MODEL[s]).filter(Boolean));
 
-    // Geo: detect user's state for the toggle button but do NOT auto-filter.
+    // Geo: detect the user's state for the hero callout (incl. the "no 287(g)
+    // here" message for states with zero agreements) and the filter button.
+    // Gate on a valid state code, NOT on allStates — allStates only contains
+    // states that *have* agencies, so gating on it suppressed the no-287(g)
+    // callout for the very states it's meant for (e.g. IL). See #138.
     const geo = await getCachedGeo();
-    if (geo.state && allStates.includes(geo.state)) {
+    if (geo.state && STATE_NAMES[geo.state]) {
       detectedState = geo.state;
     }
 
@@ -221,6 +319,11 @@
     }
 
     mounted = true;
+
+    // Hook for scripts/bake-map-video.mjs to drive cursorIdx deterministically
+    // without racing the scrubber's rAF loop.
+    (window as any).__setCursor = (idx: number) => { bakeInstant = true; cursorIdx = idx; };
+    (window as any).__getTimelineBounds = () => ({ minIdx, maxIdx, todayIdx });
   });
 
   $: allStates = [...new Set(data.agencies.map((a) => a.state).filter(Boolean))].sort();
@@ -293,9 +396,13 @@
   <meta property="og:title" content={title} />
   <meta property="og:description" content={description} />
   <meta property="og:url" content={siteUrl} />
+  <meta property="og:image" content={ogImage('home.png')} />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
   <meta property="twitter:card" content="summary_large_image" />
   <meta property="twitter:title" content={title} />
   <meta property="twitter:description" content={description} />
+  <meta property="twitter:image" content={ogImage('home.png')} />
   {@html `<script type="application/ld+json">${JSON.stringify({
     "@context": "https://schema.org",
     "@type": "Dataset",
@@ -303,7 +410,7 @@
     description,
     url: siteUrl,
     license: "https://creativecommons.org/licenses/by/4.0/",
-    creator: { "@type": "Organization", name: "287(g) Explorer" },
+    creator: { "@type": "Organization", name: "287(g) Watch" },
   })}</` + `script>`}
 </svelte:head>
 
@@ -328,11 +435,11 @@
         </p>
       {/if}
 
-      {#if data.agencyCount > 0}
+      {#if data.agencyCountUnique > 0}
         <div class="mt-6 flex flex-wrap gap-6 sm:mt-8 sm:gap-8">
           <div>
             <p class="font-mono text-2xl font-semibold tabular-nums text-slate-900 sm:text-3xl">
-              {intFmt.format(data.agencyCount)}
+              {intFmt.format(data.agencyCountUnique)}<sup class="text-base text-slate-400">*</sup>
             </p>
             <p class="mt-0.5 text-xs text-slate-500 sm:text-sm">{m.home_stat_agencies()}</p>
           </div>
@@ -342,63 +449,26 @@
             </p>
             <p class="mt-0.5 text-xs text-slate-500 sm:text-sm">{m.home_stat_states()}</p>
           </div>
-          {#if data.populationCovered > 0}
+          {#if data.populationCoveredUnique > 0}
             <div>
               <p class="font-mono text-2xl font-semibold tabular-nums text-slate-900 sm:text-3xl">
-                {popFmt.format(data.populationCovered)}
+                {popFmt.format(data.populationCoveredUnique)}
               </p>
               <p class="mt-0.5 text-xs text-slate-500 sm:text-sm">{m.home_stat_population()}</p>
             </div>
           {/if}
         </div>
 
+        <p class="mt-3 text-xs text-slate-400">
+          {m.home_stat_agencies_footnote()}
+        </p>
+
         {#if data.snapshotDate}
-          <p class="mt-4 text-xs italic text-slate-400">
+          <p class="mt-1 text-xs italic text-slate-400">
             As of {new Intl.DateTimeFormat("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" }).format(new Date(data.snapshotDate))}
           </p>
         {/if}
       {/if}
-    </div>
-  </section>
-
-  <!-- ── What each model authorizes ───────────────────────────────────────── -->
-  <section class="border-b border-slate-200 bg-white px-4 py-10 sm:px-6 sm:py-12">
-    <div class="mx-auto max-w-6xl">
-      <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">
-        {m.home_models_heading()}
-      </h2>
-      <div class="mt-5 grid items-stretch gap-4 sm:grid-cols-3">
-        {#each ALL_MODELS as model}
-          {@const desc = modelDesc(model)}
-          <div
-            class="flex flex-col overflow-hidden rounded border shadow-sm"
-            style="border-color: {MODEL_COLORS[model]};"
-          >
-            <div class="px-4 py-3" style="background: {MODEL_COLORS[model]};">
-              <h3
-                class="font-sans text-sm font-bold uppercase tracking-widest"
-                style="color: {MODEL_TEXT_COLORS[model] ?? '#ffffff'};"
-              >{model.replace(/ Model$/, '')}</h3>
-            </div>
-            <div class="flex flex-1 flex-col gap-3 px-4 py-4" style="background: {MODEL_COLORS[model]}28;">
-              <p class="text-sm leading-relaxed text-slate-700">{@html desc.short}</p>
-              <div class="flex items-end justify-between gap-2">
-                <a
-                  href={localizeHref(`/model/${MODEL_SLUG[model]}`)}
-                  class="text-sm font-semibold no-underline hover:underline"
-                  style="color: {MODEL_DARK_COLORS[model] ?? '#334155'};"
-                >Learn more →</a>
-                {#if data.modelCounts[model]}
-                  <p
-                    class="text-right text-xs italic text-slate-500"
-                    title={data.snapshotDate ? `As of ${data.snapshotDate}` : undefined}
-                  >{intFmt.format(data.modelCounts[model])} agencies</p>
-                {/if}
-              </div>
-            </div>
-          </div>
-        {/each}
-      </div>
     </div>
   </section>
 
@@ -413,33 +483,52 @@
           <p class="mt-1 text-xs text-slate-500 sm:text-sm">
             {m.home_map_subhead()}
           </p>
+          <p class="mt-1 text-xs text-slate-500 sm:text-sm">
+            {m.home_map_size_note()}
+          </p>
         </div>
         <!-- Legend -->
-        <div class="flex flex-wrap items-center gap-x-4 gap-y-2 sm:gap-x-6">
-          {#each MODEL_ORDER as full}
-            {@const short = MODEL_SHORT[full]}
-            <span class="flex items-center gap-1.5 text-xs text-slate-600 sm:text-sm">
+        <div class="flex flex-col items-start gap-2 sm:items-end">
+          <div class="flex flex-wrap items-center gap-x-4 gap-y-2 sm:gap-x-6">
+            {#each MODEL_ORDER as full}
+              {@const short = MODEL_SHORT[full]}
+              <span class="flex items-center gap-1.5 text-xs text-slate-600 sm:text-sm">
+                <span
+                  class="inline-block h-2.5 w-2.5 rounded-full border border-white shadow-sm sm:h-3 sm:w-3"
+                  style="background: {MODEL_COLORS[full]};"
+                ></span>
+                {short}
+              </span>
+            {/each}
+          </div>
+          <div class="flex items-center gap-3 text-xs text-slate-600 sm:text-sm">
+            <span class="flex items-center gap-1.5">
               <span
-                class="inline-block h-2.5 w-2.5 rounded-full border border-white shadow-sm sm:h-3 sm:w-3"
-                style="background: {MODEL_COLORS[full]};"
+                class="inline-block h-[6px] w-[6px] rounded-full border border-white bg-slate-400 shadow-sm"
+                aria-hidden="true"
               ></span>
-              {short}
+              10
             </span>
-          {/each}
+            <span class="flex items-center gap-1.5">
+              <span
+                class="inline-block h-[20px] w-[20px] rounded-full border border-white bg-slate-400 shadow-sm"
+                aria-hidden="true"
+              ></span>
+              1,000+ {m.home_map_size_legend_label()}
+            </span>
+          </div>
         </div>
       </div>
 
-      <!-- Palette selector + zoom-to-detected-state shortcut -->
-      <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-500">
-        <MapPaletteSelector />
-        {#if detectedState && STATE_NAMES[detectedState] && data.stateMeta[detectedState]?.participating > 0 && !(selectedStates.size === 1 && selectedStates.has(detectedState))}
+      {#if detectedState && STATE_NAMES[detectedState] && data.stateMeta[detectedState]?.participating > 0 && !(selectedStates.size === 1 && selectedStates.has(detectedState))}
+        <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-500">
           <button
             type="button"
             on:click={() => (selectedStates = new Set([detectedState!]))}
             class="text-xs text-slate-500 underline-offset-2 hover:text-slate-900 hover:underline"
           >Zoom to {STATE_NAMES[detectedState]} →</button>
-        {/if}
-      </div>
+        </div>
+      {/if}
     </div>
 
     <!-- Map: full-bleed so the country breaks the column and reads at scale -->
@@ -454,55 +543,107 @@
       {:else}
         <NationalMap
           agencies={data.agencies}
+          terminatedAgencies={data.terminatedAgencies}
           {selectedStates}
-          palette={$mapPalette}
           {cursorIdx}
         />
         <div
-          class="count-overlay pointer-events-none absolute inset-x-0 top-2 flex justify-center sm:top-4"
-          class:visible={showCountOverlay}
-          class:playing={timelinePlaying}
-          aria-hidden="true"
+          class="count-overlay pointer-events-none absolute inset-x-0 top-2 flex flex-col items-center sm:top-auto sm:bottom-4"
         >
-          <div class="count-card">
-            <div class="count-stat">
-              <div class="count-number">{intFmt.format(Math.round($displayedCount))}</div>
-              <div class="count-label">agencies</div>
+          <button
+            type="button"
+            on:click={restartTimeline}
+            class="count-card pointer-events-auto"
+            aria-label="Replay the 287(g) growth animation from January 2025"
+            title="Replay from January 2025"
+          >
+            <div class="count-stats">
+              <div class="count-stat">
+                <div class="count-number">{intFmt.format(Math.round($displayedCount))}</div>
+                <div class="count-label">agencies</div>
+              </div>
+              <div class="count-divider" aria-hidden="true"></div>
+              <div class="count-stat">
+                <div class="count-number">{popFmtOverlay.format(Math.max(0, $displayedPop))}</div>
+                <div class="count-label">Pop. covered</div>
+              </div>
             </div>
-            <div class="count-divider" aria-hidden="true"></div>
-            <div class="count-stat">
-              <div class="count-number">{popFmtOverlay.format(Math.max(0, $displayedPop))}</div>
-              <div class="count-label">Pop. covered</div>
-            </div>
-          </div>
+          </button>
+          <div class="count-date">{overlayDateLabel}</div>
         </div>
       {/if}
     </div>
     {#if data.agencies.length > 0 && signedIndices.length > 0 && Number.isFinite(maxIdx)}
       <div class="bg-white">
         <div class="mx-auto max-w-6xl">
-          <MapTimelineScrubber {minIdx} {maxIdx} labelMaxIdx={todayIdx} bind:cursorIdx bind:playing={timelinePlaying} {countAtCursor} />
+          <MapTimelineScrubber bind:this={scrubberRef} {minIdx} {maxIdx} labelMaxIdx={todayIdx} bind:cursorIdx bind:playing={timelinePlaying} {countAtCursor} />
+          <div class="px-4 pb-4 text-[11px] italic leading-snug text-slate-500 sm:px-6 sm:text-xs">
+            {#if statewideCount > 0}
+              <p>{m.home_map_statewide_note({ count: statewideCount })}</p>
+            {/if}
+            <p class="mt-1">{m.home_map_boundaries_note()}</p>
+            <p class="mt-1">
+              <a
+                href="https://github.com/appelson/Tracking_287g"
+                target="_blank"
+                rel="noreferrer"
+                class="underline hover:text-slate-900"
+              >{m.home_map_download()} ↗</a>
+            </p>
+          </div>
         </div>
       </div>
     {/if}
-  </section>
-
-  <!-- ── Support callout ──────────────────────────────────────────────────── -->
-  <section class="border-b border-slate-200 bg-gray-100 px-4 py-5 sm:px-6">
-    <div class="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-      <p class="text-sm text-slate-700">
-        {m.home_support_prefix()} <a href="https://vsr.recoveredfactory.net/en" target="_blank" rel="noreferrer" class="font-semibold text-slate-900">Recovered Factory</a>{m.home_support_suffix()}
-      </p>
+    <!-- Below the map: free download / licensing page (not in nav) -->
+    <div class="border-t border-slate-200 bg-stone-50 px-4 py-3 text-center sm:px-6">
       <a
-        href="https://vsr.recoveredfactory.net/en"
-        target="_blank"
-        rel="noreferrer"
-        class="self-start rounded border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 no-underline hover:border-slate-400 hover:text-slate-900 hover:no-underline sm:shrink-0 sm:self-auto"
-      >
-        {m.home_support_hire_us()}
-      </a>
+        href={localizeHref("/use-the-map")}
+        class="text-sm font-semibold text-slate-700 underline-offset-2 hover:text-slate-900 hover:underline"
+      >{m.home_map_use_cta()}</a>
     </div>
   </section>
+
+  <!-- ── What each model authorizes ───────────────────────────────────────── -->
+  <section class="border-b border-slate-200 bg-white px-4 py-10 sm:px-6 sm:py-12">
+    <div class="mx-auto max-w-6xl">
+      <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">
+        {m.home_models_heading()}
+      </h2>
+      <div class="mt-5 grid items-stretch gap-4 sm:grid-cols-3">
+        {#each ALL_MODELS as model}
+          {@const desc = modelDesc(model)}
+          <a
+            href={localizeHref(`/model/${MODEL_SLUG[model]}`)}
+            class="group flex flex-col overflow-hidden rounded border no-underline shadow-sm transition hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+            style="border-color: {MODEL_COLORS[model]};"
+          >
+            <div class="px-4 py-3" style="background: {MODEL_COLORS[model]};">
+              <h3
+                class="font-sans text-sm font-bold uppercase tracking-widest"
+                style="color: {MODEL_TEXT_COLORS[model] ?? '#ffffff'};"
+              >{model.replace(/ Model$/, '')}</h3>
+            </div>
+            <div class="flex flex-1 flex-col gap-3 px-4 py-4" style="background: {MODEL_COLORS[model]}28;">
+              <p class="text-sm leading-relaxed text-slate-700">{@html desc.short}</p>
+              <div class="flex items-end justify-between gap-2">
+                <span
+                  class="text-sm font-semibold group-hover:underline"
+                  style="color: {MODEL_DARK_COLORS[model] ?? '#334155'};"
+                >Learn more →</span>
+                {#if data.modelCounts[model]}
+                  <p
+                    class="text-right text-xs italic text-slate-500"
+                    title={data.snapshotDate ? `As of ${data.snapshotDate}` : undefined}
+                  >{intFmt.format(data.modelCounts[model])} agencies</p>
+                {/if}
+              </div>
+            </div>
+          </a>
+        {/each}
+      </div>
+    </div>
+  </section>
+
 
   <!-- ── Search + filter + browse ──────────────────────────────────────────── -->
   <section class="px-4 py-10 sm:px-6 sm:py-12">
@@ -554,7 +695,7 @@
               </button>
             {/each}
 
-            {#if detectedState && !selectedStates.has(detectedState)}
+            {#if detectedState && statesWithAnyAgreement.has(detectedState) && !selectedStates.has(detectedState)}
               <button
                 type="button"
                 on:click={() => toggleState(detectedState!)}
@@ -568,7 +709,7 @@
               bind:value={selectedYear}
               class="rounded-md border border-slate-300 bg-white py-2 pl-3 pr-7 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
-              <option value="">Year signed</option>
+              <option value="">{m.home_search_year_signed()}</option>
               {#each allYears as year}
                 <option value={year}>{year}</option>
               {/each}
@@ -605,7 +746,8 @@
           >{m.home_search_clear_filters()}</button>
         {:else}
           {m.home_search_baseline({
-            count: intFmt.format(data.agencies.length),
+            rows: intFmt.format(data.agencies.length),
+            agencies: intFmt.format(data.agencyCountUnique),
             states: String(data.stateCount),
           })}
         {/if}
@@ -645,7 +787,7 @@
                       class="font-semibold leading-snug text-slate-900 no-underline hover:underline"
                     >{agency.name}</a>
                     <p class="text-xs text-slate-600">
-                      {[agency.city, agency.state].filter(Boolean).join(", ")}
+                      {#if agency.city}{agency.city}, {/if}<a href={localizeHref(`/state/${agency.state.toLowerCase()}`)} class="no-underline hover:underline">{agency.state}</a>
                     </p>
                   </td>
                   <td class="px-2 py-2 sm:px-3 sm:py-3">
@@ -726,43 +868,72 @@
 </main>
 
 <style>
-  /* Big-number overlay on the map during timeline playback. Sits over the
-     empty space below the inset territories. Fades in/out gently; the inner
-     card gets a soft scale-pop while the timeline is actively playing. */
+  /* Big-number overlay on the map. Always visible. The card itself is a
+     button — tapping it replays the growth animation from Jan 2025. */
   .count-overlay {
-    opacity: 0;
-    transition: opacity 380ms ease-out;
     transform: translateZ(0);
   }
-  .count-overlay.visible {
-    opacity: 1;
-  }
-  .count-card {
+  button.count-card {
+    /* Reset native button chrome so the card looks like a card. */
+    border: 0;
+    font: inherit;
+    color: inherit;
+    text-align: inherit;
+    cursor: pointer;
     display: inline-flex;
+    flex-direction: column;
     align-items: stretch;
-    gap: 0.9rem;
-    padding: 0.45rem 1rem;
+    /* Fixed width so the box doesn't widen as the count crosses
+       thousands or the population step-jumps to a wider compact label. */
+    width: 13rem;
+    padding: 0.5rem 0.75rem 0.55rem;
     border-radius: 0.55rem;
-    background: rgba(255, 255, 255, 0.85);
+    background: rgba(255, 255, 255, 0.92);
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
     box-shadow:
       0 1px 3px rgba(15, 23, 42, 0.08),
-      0 8px 22px rgba(15, 23, 42, 0.06);
-    transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
-    will-change: transform;
+      0 8px 22px rgba(15, 23, 42, 0.10);
+    transition: background-color 180ms ease-out, transform 180ms ease-out;
   }
   @media (min-width: 640px) {
-    .count-card { padding: 0.55rem 1.4rem; gap: 1.25rem; }
+    button.count-card { width: 15rem; padding: 0.6rem 1rem 0.65rem; }
   }
-  .count-overlay.playing .count-card {
-    animation: count-breathe 1.6s ease-in-out infinite;
+  button.count-card:hover {
+    background: #ffffff;
   }
-  @keyframes count-breathe {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.025); }
+  button.count-card:active {
+    transform: scale(0.98);
+  }
+  button.count-card:focus-visible {
+    outline: 2px solid rgba(15, 23, 42, 0.4);
+    outline-offset: 2px;
+  }
+  .count-date {
+    margin-top: 0.4rem;
+    text-align: center;
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: #ffffff;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+  }
+  @media (min-width: 640px) {
+    .count-date { font-size: 0.72rem; }
+  }
+  .count-stats {
+    display: flex;
+    gap: 0.75rem;
+    align-items: stretch;
+  }
+  @media (min-width: 640px) {
+    .count-stats { gap: 1rem; }
   }
   .count-stat {
+    flex: 1 1 0;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -777,23 +948,25 @@
     font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
     font-variant-numeric: tabular-nums;
     font-weight: 800;
-    font-size: 1.4rem;
+    font-size: 1.35rem;
     line-height: 1;
     color: #0f172a;
     letter-spacing: -0.02em;
   }
   @media (min-width: 640px) {
-    .count-number { font-size: 2rem; }
+    .count-number { font-size: 1.7rem; }
   }
   .count-label {
     margin-top: 0.25rem;
-    font-size: 0.58rem;
+    font-size: 0.55rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.16em;
+    letter-spacing: 0.14em;
     color: #64748b;
+    text-align: center;
+    white-space: nowrap;
   }
   @media (min-width: 640px) {
-    .count-label { font-size: 0.66rem; }
+    .count-label { font-size: 0.62rem; }
   }
 </style>

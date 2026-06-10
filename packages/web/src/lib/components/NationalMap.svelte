@@ -8,7 +8,7 @@
 
   export let selectedStates: Set<string> = new Set();
 
-  export let agencies: Array<{
+  type MapAgency = {
     slug: string;
     name: string;
     state: string;
@@ -20,7 +20,13 @@
     lng?: number | null;
     lee?: { officer_ct?: number | null } | null;
     signed_date?: string | null;
-  }> = [];
+    terminated_date?: string | null;
+  };
+  export let agencies: MapAgency[] = [];
+  // Once-active agencies that have left 287(g). Rendered as dots that fade in at
+  // their signing date (like any dot) and fade OUT as the cursor crosses their
+  // terminated_date. Separate from `agencies` so topline counts stay active-only.
+  export let terminatedAgencies: MapAgency[] = [];
 
   // Continuous timeline cursor for the smooth playback animation. The value is
   // a fractional month index relative to Jan 2025 (idx 0 = Jan 2025, idx 16 =
@@ -32,81 +38,41 @@
   let container: HTMLDivElement;
   let map: any = null;
   const isMobile = browser && window.matchMedia("(max-width: 640px)").matches;
-  // Debug-only: ?scale=officers|population|flat lets us A/B sizing schemes
-  // without redeploying. Falls back to officers in prod.
-  const scaleMode: "officers" | "population" | "flat" =
-    browser && import.meta.env.DEV
-      ? ((new URLSearchParams(window.location.search).get("scale") as any) ?? "officers")
-      : "officers";
-  // Debug-only: ?roads=off hides the highway/road overlays so we can A/B
-  // map clarity without them. Default is on.
-  const roadsOn =
-    !(browser && import.meta.env.DEV) ||
-    new URLSearchParams(window.location.search).get("roads") !== "off";
-  import type { PaletteKey } from "$lib/map/paletteStore";
-  export let palette: PaletteKey = "slate";
 
-  type PaletteSpec = {
-    bg: string;
-    state: string;
-    line: string;
-    lineWidth: number;
-    county: string;
-    roadCasing: string;
-    roadFill: string;
-    roadMajorCasing: string;
-    roadMajorFill: string;
-    roadMedium: string;
-    dotStroke: string;
-    dotStrokeWidth: number;
-    text: string;
-    textHalo: string;
-  };
-
-  // Two picks: slate is the cool blue-grey default (matches the agency
-  // page baseline); dark is a steely analytical mode for presentation.
-  const PALETTES: Record<PaletteKey, PaletteSpec> = {
-    slate: {
-      bg: "#dde4eb",
-      state: "#f5f4f5",
-      line: "#94a3b8",
-      lineWidth: isMobile ? 0.9 : 1.5,
-      county: "#c8d4dc",
-      roadCasing: "#a0b0bc",
-      roadFill: "#eef2f5",
-      roadMajorCasing: "#b0bcc7",
-      roadMajorFill: "#f3f5f7",
-      roadMedium: "#cdd6dc",
-      dotStroke: "#dde4eb",
-      dotStrokeWidth: 0.6,
-      text: "#334155",
-      textHalo: "rgba(255,255,255,0.85)",
-    },
-    dark: {
-      bg: "#0c1117",
-      state: "#18202a",
-      line: "#3a4552",
-      lineWidth: 0.6,
-      county: "#1c242e",
-      roadCasing: "#252d38",
-      roadFill: "#525f6c",
-      roadMajorCasing: "#222933",
-      roadMajorFill: "#3d4754",
-      roadMedium: "#252d38",
-      dotStroke: "rgba(255,255,255,0.18)",
-      dotStrokeWidth: 0.25,
-      text: "#c2cad4",
-      textHalo: "rgba(8,12,18,0.9)",
-    },
+  // Dark is the only palette — steely analytical mode, replaces the prior
+  // slate/dark toggle so map tone reads consistently across the site.
+  // Land is lifted to a readable slate (sea stays near-black) so the country
+  // shape separates and the dots read against a lighter ground — the OG cards'
+  // "treatment D" intent (linear(1.7,-8)) ported to the live style, without
+  // touching the dots themselves. See #118, #148.
+  const C = {
+    bg: "#0c1117",
+    state: "#212e3f",
+    line: "#42566c",
+    lineWidth: 0.7,
+    county: "#283546",
+    roadCasing: "#231f1c",
+    roadFill: "#4f463f",
+    roadMajorCasing: "#221d1a",
+    roadMajorFill: "#4a4139",
+    roadMedium: "#231f1c",
+    dotStroke: "rgba(255,255,255,0.18)",
+    dotStrokeWidth: 0.25,
+    text: "#c2cad4",
+    textHalo: "rgba(8,12,18,0.9)",
   };
 
   const MODEL_FALLBACK = "#94a3b8";
   const FULL_BOUNDS: [[number, number], [number, number]] = [[-127, 21], [-65, 50]];
-  // On wide desktops the container aspect can exceed the bbox aspect, which
-  // makes fitBounds size by latitude and pin the southern bound (21°) to the
-  // very bottom — clipping AK's inset (extends to ~18°). Asymmetric bottom
-  // padding gives AK breathing room without redoing the inset transform.
-  const FIT_PADDING: any = isMobile ? 6 : { top: 14, bottom: 70, left: 14, right: 14 };
+  // Asymmetric padding:
+  //   - Mobile pushes the country down (top: 110) so the top-mounted
+  //     counter overlay doesn't cover the lower-48.
+  //   - Desktop reserves bottom space (bottom: 70) so AK's inset (which
+  //     extends to ~18° below the bbox south of 21°) has room on wide
+  //     aspect ratios where fitBounds otherwise pins 21° to the edge.
+  const FIT_PADDING: any = isMobile
+    ? { top: 95, bottom: 8, left: 6, right: 6 }
+    : { top: 14, bottom: 70, left: 14, right: 14 };
 
   function fitToSelection() {
     if (!map) return;
@@ -133,23 +99,38 @@
 
   $: selectedStates, fitToSelection();
 
-  // Fractional month index from Jan 2025 (idx 0). Pre-2025 signings (and any
-  // missing dates) get a deeply negative value so they're always past the
-  // fade-in window — i.e. shown unconditionally as the baseline.
+  // Fractional month index from Jan 2025 (idx 0). The animation begins Dec 18
+  // 2024 (TIMELINE_START_IDX) — the most recent pre-2025 archived snapshot (#169)
+  // — so any signing on or before then (and any missing date) gets a deeply
+  // negative value, always past the fade-in window — i.e. shown unconditionally
+  // as the baseline. Must match TIMELINE_START_IDX in routes/+page.svelte.
   const BASELINE_IDX = -10000;
   const TIMELINE_EPOCH_YEAR = 2025;
+  const TIMELINE_START_IDX = -1 + 17 / 31; // Dec 18 2024, relative to the Jan 2025 epoch
   const signedDateIdx = (d?: string | null): number => {
     if (!d || d.length < 10) return BASELINE_IDX;
     const y = Number(d.slice(0, 4));
     const m = Number(d.slice(5, 7));
     const day = Number(d.slice(8, 10));
-    if (y < TIMELINE_EPOCH_YEAR) return BASELINE_IDX;
+    const idx = (y - TIMELINE_EPOCH_YEAR) * 12 + (m - 1) + (day - 1) / 31;
+    return idx < TIMELINE_START_IDX ? BASELINE_IDX : idx;
+  };
+
+  // Termination index in the same fractional-month space. Active agencies (no
+  // terminated_date) get a sentinel far past the timeline so the cursor never
+  // reaches it — their dots never fade out.
+  const TERMINATION_NONE = 1_000_000;
+  const terminatedDateIdx = (d?: string | null): number => {
+    if (!d || d.length < 10) return TERMINATION_NONE;
+    const y = Number(d.slice(0, 4));
+    const m = Number(d.slice(5, 7));
+    const day = Number(d.slice(8, 10));
     return (y - TIMELINE_EPOCH_YEAR) * 12 + (m - 1) + (day - 1) / 31;
   };
 
   $: geojson = {
     type: "FeatureCollection",
-    features: agencies
+    features: [...agencies, ...terminatedAgencies]
       .filter((a) => a.lat != null && a.lng != null)
       .map((a) => {
         const [lng, lat] = toInsetCoords(a.lng!, a.lat!, a.state);
@@ -167,6 +148,7 @@
             officer_ct: a.lee?.officer_ct ?? 0,
             color: MODEL_COLORS[a.primary_model ?? ""] ?? MODEL_FALLBACK,
             signed_idx: signedDateIdx(a.signed_date),
+            terminated_idx: terminatedDateIdx(a.terminated_date),
           },
         };
       }),
@@ -193,8 +175,17 @@
     0, 0,
     FADE_WINDOW, 1,
   ];
+  // Fade-OUT for terminated dots: full opacity until the cursor reaches the
+  // termination date, then ramps to 0 over FADE_WINDOW. Active dots carry a
+  // sentinel terminated_idx far in the future, so this clamps to 1 for them.
+  const fadeOutMultiplier = (cursor: number) => [
+    "interpolate", ["linear"],
+    ["-", cursor, ["get", "terminated_idx"]],
+    0, 1,
+    FADE_WINDOW, 0,
+  ];
   const opacityWithFade = (cursor: number) => [
-    "*", BASE_OPACITY, fadeMultiplier(cursor),
+    "*", BASE_OPACITY, fadeMultiplier(cursor), fadeOutMultiplier(cursor),
   ];
 
   // MapLibre rule: ["zoom"] can only appear as the direct input of a top-level
@@ -209,8 +200,9 @@
   const radiusWithFade = (cursor: number): any => {
     if (!radiusStops.length) return 1;
     const fm = fadeMultiplier(cursor);
+    const fo = fadeOutMultiplier(cursor);
     const flat: any[] = [];
-    for (const [z, r] of radiusStops) flat.push(z, ["*", fm, r]);
+    for (const [z, r] of radiusStops) flat.push(z, ["*", fm, fo, r]);
     return ["interpolate", ["linear"], ["zoom"], ...flat];
   };
 
@@ -221,44 +213,6 @@
     } else {
       map.setPaintProperty("agencies", "circle-opacity", opacityWithFade(cursorIdx));
       map.setPaintProperty("agencies", "circle-radius", radiusWithFade(cursorIdx));
-    }
-  }
-
-  // Re-paint when the user toggles the palette via the selector. Covers
-  // every layer that has a palette-driven color so the switch updates
-  // basemap, labels, and roads in one pass without remount.
-  $: if (map && map.isStyleLoaded()) {
-    const c = PALETTES[palette];
-    map.setPaintProperty("background", "background-color", c.bg);
-    if (map.getLayer("state-fills"))
-      map.setPaintProperty("state-fills", "fill-color", c.state);
-    if (map.getLayer("state-lines")) {
-      map.setPaintProperty("state-lines", "line-color", c.line);
-      map.setPaintProperty("state-lines", "line-width", c.lineWidth);
-    }
-    if (map.getLayer("county-lines"))
-      map.setPaintProperty("county-lines", "line-color", c.county);
-    if (map.getLayer("highway-static-casing"))
-      map.setPaintProperty("highway-static-casing", "line-color", c.roadCasing);
-    if (map.getLayer("highway-static-fill"))
-      map.setPaintProperty("highway-static-fill", "line-color", c.roadFill);
-    if (map.getLayer("road-highway-casing"))
-      map.setPaintProperty("road-highway-casing", "line-color", c.roadCasing);
-    if (map.getLayer("road-highway-fill"))
-      map.setPaintProperty("road-highway-fill", "line-color", c.roadFill);
-    if (map.getLayer("agencies"))
-      map.setPaintProperty("agencies", "circle-stroke-color", c.dotStroke);
-      map.setPaintProperty("agencies", "circle-stroke-width", c.dotStrokeWidth);
-    if (map.getLayer("road-major-casing"))
-      map.setPaintProperty("road-major-casing", "line-color", c.roadMajorCasing);
-    if (map.getLayer("road-major-fill"))
-      map.setPaintProperty("road-major-fill", "line-color", c.roadMajorFill);
-    if (map.getLayer("road-medium"))
-      map.setPaintProperty("road-medium", "line-color", c.roadMedium);
-    for (const id of ["places-major", "places-minor", "places-all"]) {
-      if (!map.getLayer(id)) continue;
-      map.setPaintProperty(id, "text-color", c.text);
-      map.setPaintProperty(id, "text-halo-color", c.textHalo);
     }
   }
 
@@ -291,7 +245,7 @@
         glyphs: PMTILES_GLYPHS,
         projection: { type: "mercator" },
         layers: [
-          { id: "background", type: "background", paint: { "background-color": PALETTES[palette].bg } },
+          { id: "background", type: "background", paint: { "background-color": C.bg } },
         ],
       } as any,
       // Inset layout: continental US + territory insets all fit in this window
@@ -310,6 +264,7 @@
       map.resize();
       map.fitBounds(FIT_BOUNDS, FIT_OPTIONS);
       map.setMinZoom(map.getZoom());
+      if (selectedStates.size > 0) fitToSelection();
 
       // Don't hijack page scroll at the locked-floor zoom — at full zoom-out
       // there's nothing to scroll-zoom into anyway, and a wheel over the map
@@ -330,7 +285,7 @@
         id: "state-fills",
         type: "fill",
         source: "states",
-        paint: { "fill-color": PALETTES[palette].state, "fill-opacity": 1 },
+        paint: { "fill-color": C.state, "fill-opacity": 1 },
       });
 
       map.addLayer({
@@ -338,8 +293,8 @@
         type: "line",
         source: "states",
         paint: {
-          "line-color": PALETTES[palette].line,
-          "line-width": PALETTES[palette].lineWidth,
+          "line-color": C.line,
+          "line-width": C.lineWidth,
           // Fainter at the locked-floor national view (zoom ~1) so the country
           // doesn't read as a cage of borders. Ramps to full visibility once
           // individual states fill the screen.
@@ -359,7 +314,7 @@
         source: "counties",
         minzoom: 5,
         paint: {
-          "line-color": PALETTES[palette].county,
+          "line-color": C.county,
           "line-width": 0.4,
           "line-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0, 5.5, 0.7],
         },
@@ -383,9 +338,8 @@
         type: "line",
         source: "highways-static",
         maxzoom: 4.5,
-        layout: { visibility: roadsOn ? "visible" : "none" },
         paint: {
-          "line-color": PALETTES[palette].roadCasing,
+          "line-color": C.roadCasing,
           "line-width": ["interpolate", ["linear"], ["zoom"], 1, 1.2, 4, 2.2],
           "line-opacity": ["interpolate", ["linear"], ["zoom"], 1, 0.35, 3.5, 0.35, 4.5, 0],
         },
@@ -395,9 +349,8 @@
         type: "line",
         source: "highways-static",
         maxzoom: 4.5,
-        layout: { visibility: roadsOn ? "visible" : "none" },
         paint: {
-          "line-color": PALETTES[palette].roadFill,
+          "line-color": C.roadFill,
           "line-width": ["interpolate", ["linear"], ["zoom"], 1, 0.5, 4, 1.0],
           "line-opacity": ["interpolate", ["linear"], ["zoom"], 1, 0.5, 3.5, 0.5, 4.5, 0],
         },
@@ -418,10 +371,10 @@
         source: "base",
         "source-layer": "roads",
         filter: ["==", ["get", "kind"], "highway"],
-        layout: { "line-cap": "round", "line-join": "round", visibility: roadsOn ? "visible" : "none" },
+        layout: { "line-cap": "round", "line-join": "round" },
         paint: {
-          "line-color": PALETTES[palette].roadCasing,
-          "line-width": ["interpolate", ["linear"], ["zoom"], 2, 1.8, 5, 2.5, 9, 4, 12, 5.5],
+          "line-color": C.roadCasing,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 2, 1.8, 5, 2.6, 9, 4.6, 12, 6.4, 15, 8],
           // Fades in 3.5→4.5 as the static overlay fades out — single highway at every zoom.
           "line-opacity": ["interpolate", ["linear"], ["zoom"], 3.5, 0, 4.5, 0.8],
         },
@@ -433,28 +386,30 @@
         source: "base",
         "source-layer": "roads",
         filter: ["==", ["get", "kind"], "highway"],
-        layout: { "line-cap": "round", "line-join": "round", visibility: roadsOn ? "visible" : "none" },
+        layout: { "line-cap": "round", "line-join": "round" },
         paint: {
-          "line-color": PALETTES[palette].roadFill,
-          "line-width": ["interpolate", ["linear"], ["zoom"], 2, 0.8, 5, 1.2, 9, 2, 12, 3],
+          "line-color": C.roadFill,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 2, 0.8, 5, 1.3, 9, 2.5, 12, 3.8, 15, 4.8],
           "line-opacity": ["interpolate", ["linear"], ["zoom"], 3.5, 0, 4.5, 0.95],
         },
       });
 
-      // US/state highways — visible from zoom 5+ once the viewport is
-      // narrow enough that they don't read as visual noise.
+      // US/state highways — shown from the national view (fading in with the
+      // interstates at 3.5→4.5), because agencies string along these corridors,
+      // so seeing the network explains the dot clustering. Faint hint when
+      // zoomed out, fuller as you zoom in.
       map.addLayer({
         id: "road-major-casing",
         type: "line",
         source: "base",
         "source-layer": "roads",
-        minzoom: 5,
+        minzoom: 3,
         filter: ["==", ["get", "kind"], "major_road"],
-        layout: { "line-cap": "round", "line-join": "round", visibility: roadsOn ? "visible" : "none" },
+        layout: { "line-cap": "round", "line-join": "round" },
         paint: {
-          "line-color": PALETTES[palette].roadMajorCasing,
-          "line-width": ["interpolate", ["linear"], ["zoom"], 5, 0.8, 9, 2, 12, 3.5],
-          "line-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0, 5.5, 0.65],
+          "line-color": C.roadMajorCasing,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 3, 0.6, 5, 1.0, 9, 2.5, 12, 4.2, 15, 5.4],
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 3.5, 0, 4.5, 0.6, 8, 0.8],
         },
       });
 
@@ -463,29 +418,45 @@
         type: "line",
         source: "base",
         "source-layer": "roads",
-        minzoom: 5,
+        minzoom: 3,
         filter: ["==", ["get", "kind"], "major_road"],
-        layout: { "line-cap": "round", "line-join": "round", visibility: roadsOn ? "visible" : "none" },
+        layout: { "line-cap": "round", "line-join": "round" },
         paint: {
-          "line-color": PALETTES[palette].roadMajorFill,
-          "line-width": ["interpolate", ["linear"], ["zoom"], 5, 0.4, 9, 1.1, 12, 2],
-          "line-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0, 5.5, 0.9],
+          "line-color": C.roadMajorFill,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 3, 0.35, 5, 0.5, 9, 1.5, 12, 2.7, 15, 3.5],
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 3.5, 0, 4.5, 0.7, 8, 0.95],
         },
       });
 
-      // Medium roads fade in at city zoom for context
+      // Medium roads fade in approaching city zoom for context
       map.addLayer({
         id: "road-medium",
         type: "line",
         source: "base",
         "source-layer": "roads",
-        minzoom: 8,
+        minzoom: 7,
         filter: ["==", ["get", "kind"], "medium_road"],
-        layout: { visibility: roadsOn ? "visible" : "none" },
         paint: {
-          "line-color": PALETTES[palette].roadMedium,
-          "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.4, 12, 1.5],
-          "line-opacity": 0.8,
+          "line-color": C.roadMedium,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 7, 0.3, 12, 1.6, 15, 2.6],
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 7, 0, 8, 0.85],
+        },
+      });
+
+      // Minor roads / local streets — only once zoomed into a city, so the
+      // urban grid fills in under the dots instead of an empty slate. Kept
+      // faint so it reads as texture, not a full street map.
+      map.addLayer({
+        id: "road-minor",
+        type: "line",
+        source: "base",
+        "source-layer": "roads",
+        minzoom: 11,
+        filter: ["==", ["get", "kind"], "minor_road"],
+        paint: {
+          "line-color": C.roadMedium,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 11, 0.25, 14, 1, 16, 1.8],
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 11, 0, 12.5, 0.6],
         },
       });
 
@@ -512,8 +483,8 @@
           "text-allow-overlap": false,
         },
         paint: {
-          "text-color": PALETTES[palette].text,
-          "text-halo-color": PALETTES[palette].textHalo,
+          "text-color": C.text,
+          "text-halo-color": C.textHalo,
           "text-halo-width": 1.5,
           "text-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0, 4.5, 1],
         },
@@ -539,8 +510,8 @@
           "text-allow-overlap": false,
         },
         paint: {
-          "text-color": PALETTES[palette].text,
-          "text-halo-color": PALETTES[palette].textHalo,
+          "text-color": C.text,
+          "text-halo-color": C.textHalo,
           "text-halo-width": 1.5,
           "text-opacity": ["interpolate", ["linear"], ["zoom"], 6, 0, 6.5, 1],
         },
@@ -562,8 +533,8 @@
           "text-allow-overlap": false,
         },
         paint: {
-          "text-color": PALETTES[palette].text,
-          "text-halo-color": PALETTES[palette].textHalo,
+          "text-color": C.text,
+          "text-halo-color": C.textHalo,
           "text-halo-width": 1.5,
           "text-opacity": ["interpolate", ["linear"], ["zoom"], 8, 0, 8.5, 1],
         },
@@ -575,30 +546,25 @@
       });
 
       // Agency dots — on top of city labels. Radius scales by sqrt of the
-      // chosen metric so big departments read visibly heavier than rural
+      // officer count so big departments read visibly heavier than rural
       // sheriff's offices, without erasing the small ones. Mobile gets a
-      // tighter scale; ?scale=population|flat swaps the metric in dev for
-      // visual tuning.
+      // tighter scale. Domain ceiling = ~1,000 officers (between p99 and the
+      // dozen-or-so 1k+ outliers like Las Vegas Metro) → sqrt ≈ 31.6.
       const SCALE = isMobile ? 0.7 : 1;
-      const sizeExpr =
-        scaleMode === "flat"
-          ? 20
-          : ["sqrt", ["coalesce", ["get", scaleMode === "population" ? "population" : "officer_ct"], 0]];
-      // Domain ceiling matched to each metric's 95th percentile:
-      //   officers p95 = 307 → sqrt ≈ 17.5
-      //   population p95 = 255k → sqrt ≈ 505
-      const sizeDomainMax = scaleMode === "population" ? 600 : 18;
+      const sizeExpr: any = ["sqrt", ["coalesce", ["get", "officer_ct"], 0]];
+      const sizeDomainMax = 32;
       const radius = (low: number, high: number) => [
-        "interpolate", ["linear"], sizeExpr as any,
+        "interpolate", ["linear"], sizeExpr,
         0, low * SCALE,
         sizeDomainMax, high * SCALE,
       ];
       // Captured so the timeline cursor's paint updates can rebuild the radius
       // interpolation each frame with the fade multiplier applied per-stop.
       radiusStops = [
-        [3, radius(0.8, 7)],
-        [6, radius(2.2, 12)],
-        [10, radius(4, 20)],
+        [3, radius(0.8, 9)],
+        [6, radius(2.4, 16)],
+        [10, radius(5, 30)],
+        [13, radius(8, 40)],
       ];
       const initialRadius = cursorIdx == null
         ? baseRadiusExpression()
@@ -616,8 +582,8 @@
           // touching dots without reading as a halo. The reduced fill
           // opacity lets dense clusters (FL, TX) read as "many overlapping"
           // rather than a solid blob.
-          "circle-stroke-width": PALETTES[palette].dotStrokeWidth,
-          "circle-stroke-color": PALETTES[palette].dotStroke,
+          "circle-stroke-width": C.dotStrokeWidth,
+          "circle-stroke-color": C.dotStroke,
           "circle-stroke-opacity": 1,
           "circle-radius": initialRadius,
           "circle-opacity": initialOpacity,
@@ -721,6 +687,13 @@
         if (hasHoverPointer || !popupSlug) return;
         const feats = map.queryRenderedFeatures(e.point, { layers: ["agencies"] });
         if (feats.length === 0) dismissPopup();
+      });
+
+      // Snapshot signal for the OG bake (scripts/bake-og.mjs). Set after
+      // the first idle fires past initial render so a Playwright snapshot
+      // waits for tiles + dots to settle before capturing.
+      map.once("idle", () => {
+        (window as any).__mapReady = true;
       });
 
     });

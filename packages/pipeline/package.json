@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "ingest": "tsx ingest.ts",
+    "cache:warm": "node warm-cache.mjs",
     "build:muckrock": "tsx build-muckrock-snapshot.ts",
     "build:moa-index": "tsx build-moa-index.ts",
     "scrape:contacts": "tsx scrape-contacts.ts"

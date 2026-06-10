@@ -94,12 +94,22 @@ export default $config({
       },
     );
 
+    // Public bucket for the downloadable map assets (video/gif/png archive).
+    // Served via direct S3 URLs — no custom domain, no CloudFront — to avoid
+    // adding to the account's cache-policy quota and to keep the big files out
+    // of the site deploy. `pnpm publish:map-assets` uploads a `-latest` copy
+    // (linked from the licensing page) plus an immutable dated-hash archive
+    // copy per ICE release. See packages/web/scripts/publish-map-assets.mjs.
+    const mapArchive = new sst.aws.Bucket("MapArchive", { access: "public" });
+
     new sst.aws.SvelteKit("Web", {
       path: "packages/web",
       domain: webDomain,
       warm: isProdStage ? 1 : 0,
+      link: [mapArchive],
       environment: {
         PUBLIC_STAGE: $app.stage,
+        PUBLIC_MAP_ASSETS_URL: $interpolate`https://${mapArchive.domain}`,
       },
       transform: {
         cdn: {

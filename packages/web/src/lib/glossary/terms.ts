@@ -15,29 +15,31 @@ export const GLOSSARY_TERMS: GlossaryTerm[] = [
   {
     term: "Administrative warrant",
     definition:
-      "A civil warrant issued by an immigration officer, not a federal judge. Unlike criminal warrants, administrative warrants do not authorize entry into a private home.",
+      "A civil warrant issued by an immigration officer rather than a federal judge. Unlike criminal warrants, administrative warrants don't authorize entry into a private home — but they do let 287(g) officers, especially under the Warrant Service Officer model, detain named individuals for ICE pickup.",
     seeAlso: ["Detainer", "Warrant Service Officer"],
   },
   {
     term: "Civil immigration violation",
     definition:
       "Being present in the United States without authorization is a civil violation, not a criminal one. This distinction matters for what local officers can legally do under 287(g).",
+    seeAlso: ["287(g)", "Detainer"],
   },
   {
     term: "Detainer",
     definition:
-      "A request from ICE to a local jail or law enforcement agency to hold a person beyond their scheduled release date so ICE can take custody.",
-    seeAlso: ["Jail Enforcement Model"],
+      "A request from ICE asking a local jail to hold a person — typically up to 48 hours past their scheduled release — so ICE can take custody. Federal courts have found that complying with a detainer without an independent legal basis can violate the Fourth Amendment, and a number of jurisdictions decline them for that reason.",
+    seeAlso: ["Jail Enforcement Model", "Civil immigration violation"],
   },
   {
     term: "ICE",
     definition:
       "U.S. Immigration and Customs Enforcement, the federal agency within the Department of Homeland Security responsible for civil immigration enforcement.",
+    seeAlso: ["287(g)"],
   },
   {
     term: "Jail Enforcement Model",
     definition:
-      "Under the Jail Enforcement Model (JEM), trained local officers screen people booked into local jails to identify those who may be removable under federal immigration law.",
+      "The most common 287(g) model. Trained local officers screen people booked into the jail, run them against immigration databases, and flag those who may be removable so ICE can lodge a detainer. Activity is confined to the jail — no community arrests.",
     seeAlso: ["287(g)", "Task Force Model", "Warrant Service Officer"],
     learnMoreHref: "/model/jail",
   },
@@ -55,19 +57,20 @@ export const GLOSSARY_TERMS: GlossaryTerm[] = [
   {
     term: "Removal",
     definition:
-      "The formal process by which a person is ordered to leave the United States by an immigration judge or through expedited procedures.",
+      "The official term for being deported. Removal happens either through an immigration judge's order or — far more often — through expedited procedures that bypass the courts entirely. ICE carries out the physical removal.",
+    seeAlso: ["ICE", "Detainer", "287(g)"],
   },
   {
     term: "Task Force Model",
     definition:
-      "Under the Task Force Model (TFM), trained local officers work alongside ICE agents in the community to make immigration arrests — the broadest authority granted under 287(g).",
+      "The broadest 287(g) authority. Trained local officers ride along with ICE field agents to stop, question, and arrest people for immigration violations in the community — not just those already in custody.",
     seeAlso: ["287(g)", "Jail Enforcement Model", "Warrant Service Officer"],
     learnMoreHref: "/model/taskforce",
   },
   {
     term: "Warrant Service Officer",
     definition:
-      "The Warrant Service Officer (WSO) model authorizes local officers to serve administrative warrants on people ICE has already identified for removal. Officers cannot initiate independent enforcement.",
+      "The narrowest 287(g) model. Local officers — typically in a jail setting — execute ICE administrative warrants on people ICE has already named. They can't decide who's targeted and can't make independent immigration arrests.",
     seeAlso: ["287(g)", "Administrative warrant", "Jail Enforcement Model"],
     learnMoreHref: "/model/wso",
   },

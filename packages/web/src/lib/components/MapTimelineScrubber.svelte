@@ -2,9 +2,10 @@
   import { onDestroy } from "svelte";
   import { browser } from "$app/environment";
   import { getLocale } from "$lib/paraglide/runtime";
+  import { m } from "$lib/paraglide/messages.js";
 
-  // Range is fractional months relative to Jan 2025 (idx 0). minIdx is usually
-  // 0; maxIdx includes a small headroom past today so the last batch of
+  // Range is fractional months relative to Jan 2025 (idx 0). minIdx is the
+  // animation start (May 2025, idx 4); maxIdx includes a small headroom past today so the last batch of
   // signings can fully fade in. labelMaxIdx is the value used to format the
   // displayed month — clamped to today so the label never reads "Jun 2026"
   // for headroom that doesn't correspond to real data.
@@ -16,9 +17,13 @@
   // Count of agreements visible at the current cursor (baseline + matched).
   export let countAtCursor: number;
 
-  // 1.7 idx/sec → ~10s to play the full 17-month span. Tuned to give the busy
-  // months breathing room without dragging.
-  const PLAY_SPEED = 1.7;
+  // Constant playback DURATION rather than constant speed: the sweep always
+  // takes ~PLAY_DURATION seconds regardless of how many months the range
+  // spans, so the per-month step slows as the span shrinks (e.g. a May-2025
+  // start covers fewer months than a Jan-2025 one but plays for the same time).
+  // 8s to match the baked map video's runtime.
+  const PLAY_DURATION = 8;
+  $: playSpeed = maxIdx > minIdx ? (maxIdx - minIdx) / PLAY_DURATION : 1;
 
   // Exported so the parent can drive a map overlay (visible while playing).
   export let playing = false;
@@ -36,7 +41,7 @@
   const tick = (now: number) => {
     const dt = lastTimestamp ? (now - lastTimestamp) / 1000 : 0;
     lastTimestamp = now;
-    const next = cursorIdx + PLAY_SPEED * dt;
+    const next = cursorIdx + playSpeed * dt;
     if (next >= maxIdx) {
       cursorIdx = maxIdx;
       stop();
@@ -60,12 +65,26 @@
     cursorIdx = Number((e.target as HTMLInputElement).value);
   };
 
+  // Restart from the beginning. Exposed so the parent can wire this to the
+  // map's counter card (tap-to-replay).
+  export const restart = () => {
+    if (rafId != null) { cancelAnimationFrame(rafId); rafId = null; }
+    cursorIdx = minIdx;
+    if (!browser) return;
+    playing = true;
+    lastTimestamp = 0;
+    rafId = requestAnimationFrame(tick);
+  };
+
   onDestroy(stop);
 
   const monthLabel = (idx: number): string => {
-    const month = Math.max(0, Math.floor(idx));
+    // idx is months relative to Jan 2025 (idx 0); it can go negative once the
+    // timeline reaches the pre-2025 era (e.g. Dec 2024 ≈ -0.45). Use a real
+    // floored-division month so negatives map back to the right year/month.
+    const month = Math.floor(idx);
     const y = 2025 + Math.floor(month / 12);
-    const m = (month % 12) + 1;
+    const m = (((month % 12) + 12) % 12) + 1;
     const localeTag = getLocale() === "es" ? "es-MX" : "en-US";
     return new Intl.DateTimeFormat(localeTag, { month: "short", year: "numeric", timeZone: "UTC" })
       .format(new Date(Date.UTC(y, m - 1, 1)));
@@ -114,7 +133,7 @@
   </div>
 
   <p class="text-[11px] italic leading-snug text-slate-500 sm:text-xs">
-    This map shows agencies that were active as of the most recent data. Agreements signed before January 2025 are shown throughout as a baseline; later signings appear by their signing month. It doesn't reflect agreements that were later terminated, paused, or earlier signings of agreements that were re-signed.
+    {m.home_map_caveat()}
   </p>
 </div>
 
