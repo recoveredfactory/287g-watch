@@ -35,6 +35,12 @@
   // renders all dots at full opacity.
   export let cursorIdx: number | null = null;
 
+  // Map-tone selector (MapPaletteSelector / paletteStore). Surfaced as a
+  // data-palette attribute on the container for now; the layer styles still
+  // render a single dark tone, so switching tone is a no-op until those are
+  // wired to read this. See the map-palette PR.
+  export let palette: string = "dark";
+
   let container: HTMLDivElement;
   let map: any = null;
   const isMobile = browser && window.matchMedia("(max-width: 640px)").matches;
@@ -707,7 +713,7 @@
   export const resize = () => map?.resize();
 </script>
 
-<div bind:this={container} class="h-full w-full"></div>
+<div bind:this={container} class="h-full w-full" data-palette={palette}></div>
 
 <style>
   :global(.map-popup .maplibregl-popup-content) {

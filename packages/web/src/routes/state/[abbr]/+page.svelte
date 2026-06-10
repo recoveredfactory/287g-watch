@@ -3,6 +3,8 @@
   import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_DARK_COLORS, MODEL_SHORT, MODEL_MINI, MODEL_SLUG, MODEL_ORDER } from "$lib/colors";
   import NationalMap from "$lib/components/NationalMap.svelte";
   import MapTimelineScrubber from "$lib/components/MapTimelineScrubber.svelte";
+  import MapPaletteSelector from "$lib/components/MapPaletteSelector.svelte";
+  import { mapPalette } from "$lib/map/paletteStore";
   import { tweened } from "svelte/motion";
   import { cubicOut } from "svelte/easing";
   import { localizeHref } from "$lib/paraglide/runtime";
@@ -171,8 +173,12 @@
     <NationalMap
       {agencies}
       {selectedStates}
+      palette={$mapPalette}
       {cursorIdx}
     />
+    <div class="absolute right-2 top-2 z-10">
+      <MapPaletteSelector />
+    </div>
     {#if showCountOverlay}
       <div class="pointer-events-none absolute inset-x-0 top-2 flex justify-center sm:top-4" aria-hidden="true">
         <div class="flex items-center gap-4 rounded-xl bg-white/90 px-5 py-2.5 shadow-md backdrop-blur">
