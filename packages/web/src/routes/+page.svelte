@@ -12,8 +12,6 @@
   import { m } from "$lib/paraglide/messages.js";
   import Gloss from "$lib/components/Gloss.svelte";
   import { ogImage } from "$lib/ogImage";
-  import VirtualList from "svelte-virtual-list/VirtualList.svelte";
-  import TrendCharts from "$lib/components/TrendCharts.svelte";
 
   export let data: PageData;
 
@@ -183,6 +181,8 @@
   let activeModels: Set<string> = new Set();
   let selectedStates: Set<string> = new Set();
   let selectedYear = "";
+  let currentPage = 1;
+  const PAGE_SIZE = 25;
   let filterBarHeight = 0;
   $: thTop = `calc(var(--site-header-height) + var(--staging-banner-height) + ${filterBarHeight}px)`;
 
@@ -275,6 +275,7 @@
       if (selectedYear) params.set("year", selectedYear);
       if (activeModels.size > 0)
         params.set("models", [...activeModels].map((m) => MODEL_SLUG[m]).filter(Boolean).join(","));
+      if (currentPage > 1) params.set("page", String(currentPage));
       const qs = params.toString();
       history.replaceState(history.state, "", qs ? `?${qs}` : location.pathname);
     }, 300);
@@ -282,7 +283,7 @@
 
   // Only sync URL for user-initiated changes after mount. Initial-state setup
   // (URL params, geo default) runs inside onMount and intentionally skips sync.
-  $: { searchQuery; selectedStates; selectedYear; activeModels;
+  $: { searchQuery; selectedStates; selectedYear; activeModels; currentPage;
     if (mounted) scheduleUrlSync();
   }
 
@@ -290,6 +291,7 @@
     const params = new URLSearchParams(location.search);
     const q = params.get("q");
     const models = params.get("models");
+    const page = params.get("page");
     if (q) searchQuery = q;
     // Support both ?states=TX,FL (new) and legacy ?state=TX
     const statesParam = params.get("states") ?? params.get("state");
@@ -307,6 +309,13 @@
     const geo = await getCachedGeo();
     if (geo.state && STATE_NAMES[geo.state]) {
       detectedState = geo.state;
+    }
+
+    // Set page last — filter changes above will reset currentPage to 1 reactively,
+    // so this must come after all other assignments to stick.
+    if (page) {
+      const n = parseInt(page, 10);
+      if (!isNaN(n) && n > 1) currentPage = n;
     }
 
     mounted = true;
@@ -334,6 +343,14 @@
     const matchesYear = !selectedYear || a.signed_date?.startsWith(selectedYear);
     return matchesSearch && matchesModel && matchesState && matchesYear;
   });
+
+  // Reset to page 1 whenever filters change
+  $: if (filteredAgencies) currentPage = 1;
+
+  $: totalPages = Math.max(1, Math.ceil(filteredAgencies.length / PAGE_SIZE));
+  $: pageStart = (currentPage - 1) * PAGE_SIZE;
+  $: pageEnd = Math.min(pageStart + PAGE_SIZE, filteredAgencies.length);
+  $: pageAgencies = filteredAgencies.slice(pageStart, pageEnd);
 
   const toggleState = (state: string) => {
     const next = new Set(selectedStates);
@@ -628,19 +645,6 @@
   </section>
 
 
-  <!-- ── Participation trends ─────────────────────────────────────────────── -->
-  {#if data.timeline.length > 1}
-    <section class="border-b border-slate-200 px-4 py-8 sm:px-6 sm:py-10">
-      <div class="mx-auto max-w-6xl">
-        <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">Program growth</h2>
-        <p class="mt-1 text-sm text-slate-500">Agencies in the 287(g) program over time, by model type</p>
-        <div class="mt-5">
-          <TrendCharts timeline={data.timeline} />
-        </div>
-      </div>
-    </section>
-  {/if}
-
   <!-- ── Search + filter + browse ──────────────────────────────────────────── -->
   <section class="px-4 py-10 sm:px-6 sm:py-12">
     <div class="mx-auto max-w-6xl">
@@ -762,59 +766,100 @@
           </button>
         </div>
       {:else}
-        <div class="agency-list mt-4 rounded-lg border border-slate-200 overflow-hidden text-sm">
-          <!-- Column headers -->
-          <div class="agency-row agency-row--header border-b border-slate-200 bg-slate-50 text-xs font-bold uppercase tracking-wider text-slate-700">
-            <div class="px-3 py-2 sm:px-4 sm:py-3">Agency</div>
-            <div class="px-2 py-2 sm:px-3 sm:py-3">Type</div>
-            <div class="px-2 py-2 sm:px-3 sm:py-3">Signed</div>
-            <div class="agency-col-pop px-2 py-2 sm:px-3 sm:py-3">Population</div>
-            <div class="px-2 py-2 sm:px-3 sm:py-3">MOA</div>
-            <div class="agency-col-foia px-2 py-2 sm:px-3 sm:py-3">FOIA</div>
-          </div>
-          <!-- Virtualized rows -->
-          <VirtualList items={filteredAgencies} height="calc(100vh - 400px)" itemHeight={56} let:item={agency}>
-            <div class="agency-row border-b border-slate-100 hover:bg-slate-50">
-              <div class="px-3 py-2 sm:px-4 sm:py-3">
-                <a
-                  href={localizeHref(`/agency/${agency.slug}`)}
-                  class="font-semibold leading-snug text-slate-900 no-underline hover:underline"
-                >{agency.name}</a>
-                <p class="text-xs text-slate-600">
-                  {#if agency.city}{agency.city}, {/if}<a href={localizeHref(`/state/${agency.state.toLowerCase()}`)} class="no-underline hover:underline">{agency.state}</a>
-                </p>
-              </div>
-              <div class="px-2 py-2 sm:px-3 sm:py-3">
-                <div class="flex flex-wrap gap-1">
-                  {#each agency.models as model}
-                    <span
-                      class="model-badge"
-                      class:model-badge--jail={model.includes("Jail")}
-                      class:model-badge--taskforce={model.includes("Task")}
-                      class:model-badge--wso={model.includes("Warrant")}
-                    ><span class="sm:hidden">{MODEL_MINI[model] ?? model}</span><span class="hidden sm:inline">{MODEL_SHORT[model] ?? model}</span></span>
-                  {/each}
-                </div>
-              </div>
-              <div class="px-2 py-2 tabular-nums text-slate-600 sm:px-3 sm:py-3">
-                {agency.signed_date ? agency.signed_date.slice(0, 4) : "—"}
-              </div>
-              <div class="agency-col-pop px-2 py-2 tabular-nums text-slate-600 sm:px-3 sm:py-3">
-                {agency.population ? popFmt.format(agency.population) : "—"}
-              </div>
-              <div class="px-2 py-2 text-xs font-semibold sm:px-3 sm:py-3">
-                {#if agency.moa_url}
-                  <a href={agency.moa_url} target="_blank" rel="noreferrer" class="no-underline hover:underline">↗</a>
-                {:else}
-                  <span class="text-slate-300">—</span>
-                {/if}
-              </div>
-              <div class="agency-col-foia px-2 py-2 text-xs font-semibold sm:px-3 sm:py-3">
-                <a href="https://www.muckrock.com/foi/create/" target="_blank" rel="noreferrer" class="no-underline hover:underline">→</a>
-              </div>
-            </div>
-          </VirtualList>
+        <div class="mt-4 rounded-lg border border-slate-200">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-slate-200 bg-slate-50 text-left">
+                <th class="sticky z-10 bg-slate-50 px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 sm:px-4 sm:py-3" style="top: {thTop}">Agency</th>
+                <th class="sticky z-10 bg-slate-50 px-2 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 sm:px-3 sm:py-3" style="top: {thTop}">Type</th>
+                <th class="sticky z-10 bg-slate-50 px-2 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 sm:px-3 sm:py-3" style="top: {thTop}">Signed</th>
+                <th class="sticky z-10 hidden bg-slate-50 px-2 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 sm:table-cell sm:px-3 sm:py-3" style="top: {thTop}">Population</th>
+                <th class="sticky z-10 bg-slate-50 px-2 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 sm:px-3 sm:py-3" style="top: {thTop}">MOA</th>
+                <th class="sticky z-10 hidden bg-slate-50 px-2 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 sm:table-cell sm:px-3 sm:py-3" style="top: {thTop}">FOIA</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              {#each pageAgencies as agency (agency.slug)}
+                <tr class="group hover:bg-slate-50">
+                  <td class="px-3 py-2 sm:px-4 sm:py-3">
+                    <a
+                      href={localizeHref(`/agency/${agency.slug}`)}
+                      class="font-semibold leading-snug text-slate-900 no-underline hover:underline"
+                    >{agency.name}</a>
+                    <p class="text-xs text-slate-600">
+                      {[agency.city, agency.state].filter(Boolean).join(", ")}
+                    </p>
+                  </td>
+                  <td class="px-2 py-2 sm:px-3 sm:py-3">
+                    <div class="flex flex-wrap gap-1">
+                      {#each agency.models as model}
+                        <span
+                          class="model-badge"
+                          class:model-badge--jail={model.includes("Jail")}
+                          class:model-badge--taskforce={model.includes("Task")}
+                          class:model-badge--wso={model.includes("Warrant")}
+                        ><span class="sm:hidden">{MODEL_MINI[model] ?? model}</span><span class="hidden sm:inline">{MODEL_SHORT[model] ?? model}</span></span>
+                      {/each}
+                    </div>
+                  </td>
+                  <td class="px-2 py-2 tabular-nums text-slate-600 sm:px-3 sm:py-3">
+                    {agency.signed_date ? agency.signed_date.slice(0, 4) : "—"}
+                  </td>
+                  <td class="hidden px-2 py-2 tabular-nums text-slate-600 sm:table-cell sm:px-3 sm:py-3">
+                    {agency.population ? popFmt.format(agency.population) : "—"}
+                  </td>
+                  <td class="px-2 py-2 text-xs font-semibold sm:px-3 sm:py-3">
+                    {#if agency.moa_url}
+                      <a href={agency.moa_url} target="_blank" rel="noreferrer" class="no-underline hover:underline">↗</a>
+                    {:else}
+                      <span class="text-slate-300">—</span>
+                    {/if}
+                  </td>
+                  <td class="hidden px-2 py-2 text-xs font-semibold sm:table-cell sm:px-3 sm:py-3">
+                    <a href="https://www.muckrock.com/foi/create/" target="_blank" rel="noreferrer" class="no-underline hover:underline">→</a>
+                  </td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
         </div>
+
+        <!-- Pagination -->
+        {#if totalPages > 1}
+          <div class="mt-6 flex items-center justify-between gap-4">
+            <button
+              type="button"
+              on:click={() => (currentPage = Math.max(1, currentPage - 1))}
+              disabled={currentPage === 1}
+              class="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+              </svg>
+              <span class="hidden sm:inline">{m.home_pagination_previous()}</span>
+            </button>
+
+            <p class="text-sm text-slate-500">
+              {m.home_pagination_range({
+                start: String(pageStart + 1),
+                end: String(pageEnd),
+                total: intFmt.format(filteredAgencies.length),
+              })}
+            </p>
+
+            <button
+              type="button"
+              on:click={() => (currentPage = Math.min(totalPages, currentPage + 1))}
+              disabled={currentPage === totalPages}
+              class="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <span class="hidden sm:inline">{m.home_pagination_next()}</span>
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+        {/if}
       {/if}
 
     </div>
@@ -923,35 +968,5 @@
   }
   @media (min-width: 640px) {
     .count-label { font-size: 0.62rem; }
-  }
-
-  /* Agency virtual list grid */
-  .agency-row {
-    display: grid;
-    grid-template-columns: 1fr auto auto auto auto;
-    align-items: center;
-  }
-  .agency-col-pop,
-  .agency-col-foia {
-    display: none;
-  }
-  @media (min-width: 640px) {
-    .agency-row {
-      grid-template-columns: 1fr auto auto auto auto auto;
-    }
-    .agency-col-pop,
-    .agency-col-foia {
-      display: block;
-    }
-  }
-  /* VirtualList viewport needs explicit overflow */
-  :global(svelte-virtual-list-viewport) {
-    overflow-y: auto !important;
-  }
-  :global(svelte-virtual-list-contents) {
-    width: 100%;
-  }
-  :global(svelte-virtual-list-row) {
-    width: 100%;
   }
 </style>
