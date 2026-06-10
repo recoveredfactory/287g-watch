@@ -1,6 +1,7 @@
 import { error } from "@sveltejs/kit";
 import { STATE_NAMES } from "$lib/states";
 import type { Agency, StateMeta } from "../../+page.server";
+import { buildTimeline, type TimelinePoint } from "$lib/timeline";
 
 export type StatePageData = {
   abbr: string;
@@ -10,6 +11,8 @@ export type StatePageData = {
   snapshotDate: string | null;
   modelCounts: Record<string, number>;
   agencyTypeCounts: Record<string, number>;
+  timeline: TimelinePoint[];
+  nationalTimeline: TimelinePoint[];
 };
 
 export const load = async ({ fetch, params }): Promise<StatePageData> => {
@@ -50,5 +53,9 @@ export const load = async ({ fetch, params }): Promise<StatePageData> => {
     }
   }
 
-  return { abbr, stateName, agencies, stateMeta, snapshotDate, modelCounts, agencyTypeCounts };
+  return {
+    abbr, stateName, agencies, stateMeta, snapshotDate, modelCounts, agencyTypeCounts,
+    timeline: buildTimeline(agencies),
+    nationalTimeline: buildTimeline(allAgencies),
+  };
 };

@@ -92,6 +92,9 @@ export type HomeAgency = {
   lee?: { officer_ct: number | null } | null;
 };
 
+import { buildTimeline, type TimelinePoint } from "$lib/timeline";
+export type { TimelinePoint };
+
 export type PageData = {
   agencies: HomeAgency[];
   // Once-active agencies that have since left 287(g). Kept OUT of `agencies`
@@ -114,6 +117,7 @@ export type PageData = {
   snapshotDate: string | null;
   modelCounts: Record<string, number>;
   stateMeta: Record<string, StateMeta>;
+  timeline: TimelinePoint[];
 };
 
 export const load = async ({ fetch }): Promise<PageData> => {
@@ -229,6 +233,7 @@ export const load = async ({ fetch }): Promise<PageData> => {
       snapshotDate,
       modelCounts,
       stateMeta,
+      timeline: buildTimeline([...agencies, ...terminatedRaw]),
     };
   } catch {
     return {
@@ -242,6 +247,7 @@ export const load = async ({ fetch }): Promise<PageData> => {
       snapshotDate: null,
       modelCounts: {},
       stateMeta: {},
+      timeline: [],
     };
   }
 };
