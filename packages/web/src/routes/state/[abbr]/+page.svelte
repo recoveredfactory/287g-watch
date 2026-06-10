@@ -9,6 +9,7 @@
   import { tweened } from "svelte/motion";
   import { cubicOut } from "svelte/easing";
   import { localizeHref } from "$lib/paraglide/runtime";
+  import TrendCharts from "$lib/components/TrendCharts.svelte";
 
   export let data: StatePageData;
 
@@ -204,6 +205,21 @@
         <MapTimelineScrubber {minIdx} {maxIdx} labelMaxIdx={todayIdx} bind:cursorIdx bind:playing={timelinePlaying} {countAtCursor} />
       </div>
     </div>
+  {/if}
+
+  <!-- Trend chart -->
+  {#if data.timeline.length > 1}
+    <section class="border-b border-slate-200 px-4 py-8 sm:px-6 sm:py-10">
+      <div class="mx-auto max-w-4xl">
+        <h2 class="font-serif text-xl font-bold text-slate-900">Participation over time</h2>
+        <p class="mt-1 text-sm text-slate-500">
+          Agencies in the 287(g) program in {stateName}, by model — dashed line shows national total
+        </p>
+        <div class="mt-5">
+          <TrendCharts timeline={data.timeline} nationalTimeline={data.nationalTimeline} />
+        </div>
+      </div>
+    </section>
   {/if}
 
   <!-- Model breakdown + table -->
