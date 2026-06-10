@@ -47,9 +47,14 @@ export const GET: RequestHandler = async ({ fetch, url }) => {
     }
   } catch {}
 
+  const stateAbbrs = [...new Set(agencies.map((a) => a.state))];
+
   const entries: string[] = [];
   for (const path of STATIC_PATHS) {
     entries.push(urlEntry(siteUrl, path, snapshotDate));
+  }
+  for (const abbr of stateAbbrs) {
+    entries.push(urlEntry(siteUrl, `/state/${abbr.toLowerCase()}`, snapshotDate));
   }
   for (const a of agencies) {
     entries.push(urlEntry(siteUrl, `/agency/${a.slug}`, snapshotDate));
