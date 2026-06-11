@@ -435,39 +435,13 @@
         </p>
       {/if}
 
-      {#if data.agencyCountUnique > 0}
-        <div class="mt-6 flex flex-wrap gap-6 sm:mt-8 sm:gap-8">
-          <div>
-            <p class="font-mono text-2xl font-semibold tabular-nums text-slate-900 sm:text-3xl">
-              {intFmt.format(data.agencyCountUnique)}<sup class="text-base text-slate-400">*</sup>
-            </p>
-            <p class="mt-0.5 text-xs text-slate-500 sm:text-sm">{m.home_stat_agencies()}</p>
-          </div>
-          <div>
-            <p class="font-mono text-2xl font-semibold tabular-nums text-slate-900 sm:text-3xl">
-              {data.stateCount}
-            </p>
-            <p class="mt-0.5 text-xs text-slate-500 sm:text-sm">{m.home_stat_states()}</p>
-          </div>
-          {#if data.populationCoveredUnique > 0}
-            <div>
-              <p class="font-mono text-2xl font-semibold tabular-nums text-slate-900 sm:text-3xl">
-                {popFmt.format(data.populationCoveredUnique)}
-              </p>
-              <p class="mt-0.5 text-xs text-slate-500 sm:text-sm">{m.home_stat_population()}</p>
-            </div>
-          {/if}
-        </div>
-
-        <p class="mt-3 text-xs text-slate-400">
-          {m.home_stat_agencies_footnote()}
+      <!-- Big-number stats removed (#163): agencies + population are already
+           shown on the map overlay, and the block read as plain/redundant.
+           The snapshot date survives as the page's data-freshness signal. -->
+      {#if data.snapshotDate}
+        <p class="mt-4 text-xs italic text-slate-400 sm:mt-6">
+          As of {new Intl.DateTimeFormat("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" }).format(new Date(data.snapshotDate))}
         </p>
-
-        {#if data.snapshotDate}
-          <p class="mt-1 text-xs italic text-slate-400">
-            As of {new Intl.DateTimeFormat("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" }).format(new Date(data.snapshotDate))}
-          </p>
-        {/if}
       {/if}
     </div>
   </section>
