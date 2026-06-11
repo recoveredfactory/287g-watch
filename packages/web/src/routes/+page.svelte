@@ -266,6 +266,17 @@
 
   $: hasActiveFilters = searchQuery.trim() !== "" || activeModels.size > 0 || selectedStates.size > 0 || selectedYear !== "";
 
+  // Signature of the active filter set. The virtual list keeps its scroll
+  // position when `items` changes, so narrowing a filter would otherwise
+  // strand the reader mid-list. Keying the list on this string remounts it —
+  // and a fresh viewport renders from the top — whenever any filter changes.
+  $: filterKey = JSON.stringify([
+    searchQuery.trim().toLowerCase(),
+    [...selectedStates].sort(),
+    selectedYear,
+    [...activeModels].sort(),
+  ]);
+
   function modelDesc(model: string): { short: string; detail: string } {
     switch (model) {
       case "Jail Enforcement Model":
@@ -643,7 +654,9 @@
             <div class="px-2 py-2 sm:px-3 sm:py-3">MOA</div>
             <div class="agency-col-foia px-2 py-2 sm:px-3 sm:py-3">FOIA</div>
           </div>
-          <!-- Virtualized rows -->
+          <!-- Virtualized rows. Keyed on the filter signature so the list
+               remounts and scrolls back to the top whenever a filter changes. -->
+          {#key filterKey}
           <VirtualList items={filteredAgencies} height="calc(100vh - 400px)" itemHeight={56} let:item={agency}>
             <div class="agency-row border-b border-slate-100 hover:bg-slate-50">
               <div class="px-3 py-2 sm:px-4 sm:py-3">
@@ -685,6 +698,7 @@
               </div>
             </div>
           </VirtualList>
+          {/key}
         </div>
       {/if}
 
