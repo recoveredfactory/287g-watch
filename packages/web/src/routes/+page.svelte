@@ -657,7 +657,7 @@
           <!-- Virtualized rows. Keyed on the filter signature so the list
                remounts and scrolls back to the top whenever a filter changes. -->
           {#key filterKey}
-          <VirtualList items={filteredAgencies} height="calc(100vh - 400px)" itemHeight={56} let:item={agency}>
+          <VirtualList items={filteredAgencies} height="calc(100vh - 400px)" let:item={agency}>
             <div class="agency-row border-b border-slate-100 hover:bg-slate-50">
               <div class="px-3 py-2 sm:px-4 sm:py-3">
                 <a
@@ -676,7 +676,8 @@
                       class:model-badge--jail={model.includes("Jail")}
                       class:model-badge--taskforce={model.includes("Task")}
                       class:model-badge--wso={model.includes("Warrant")}
-                    ><span class="sm:hidden">{MODEL_MINI[model] ?? model}</span><span class="hidden sm:inline">{MODEL_SHORT[model] ?? model}</span></span>
+                      title={model}
+                    >{MODEL_MINI[model] ?? model}</span>
                   {/each}
                 </div>
               </div>
@@ -810,10 +811,14 @@
     .count-label { font-size: 0.62rem; }
   }
 
-  /* Agency virtual list grid */
+  /* Agency virtual list grid. Fixed column tracks (not `auto`) so every row —
+     header included — sizes its columns identically and they line up into a
+     real table. `auto` tracks size to each row's own content, which is what
+     broke the tabular alignment. minmax(0, …) lets the name column shrink and
+     wrap instead of forcing the grid wider than its container. */
   .agency-row {
     display: grid;
-    grid-template-columns: 1fr auto auto auto auto;
+    grid-template-columns: minmax(0, 1fr) 7rem 3.25rem 2.5rem;
     align-items: center;
   }
   .agency-col-pop,
@@ -822,7 +827,7 @@
   }
   @media (min-width: 640px) {
     .agency-row {
-      grid-template-columns: 1fr auto auto auto auto auto;
+      grid-template-columns: minmax(0, 1fr) 8.5rem 4rem 5.5rem 3.5rem 3.5rem;
     }
     .agency-col-pop,
     .agency-col-foia {
