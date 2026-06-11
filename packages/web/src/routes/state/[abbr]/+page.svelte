@@ -3,9 +3,8 @@
   import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_DARK_COLORS, MODEL_SHORT, MODEL_MINI, MODEL_SLUG, MODEL_ORDER } from "$lib/colors";
   import NationalMap from "$lib/components/NationalMap.svelte";
   import MapTimelineScrubber from "$lib/components/MapTimelineScrubber.svelte";
-  import MapPaletteSelector from "$lib/components/MapPaletteSelector.svelte";
-  import { mapPalette } from "$lib/map/paletteStore";
   import { browser } from "$app/environment";
+  import { onMount } from "svelte";
   import { tweened } from "svelte/motion";
   import { cubicOut } from "svelte/easing";
   import { localizeHref } from "$lib/paraglide/runtime";
@@ -85,17 +84,89 @@
 
   const selectedStates = new Set([abbr]);
 
-  // ── Table sort ──────────────────────────────────────────────────────────────
+  // ── Table filter + sort ─────────────────────────────────────────────────────
   type SortCol = "name" | "signed" | "population";
   let sortCol: SortCol = "signed";
   let sortDir: 1 | -1 = -1;
+  let searchQuery = "";
+  let activeModels = new Set<string>();
+  let activeTypes = new Set<string>();
+  let moaOnly = false;
+
+  // Short URL keys for model names
+  const MODEL_URL_KEY: Record<string, string> = {
+    "Jail Enforcement Model": "jail",
+    "Task Force Model": "tf",
+    "Warrant Service Officer": "wso",
+  };
+  const URL_KEY_MODEL: Record<string, string> = Object.fromEntries(
+    Object.entries(MODEL_URL_KEY).map(([k, v]) => [v, k])
+  );
+
+  // Read initial filter state from URL params on mount
+  let mounted = false;
+  onMount(() => {
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get("q"); if (q) searchQuery = q;
+    const mp = params.get("model");
+    if (mp) activeModels = new Set(mp.split(",").map(k => URL_KEY_MODEL[k]).filter(Boolean));
+    const tp = params.get("type");
+    if (tp) activeTypes = new Set(tp.split(","));
+    if (params.get("moa") === "1") moaOnly = true;
+    const sp = params.get("sort") as SortCol | null;
+    if (sp && ["name", "signed", "population"].includes(sp)) sortCol = sp;
+    if (params.get("dir") === "asc") sortDir = 1;
+    mounted = true;
+  });
+
+  // Sync filter state back to URL (replaces history entry, no navigation)
+  $: if (browser && mounted) {
+    const params = new URLSearchParams();
+    if (searchQuery.trim()) params.set("q", searchQuery.trim());
+    if (activeModels.size > 0) params.set("model", [...activeModels].map(m => MODEL_URL_KEY[m] ?? m).join(","));
+    if (activeTypes.size > 0) params.set("type", [...activeTypes].join(","));
+    if (moaOnly) params.set("moa", "1");
+    if (sortCol !== "signed") params.set("sort", sortCol);
+    if (sortDir === 1) params.set("dir", "asc");
+    const qs = params.toString();
+    history.replaceState({}, "", window.location.pathname + (qs ? "?" + qs : ""));
+  }
 
   function setSort(col: SortCol) {
     if (sortCol === col) sortDir = sortDir === 1 ? -1 : 1;
     else { sortCol = col; sortDir = col === "name" ? 1 : -1; }
   }
 
-  $: sortedAgencies = [...agencies].sort((a, b) => {
+  function toggleModel(model: string) {
+    const next = new Set(activeModels);
+    if (next.has(model)) next.delete(model); else next.add(model);
+    activeModels = next;
+  }
+
+  function toggleType(type: string) {
+    const next = new Set(activeTypes);
+    if (next.has(type)) next.delete(type); else next.add(type);
+    activeTypes = next;
+  }
+
+  function clearFilters() {
+    searchQuery = "";
+    activeModels = new Set();
+    activeTypes = new Set();
+    moaOnly = false;
+  }
+
+  $: hasFilters = searchQuery.trim() !== "" || activeModels.size > 0 || activeTypes.size > 0 || moaOnly;
+
+  $: filteredAgencies = agencies.filter(a => {
+    if (searchQuery.trim() && !a.name.toLowerCase().includes(searchQuery.toLowerCase().trim())) return false;
+    if (activeModels.size > 0 && !a.models.some(m => activeModels.has(m))) return false;
+    if (activeTypes.size > 0 && !activeTypes.has(a.agency_type)) return false;
+    if (moaOnly && !a.moa_url) return false;
+    return true;
+  });
+
+  $: sortedAgencies = [...filteredAgencies].sort((a, b) => {
     if (sortCol === "name") return sortDir * a.name.localeCompare(b.name);
     if (sortCol === "signed") return sortDir * ((a.signed_date ?? "").localeCompare(b.signed_date ?? ""));
     if (sortCol === "population") return sortDir * ((a.population ?? 0) - (b.population ?? 0));
@@ -171,16 +242,15 @@
   </div>
 
   <!-- Map: full-bleed -->
-  <div class="relative h-[320px] overflow-hidden border-y border-slate-200 shadow-sm sm:h-[460px]">
+  <div
+    class="relative h-[320px] overflow-hidden border-y border-slate-200 shadow-sm sm:h-[460px]"
+    aria-label="Map showing 287(g) agency locations in {stateName}"
+  >
     <NationalMap
       {agencies}
       {selectedStates}
-      palette={$mapPalette}
       {cursorIdx}
     />
-    <div class="absolute right-2 top-2 z-10">
-      <MapPaletteSelector />
-    </div>
     {#if showCountOverlay}
       <div class="pointer-events-none absolute inset-x-0 top-2 flex justify-center sm:top-4" aria-hidden="true">
         <div class="flex items-center gap-4 rounded-xl bg-white/90 px-5 py-2.5 shadow-md backdrop-blur">
@@ -225,69 +295,119 @@
   <!-- Model breakdown + table -->
   <div class="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
 
-    <!-- Model pills -->
-    {#if MODEL_ORDER.some((m) => modelCounts[m])}
-      <section>
-        <h2 class="font-serif text-xl font-bold text-slate-900">Agreement types</h2>
-        <div class="mt-3 flex flex-wrap gap-2">
-          {#each MODEL_ORDER as model}
-            {#if modelCounts[model]}
+    <!-- Agreement types + filter controls -->
+    <section>
+      <h2 class="font-serif text-xl font-bold text-slate-900">Agreement types</h2>
+      <div class="mt-3 flex flex-wrap items-center gap-2">
+        {#each MODEL_ORDER as model}
+          {#if modelCounts[model]}
+            {@const active = activeModels.has(model)}
+            <div class="flex items-center">
+              <button
+                type="button"
+                aria-pressed={active}
+                on:click={() => toggleModel(model)}
+                class="rounded-l border px-3 py-1.5 text-xs font-semibold transition-colors"
+                style={active
+                  ? `background: ${MODEL_COLORS[model]}; border-color: ${MODEL_COLORS[model]}; color: ${MODEL_TEXT_COLORS[model] ?? '#fff'};`
+                  : `background: ${MODEL_COLORS[model]}22; border-color: ${MODEL_COLORS[model]}88; color: ${MODEL_DARK_COLORS[model]};`}
+              >{MODEL_SHORT[model]} · {intFmt.format(modelCounts[model])}</button>
               <a
                 href={localizeHref(`/model/${MODEL_SLUG[model]}`)}
-                class="flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold no-underline hover:opacity-80"
-                style="background: {MODEL_COLORS[model]}1a; border-color: {MODEL_COLORS[model]}66; color: {MODEL_DARK_COLORS[model]};"
-              >
-                <span
-                  class="inline-block h-2.5 w-2.5 rounded-full"
-                  style="background: {MODEL_COLORS[model]};"
-                  aria-hidden="true"
-                ></span>
-                {MODEL_SHORT[model]}
-                <span
-                  class="rounded-full px-2 py-0.5 text-xs font-black text-white"
-                  style="background: {MODEL_COLORS[model]};"
-                >{intFmt.format(modelCounts[model])}</span>
-              </a>
-            {/if}
-          {/each}
-        </div>
-      </section>
-    {/if}
+                aria-label="About {MODEL_SHORT[model]}"
+                class="rounded-r border-y border-r px-2 py-1.5 text-xs font-semibold no-underline transition-colors hover:opacity-80"
+                style={active
+                  ? `background: ${MODEL_COLORS[model]}dd; border-color: ${MODEL_COLORS[model]}; color: ${MODEL_TEXT_COLORS[model] ?? '#fff'};`
+                  : `background: ${MODEL_COLORS[model]}15; border-color: ${MODEL_COLORS[model]}88; color: ${MODEL_DARK_COLORS[model]};`}
+              >→</a>
+            </div>
+          {/if}
+        {/each}
+      </div>
+    </section>
 
     <!-- Agencies table -->
     <section class="mt-10">
-      <h2 class="font-serif text-xl font-bold text-slate-900">
-        Participating agencies
-        <span class="ml-1 font-sans text-base font-normal text-slate-400">({intFmt.format(agencies.length)})</span>
-      </h2>
+      <div class="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 class="font-serif text-xl font-bold text-slate-900">
+          Participating agencies
+          {#if hasFilters}
+            <span class="ml-1 font-sans text-base font-normal text-slate-400">({intFmt.format(sortedAgencies.length)} of {intFmt.format(agencies.length)})</span>
+          {:else}
+            <span class="ml-1 font-sans text-base font-normal text-slate-400">({intFmt.format(agencies.length)})</span>
+          {/if}
+        </h2>
+        {#if hasFilters}
+          <button type="button" on:click={clearFilters} class="text-xs font-semibold text-slate-500 hover:text-slate-800 underline underline-offset-2">Clear filters</button>
+        {/if}
+      </div>
 
-      <div class="mt-4 overflow-x-auto rounded-lg border border-slate-200">
-        <table class="w-full min-w-[520px] text-sm">
+      <!-- Search + type + MOA filters -->
+      <div class="mt-3 flex flex-wrap items-center gap-2">
+        <input
+          type="search"
+          placeholder="Search agencies…"
+          aria-label="Search agencies"
+          bind:value={searchQuery}
+          class="w-full rounded border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none sm:w-56"
+        />
+        {#each Object.entries(agencyTypeCounts).sort((a, b) => b[1] - a[1]) as [type, n]}
+          {@const typeActive = activeTypes.has(type)}
+          <button
+            type="button"
+            aria-pressed={typeActive}
+            on:click={() => toggleType(type)}
+            class="rounded border px-3 py-1.5 text-xs font-semibold transition-colors"
+            class:bg-slate-700={typeActive}
+            class:border-slate-700={typeActive}
+            class:text-white={typeActive}
+            class:bg-slate-100={!typeActive}
+            class:border-slate-300={!typeActive}
+            class:text-slate-600={!typeActive}
+          >{type} · {n}</button>
+        {/each}
+        <button
+          type="button"
+          aria-pressed={moaOnly}
+          on:click={() => (moaOnly = !moaOnly)}
+          class="rounded border px-3 py-1.5 text-xs font-semibold transition-colors"
+          class:bg-slate-700={moaOnly}
+          class:border-slate-700={moaOnly}
+          class:text-white={moaOnly}
+          class:bg-slate-100={!moaOnly}
+          class:border-slate-300={!moaOnly}
+          class:text-slate-600={!moaOnly}
+        >Has MOA</button>
+      </div>
+
+      <div class="mt-3 overflow-x-auto rounded-lg border border-slate-200">
+        <table class="w-full min-w-[340px] text-sm">
           <thead>
             <tr class="border-b border-slate-200 bg-slate-50">
-              <th class="px-4 py-3 text-left">
+              <th class="px-4 py-3 text-left" aria-sort={sortCol === "name" ? (sortDir === 1 ? "ascending" : "descending") : "none"}>
                 <button
                   type="button"
                   class="font-bold text-slate-700 hover:text-slate-900"
                   on:click={() => setSort("name")}
                 >Agency{sortArrow("name")}</button>
               </th>
+              <th class="hidden px-4 py-3 text-left font-bold text-slate-700 sm:table-cell">Type</th>
               <th class="px-4 py-3 text-left font-bold text-slate-700">Model</th>
-              <th class="px-4 py-3 text-left">
+              <th class="px-4 py-3 text-left" aria-sort={sortCol === "signed" ? (sortDir === 1 ? "ascending" : "descending") : "none"}>
                 <button
                   type="button"
                   class="font-bold text-slate-700 hover:text-slate-900"
                   on:click={() => setSort("signed")}
                 >Signed{sortArrow("signed")}</button>
               </th>
-              <th class="px-4 py-3 text-right">
+              <th class="hidden px-4 py-3 text-right sm:table-cell" aria-sort={sortCol === "population" ? (sortDir === 1 ? "ascending" : "descending") : "none"}>
                 <button
                   type="button"
                   class="font-bold text-slate-700 hover:text-slate-900"
                   on:click={() => setSort("population")}
                 >Population{sortArrow("population")}</button>
               </th>
-              <th class="px-4 py-3 text-center font-bold text-slate-700">MOA</th>
+              <th class="hidden px-4 py-3 text-center font-bold text-slate-700 sm:table-cell">MOA</th>
             </tr>
           </thead>
           <tbody>
@@ -302,6 +422,7 @@
                     <div class="text-xs text-slate-500">{agency.city}</div>
                   {/if}
                 </td>
+                <td class="hidden px-4 py-3 text-xs text-slate-500 sm:table-cell">{agency.agency_type ?? "—"}</td>
                 <td class="px-4 py-3">
                   <div class="flex flex-wrap gap-1">
                     {#each agency.models as model}
@@ -313,10 +434,10 @@
                   </div>
                 </td>
                 <td class="px-4 py-3 text-slate-600">{formatSigned(agency.signed_date)}</td>
-                <td class="px-4 py-3 text-right tabular-nums text-slate-600">
+                <td class="hidden px-4 py-3 text-right tabular-nums text-slate-600 sm:table-cell">
                   {agency.population ? intFmt.format(agency.population) : "—"}
                 </td>
-                <td class="px-4 py-3 text-center">
+                <td class="hidden px-4 py-3 text-center sm:table-cell">
                   {#if agency.moa_url}
                     <a
                       href={agency.moa_url}
@@ -331,6 +452,14 @@
                 </td>
               </tr>
             {/each}
+            {#if sortedAgencies.length === 0}
+              <tr>
+                <td colspan="6" class="px-4 py-8 text-center text-sm text-slate-400">
+                  No agencies match your filters.
+                  <button type="button" on:click={clearFilters} class="ml-1 underline underline-offset-2 hover:text-slate-600">Clear</button>
+                </td>
+              </tr>
+            {/if}
           </tbody>
         </table>
       </div>
