@@ -283,10 +283,10 @@
       <div class="mx-auto max-w-4xl">
         <h2 class="font-serif text-xl font-bold text-slate-900">Participation over time</h2>
         <p class="mt-1 text-sm text-slate-500">
-          Agencies in the 287(g) program in {stateName}, by model — dashed line shows national total
+          Agencies in the 287(g) program in {stateName}, by agreement type
         </p>
         <div class="mt-5">
-          <TrendCharts timeline={data.timeline} nationalTimeline={data.nationalTimeline} />
+          <TrendCharts timeline={data.timeline} />
         </div>
       </div>
     </section>

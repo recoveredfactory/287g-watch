@@ -77,6 +77,7 @@
   function fitToSelection() {
     if (!map) return;
     if (selectedStates.size === 0) {
+      map.setMaxBounds(null);
       map.fitBounds(FULL_BOUNDS, { padding: FIT_PADDING, duration: 500 });
       return;
     }
@@ -84,6 +85,7 @@
       .filter((a) => selectedStates.has(a.state) && a.lat != null && a.lng != null)
       .map((a) => toInsetCoords(a.lng!, a.lat!, a.state));
     if (points.length === 0) {
+      map.setMaxBounds(null);
       map.fitBounds(FULL_BOUNDS, { padding: FIT_PADDING, duration: 500 });
       return;
     }
@@ -94,7 +96,15 @@
       if (lng > maxLng) maxLng = lng;
       if (lat > maxLat) maxLat = lat;
     }
-    map.fitBounds([[minLng, minLat], [maxLng, maxLat]], { padding: 60, duration: 500, maxZoom: 8 });
+    // Generous padding so the full state is visible around the agency cluster
+    const padLng = Math.max(8, (maxLng - minLng) * 0.7);
+    const padLat = Math.max(6, (maxLat - minLat) * 0.7);
+    map.setMaxBounds([
+      [Math.max(FULL_BOUNDS[0][0], minLng - padLng), Math.max(FULL_BOUNDS[0][1], minLat - padLat)],
+      [Math.min(FULL_BOUNDS[1][0], maxLng + padLng), Math.min(FULL_BOUNDS[1][1], maxLat + padLat)],
+    ]);
+    // maxZoom: 6 keeps the view at state level, not zoomed into individual clusters
+    map.fitBounds([[minLng, minLat], [maxLng, maxLat]], { padding: 80, duration: 500, maxZoom: 6 });
   }
 
   $: selectedStates, fitToSelection();
