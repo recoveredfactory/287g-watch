@@ -821,6 +821,16 @@
     grid-template-columns: minmax(0, 1fr) 7rem 3.25rem 2.5rem;
     align-items: center;
   }
+  /* The virtualized rows live inside a scrolling viewport; on classic
+     (space-consuming) scrollbars that viewport is ~15px narrower than the
+     header, which would shift every column. Reserve the same gutter on the
+     header so the two grids share an identical content width and the columns
+     line up. `scrollbar-gutter` is a no-op with overlay scrollbars, so this
+     doesn't disturb platforms where they already align. */
+  .agency-row--header {
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
   .agency-col-pop,
   .agency-col-foia {
     display: none;
@@ -834,9 +844,12 @@
       display: block;
     }
   }
-  /* VirtualList viewport needs explicit overflow */
+  /* VirtualList viewport needs explicit overflow. `scrollbar-gutter: stable`
+     keeps the gutter reserved whether or not the list is currently scrolling,
+     so it always matches the header's reserved gutter (above). */
   :global(svelte-virtual-list-viewport) {
     overflow-y: auto !important;
+    scrollbar-gutter: stable;
   }
   :global(svelte-virtual-list-contents) {
     width: 100%;
