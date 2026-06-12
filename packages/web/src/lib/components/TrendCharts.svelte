@@ -1,47 +1,26 @@
 <script lang="ts">
-  // ── National trend chart (#162) ────────────────────────────────────────────
-  // Low-key trend chart for the home page: a stepped multi-series line of
-  // *active* agency–model agreements over time, since Dec 2024. Each model an
-  // agency holds is one agreement, so an agency with two models contributes to
-  // two series — the lines multi-count and their right edges match the model
-  // cards' `modelCounts`. Unlike a cumulative curve, lines dip when agreements
-  // terminate or an agency drops a model.
+  // ── Trend chart (#162) ─────────────────────────────────────────────────────
+  // Stepped multi-series line of *active* agency–model agreements over time,
+  // since Dec 2024. Each model an agency holds is one agreement, so an agency
+  // with two models contributes to two series — the lines multi-count and their
+  // right edges match the model cards' `modelCounts`. Unlike a cumulative curve,
+  // lines dip when agreements terminate or an agency drops a model.
   //
-  // The series arrive precomputed from +page.server.ts — history events (live
-  // + terminated agencies) replayed through the same buildTimeline as the
-  // state pages, sampled monthly — so the client never ships per-agency
-  // history (#135). The timeline begins Dec 2024 (the last pre-2025 archived
-  // snapshot, #169 — a pre-Trump baseline, same TIMELINE_START as the map);
-  // earlier history folds into the Dec 2024 level. A state selector in the
-  // header scopes the chart.
+  // Series arrive precomputed from the server — history events (live +
+  // terminated agencies) replayed through buildTimeline, sampled monthly — so
+  // the client never ships per-agency history. The timeline begins Dec 2024
+  // (the last pre-2025 archived snapshot, a pre-Trump baseline); earlier history
+  // folds into the Dec 2024 level.
   import { MODEL_COLORS, MODEL_ORDER, MODEL_MINI, MODEL_SLUG } from "$lib/colors";
-  import { STATE_NAMES } from "$lib/states";
   import ModelLink from "$lib/components/ModelLink.svelte";
 
-  type Agency = {
-    models?: string[];
-    state?: string;
-  };
   type TrendSeries = { jail: number[]; taskforce: number[]; wso: number[] };
-  export let agencies: Agency[] = [];
-  // "YYYY-MM" sample labels and per-scope series ("" = national), index-aligned.
+  // "YYYY-MM" sample labels and per-scope series ("" = national or state scope),
+  // index-aligned.
   export let trendMonths: string[] = [];
   export let trend: Record<string, TrendSeries> = {};
 
-  // Localized thousands separators for every displayed integer.
   const nf = new Intl.NumberFormat();
-
-  // ── State scope ─────────────────────────────────────────────────────────────
-  let selectedState = ""; // "" = National
-  $: stateCounts = agencies.reduce<Record<string, number>>((acc, a) => {
-    if (a.state) acc[a.state] = (acc[a.state] ?? 0) + 1;
-    return acc;
-  }, {});
-  $: stateOptions = Object.keys(stateCounts).sort((a, b) =>
-    (STATE_NAMES[a] ?? a).localeCompare(STATE_NAMES[b] ?? b),
-  );
-  $: scoped = selectedState ? agencies.filter((a) => a.state === selectedState) : agencies;
-  $: scopeLabel = selectedState ? (STATE_NAMES[selectedState] ?? selectedState) : "the U.S.";
 
   // ── Time axis ───────────────────────────────────────────────────────────────
   // Months are integer indices relative to a Jan 2025 epoch (Dec 2024 = -1),
@@ -49,7 +28,7 @@
   const EPOCH_YEAR = 2025;
   const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const monthLabelShort = (idx: number) =>
-    `${MONTH_NAMES[((idx % 12) + 12) % 12]} ’${String(EPOCH_YEAR + Math.floor(idx / 12)).slice(2)}`;
+    `${MONTH_NAMES[((idx % 12) + 12) % 12]} '${String(EPOCH_YEAR + Math.floor(idx / 12)).slice(2)}`;
 
   $: months = trendMonths.map(
     (ym) => (Number(ym.slice(0, 4)) - EPOCH_YEAR) * 12 + (Number(ym.slice(5, 7)) - 1),
@@ -58,27 +37,20 @@
   $: endIdx = months[months.length - 1] ?? START_IDX;
 
   // ── Series: active agreements per model, over months ────────────────────────
-  // An agency counts toward every model it holds, so series multi-count.
-  $: scopedTrend = trend[selectedState] ?? { jail: [], taskforce: [], wso: [] };
+  // Always uses the "" scope (national, or state-scoped data from state pages).
+  $: scopedTrend = trend[""] ?? { jail: [], taskforce: [], wso: [] };
   $: series = MODEL_ORDER.map((model) => {
     const values = scopedTrend[MODEL_SLUG[model] as keyof TrendSeries] ?? [];
     return { model, values, first: values[0] ?? 0, final: values[values.length - 1] ?? 0 };
   });
   $: maxModel = Math.max(1, ...series.flatMap((s) => s.values));
-  // Distinct figures: total agreements (sum of the lines) vs. agencies (scope
-  // size). Agreements ≥ agencies because agencies can hold more than one model.
   $: totalAgreements = series.reduce((n, s) => n + s.final, 0);
-  $: totalAgencies = scoped.length;
 
-  // ── Geometry / scales (manual; keeps us off a charting dep) ─────────────────
-  // Generous right margin: the direct end labels are the cramped spot, and we
-  // have room to spare there on every viewport, so give them width to breathe.
-  //
+  // ── Geometry / scales ───────────────────────────────────────────────────────
   // The viewBox width tracks the rendered width 1:1 (via bind:clientWidth), so
   // the chart fills whatever the container gives it and type renders at its
-  // true pixel size on every viewport — wide on desktop instead of square,
-  // no shrunken labels on mobile. Height stays fixed.
-  let measuredW = 0; // 0 until mounted; fall back to the old fixed width for SSR
+  // true pixel size on every viewport. Height stays fixed.
+  let measuredW = 0;
   $: W = Math.max(360, Math.round(measuredW) || 520);
   const H = 370;
   const PAD = { t: 14, r: 104, b: 26, l: 40 };
@@ -90,7 +62,6 @@
   $: yAt = (v: number) => PAD.t + innerH - (v / maxModel) * innerH;
 
   // Stepped path: hold the previous value across the month, then jump.
-  // Reactive so paths rebuild when the measured width changes.
   $: stepPath = (values: number[]): string => {
     if (!values.length) return "";
     let d = `M${xAt(months[0]).toFixed(1)} ${yAt(values[0]).toFixed(1)}`;
@@ -101,9 +72,6 @@
   };
 
   // Nudge label anchor-ys apart so direct labels don't collide vertically.
-  // Resolve overlaps top-down, then if the cluster has spilled past the plot
-  // bottom, slide the whole run back up so it stays anchored to the data and
-  // never overflows. Preserves original order. (3 labels, so cheap.)
   function spreadY(ys: number[], gap = 14): number[] {
     if (ys.length < 2) return [...ys];
     const order = ys.map((_, i) => i).sort((a, b) => ys[a] - ys[b]);
@@ -111,7 +79,6 @@
     for (let i = 1; i < placed.length; i++) {
       if (placed[i] - placed[i - 1] < gap) placed[i] = placed[i - 1] + gap;
     }
-    // Clamp the run within [PAD.t, baselineY]; shift up if it overran the bottom.
     const overflow = placed[placed.length - 1] - baselineY;
     if (overflow > 0) for (let i = 0; i < placed.length; i++) placed[i] -= overflow;
     if (placed[0] < PAD.t) {
@@ -122,7 +89,8 @@
     order.forEach((orig, k) => (out[orig] = placed[k]));
     return out;
   }
-  // y-axis: a few round, integer ticks (a simple numeric axis, not a dense grid).
+
+  // Y axis: a few round, integer ticks.
   $: yTicks = (() => {
     const raw = Math.max(1, maxModel / 3);
     const mag = Math.pow(10, Math.floor(Math.log10(raw)));
@@ -134,9 +102,7 @@
   })();
   $: gridYs = yTicks.map((t) => yAt(t));
 
-  // x-axis: evenly spaced months including first and last, so a forced last
-  // tick never crowds its neighbour. Tick count scales with the measured plot
-  // width (~"Sep '25" needs ~55px each): 5 on desktop, 3 on narrow phones.
+  // X axis: evenly spaced months including first and last.
   $: ticks = (() => {
     const n = months.length;
     if (n <= 1) return months;
@@ -147,8 +113,6 @@
   })();
 
   $: endLabelY = spreadY(series.map((s) => yAt(s.final)));
-  // Start labels only where a line begins above 0, and not where it would land
-  // on a y-axis number (the axis already carries that value).
   $: startLabels = (() => {
     const picked = series.filter(
       (s) => s.first > 0 && !gridYs.some((gy) => Math.abs(yAt(s.first) - gy) < 9),
@@ -160,36 +124,18 @@
 
 <section class="border-b border-slate-200 bg-white px-4 py-10 sm:px-6 sm:py-12">
   <div class="mx-auto max-w-[720px]">
-    <!-- Headline stays plain text; the scope control is an ordinary select on the header row -->
-    <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
-      <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">
-        How participation has grown
-      </h2>
-      <label class="flex items-center gap-2 text-sm text-slate-600">
-        <span>Show</span>
-        <select
-          bind:value={selectedState}
-          class="cursor-pointer rounded border border-slate-300 bg-white px-2 py-1 text-sm text-slate-800 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-300"
-        >
-          <option value="">United States ({nf.format(agencies.length)})</option>
-          {#each stateOptions as st}
-            <option value={st}>{STATE_NAMES[st] ?? st} ({nf.format(stateCounts[st])})</option>
-          {/each}
-        </select>
-      </label>
-    </div>
+    <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">
+      How participation has grown
+    </h2>
     <p class="mt-1 text-sm text-slate-600">
-      Active 287(g) agreements by model in {scopeLabel}, since Dec&nbsp;2024.
+      Active 287(g) agreements by model since Dec&nbsp;2024.
     </p>
-    <!-- Distinct figures: an agency can hold more than one model -->
     <p class="mt-2 text-sm text-slate-500">
       <span class="font-semibold text-slate-900">{nf.format(totalAgreements)}</span>
-      {totalAgreements === 1 ? "agreement" : "agreements"}
-      across <span class="font-semibold text-slate-900">{nf.format(totalAgencies)}</span>
-      {totalAgencies === 1 ? "agency" : "agencies"}.
+      {totalAgreements === 1 ? "agreement" : "agreements"} active.
     </p>
 
-    <!-- Legend (full names; mini codes match the in-chart labels) -->
+    <!-- Legend -->
     <div class="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-sm">
       {#each series as s}
         <span class="inline-flex items-center gap-1.5 text-slate-700">
@@ -204,23 +150,28 @@
     {#if months.length > 1}
     <div class="mt-4" bind:clientWidth={measuredW}>
       <svg viewBox="0 0 {W} {H}" class="block w-full" role="img" aria-label="Active 287(g) agreements by model since December 2024">
-        <!-- simple numeric y-axis: a few round ticks + faint gridlines -->
+        <!-- Y gridlines + labels -->
         {#each yTicks as t}
           <line x1={PAD.l} y1={yAt(t)} x2={W - PAD.r} y2={yAt(t)} stroke="#eef2f6" />
           <text x={PAD.l - 6} y={yAt(t) + 3} text-anchor="end" class="fill-slate-400" style="font-size: 11px;">{nf.format(t)}</text>
         {/each}
+        <!-- X labels -->
         {#each ticks as t, i}
           <text x={xAt(t)} y={H - 8} text-anchor={i === 0 ? "start" : i === ticks.length - 1 ? "end" : "middle"} class="fill-slate-400" style="font-size: 11px;">{monthLabelShort(t)}</text>
         {/each}
 
+        <!-- Stepped lines -->
         {#each series as s}
           <path d={stepPath(s.values)} fill="none" stroke="{MODEL_COLORS[s.model]}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
         {/each}
-        <!-- Direct labels: starting value (when above 0) at the left, mini code + total at the right -->
+
+        <!-- Direct start labels -->
         {#each startLabels as l}
           <text x={xAt(START_IDX) - 5} y={l.y + 4} text-anchor="end"
             style="font-size: 11px; font-weight: 600;" fill={MODEL_COLORS[l.model]}>{nf.format(l.value)}</text>
         {/each}
+
+        <!-- Direct end labels: mini code + current count -->
         {#each series as s, i}
           <text x={xAt(endIdx) + 6} y={endLabelY[i] + 4} text-anchor="start"
             style="font-size: 11px; font-weight: 600;" fill={MODEL_COLORS[s.model]}>{MODEL_MINI[s.model] ?? ""} {nf.format(s.final)}</text>
@@ -230,7 +181,7 @@
     {/if}
 
     <p class="mt-3 text-xs italic text-slate-400">
-      Experimental (#162). Each line counts active agency–model agreements, so an agency with two models counts once per model. Changes are dated by when they appear in ICE's published list; the Dec 2024 level carries everything signed before then, and the archive has no snapshots between mid-Dec 2024 and early Mar 2025, so the lines run flat there.
+      Experimental (#162). Each line counts active agency–model agreements, so an agency with two models counts once per model. Changes are dated by when they appear in ICE's published list; the Dec&nbsp;2024 level carries everything signed before then, and the archive has no snapshots between mid-Dec 2024 and early Mar 2025, so the lines run flat there.
     </p>
   </div>
 </section>
