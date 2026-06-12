@@ -230,7 +230,7 @@
     {/if}
 
     <p class="mt-3 text-xs italic text-slate-400">
-      Experimental (#162). Each line counts active agency–model agreements, so an agency with two models counts once per model. Changes are dated by when they appear in ICE's published list; the Dec 2024 level carries everything signed before then.
+      Experimental (#162). Each line counts active agency–model agreements, so an agency with two models counts once per model. Changes are dated by when they appear in ICE's published list; the Dec 2024 level carries everything signed before then, and the archive has no snapshots between mid-Dec 2024 and early Mar 2025, so the lines run flat there.
     </p>
   </div>
 </section>
