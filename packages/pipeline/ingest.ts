@@ -82,6 +82,40 @@ const MODEL_PRIORITY = [
   'Warrant Service Officer',
 ]
 
+// ICE occasionally publishes a misspelled SUPPORT TYPE when an agency first
+// appears, then corrects it a few days later. Ingested verbatim, the upstream
+// correction reads as a phantom remove/add pair in agency history (#182), so
+// fold every model string to its canonical form before it enters a snapshot
+// or the live sheet.
+const MODEL_VARIANTS: Record<string, string> = {
+  'warrant services officer': 'Warrant Service Officer',
+  'warrant service office': 'Warrant Service Officer',
+  'task force officer': 'Task Force Model',
+}
+
+// Lowercase and collapse punctuation/whitespace, so future variants that
+// differ only in case or separators match the canonical list directly.
+function foldModel(s: string): string {
+  return s.toLowerCase().replace(/[^a-z]+/g, ' ').trim()
+}
+
+const MODEL_CANONICAL = new Map(MODEL_PRIORITY.map((m) => [foldModel(m), m]))
+const unknownModels = new Set<string>()
+
+function normalizeModel(raw: string): string {
+  if (!raw) return raw
+  const folded = foldModel(raw)
+  const canonical = MODEL_CANONICAL.get(folded) ?? MODEL_VARIANTS[folded]
+  if (canonical) return canonical
+  // Pass unknowns through rather than dropping them — a genuinely new model
+  // should surface downstream, not vanish — but flag it for triage.
+  if (!unknownModels.has(raw)) {
+    unknownModels.add(raw)
+    console.warn(`  ⚠ Unrecognized SUPPORT TYPE passed through unnormalized: "${raw}"`)
+  }
+  return raw
+}
+
 const COUNTY_SUFFIX =
   /\s+(County|Parish|Borough|Census Area|City and Borough|Municipality|city)$/i
 
@@ -312,7 +346,7 @@ function xlsxSnapRows(buf: Buffer): SnapRow[] {
   return rows.map((r) => ({
     stateFull: str(r.STATE).toUpperCase(),
     name: str(r['LAW ENFORCEMENT AGENCY']),
-    model: str(r['SUPPORT TYPE']),
+    model: normalizeModel(str(r['SUPPORT TYPE'])),
     signedRaw: r.SIGNED,
     county: str(r.COUNTY) || null,
     agencyType: str(r.TYPE) || null,
@@ -336,7 +370,7 @@ function csvSnapRows(buf: Buffer): SnapRow[] {
     out.push({
       stateFull: str(row[iState]).toUpperCase(),
       name: str(row[iAgency]),
-      model: str(row[iSupport]),
+      model: normalizeModel(str(row[iSupport])),
       signedRaw: iSigned >= 0 ? row[iSigned] : null,
       county: null,
       agencyType: null,
@@ -636,7 +670,7 @@ for (const row of rawRows) {
     state,
     county: str(row.COUNTY) || null,
     agency_type: str(row.TYPE) || null,
-    model: str(row['SUPPORT TYPE']) || null,
+    model: normalizeModel(str(row['SUPPORT TYPE'])) || null,
     signed_date: parseSignedDate(row.SIGNED),
     moa_url: moa.startsWith('http') ? moa : null,
   })
