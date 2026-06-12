@@ -1,3 +1,6 @@
+import { buildTimeline } from "$lib/timeline";
+import { MODEL_SLUG } from "$lib/colors";
+
 export type HistoryEvent = {
   date: string;
   added: string[];
@@ -114,7 +117,15 @@ export type PageData = {
   snapshotDate: string | null;
   modelCounts: Record<string, number>;
   stateMeta: Record<string, StateMeta>;
+  // Active-agreement trend (#162): monthly active agency–model counts since
+  // Dec 2024, replayed from history events. Keyed "" for national, else state
+  // abbreviation; arrays align with trendMonths ("YYYY-MM"). Computed here so
+  // the client never ships per-agency history (#135).
+  trendMonths: string[];
+  trend: Record<string, TrendSeries>;
 };
+
+export type TrendSeries = { jail: number[]; taskforce: number[]; wso: number[] };
 
 export const load = async ({ fetch }): Promise<PageData> => {
   try {
@@ -218,6 +229,86 @@ export const load = async ({ fetch }): Promise<PageData> => {
       lee: a.lee ? { officer_ct: a.lee.officer_ct } : null,
     }));
 
+    // ── Active-agreement trend (#162) ────────────────────────────────────
+    // Replay history events (live + terminated) into monthly active counts,
+    // nationally and per state. Dec 2024 is the pre-2025 archive baseline
+    // (#169); earlier events fold into that first sample.
+    const TREND_START = "2024-12";
+    const allForTrend = [...agencies, ...terminatedRaw];
+    let lastMonth = TREND_START;
+    for (const a of allForTrend)
+      for (const h of a.history ?? [])
+        if (h.date.slice(0, 7) > lastMonth) lastMonth = h.date.slice(0, 7);
+    const trendMonths: string[] = [];
+    for (let ym = TREND_START; ym <= lastMonth; ) {
+      trendMonths.push(ym);
+      const y = Number(ym.slice(0, 4));
+      const mo = Number(ym.slice(5, 7));
+      ym = mo === 12 ? `${y + 1}-01` : `${y}-${String(mo + 1).padStart(2, "0")}`;
+    }
+
+    const sampleMonthly = (group: Agency[]): TrendSeries => {
+      const out: TrendSeries = { jail: [], taskforce: [], wso: [] };
+      // The ingest unions history across upstream rows that share a
+      // historyKey — duplicate rows of one real-world agency (separate
+      // per-model agreements) carry identical event lists, so replaying every
+      // row would double-count each of its models. Replay one carrier per
+      // key, normalized the same way ingest's historyKey is (the duplicate
+      // rows can differ by punctuation glyph, e.g. curly vs straight
+      // apostrophe).
+      const seen = new Set<string>();
+      const carriers = group.filter((a) => {
+        const k = `${a.state}\x00${a.name.toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim()}`;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+      const pts = buildTimeline(carriers);
+      if (pts.length) {
+        // Month value = the last replayed point in or before that month.
+        let i = -1;
+        for (const ym of trendMonths) {
+          while (i + 1 < pts.length && pts[i + 1].date.slice(0, 7) <= ym) i++;
+          out.jail.push(i >= 0 ? pts[i].jail : 0);
+          out.taskforce.push(i >= 0 ? pts[i].taskforce : 0);
+          out.wso.push(i >= 0 ? pts[i].wso : 0);
+        }
+        return out;
+      }
+      // buildTimeline yields nothing below 2 distinct event dates. A scope
+      // with a single one (AK, CO, GU, MP) can't have terminations, so it's
+      // just the current models, flat from that date.
+      const firstYm = group
+        .flatMap((a) => (a.history ?? []).map((h) => h.date.slice(0, 7)))
+        .sort()[0];
+      const startYm = firstYm && firstYm > TREND_START ? firstYm : TREND_START;
+      const counts = { jail: 0, taskforce: 0, wso: 0 };
+      for (const a of group) {
+        if (a.terminated_date) continue;
+        for (const m of a.models) {
+          const k = MODEL_SLUG[m] as keyof TrendSeries | undefined;
+          if (k) counts[k]++;
+        }
+      }
+      for (const ym of trendMonths) {
+        const on = firstYm !== undefined && ym >= startYm;
+        out.jail.push(on ? counts.jail : 0);
+        out.taskforce.push(on ? counts.taskforce : 0);
+        out.wso.push(on ? counts.wso : 0);
+      }
+      return out;
+    };
+
+    const trendByState = new Map<string, Agency[]>();
+    for (const a of allForTrend) {
+      if (!a.state) continue;
+      const g = trendByState.get(a.state);
+      if (g) g.push(a);
+      else trendByState.set(a.state, [a]);
+    }
+    const trend: Record<string, TrendSeries> = { "": sampleMonthly(allForTrend) };
+    for (const [st, group] of trendByState) trend[st] = sampleMonthly(group);
+
     return {
       agencies: homeAgencies,
       terminatedAgencies,
@@ -229,6 +320,8 @@ export const load = async ({ fetch }): Promise<PageData> => {
       snapshotDate,
       modelCounts,
       stateMeta,
+      trendMonths,
+      trend,
     };
   } catch {
     return {
@@ -242,6 +335,8 @@ export const load = async ({ fetch }): Promise<PageData> => {
       snapshotDate: null,
       modelCounts: {},
       stateMeta: {},
+      trendMonths: [],
+      trend: {},
     };
   }
 };
