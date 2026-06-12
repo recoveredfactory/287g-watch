@@ -77,18 +77,25 @@
   // ── Geometry / scales (manual; keeps us off a charting dep) ─────────────────
   // Generous right margin: the direct end labels are the cramped spot, and we
   // have room to spare there on every viewport, so give them width to breathe.
-  const W = 520;
+  //
+  // The viewBox width tracks the rendered width 1:1 (via bind:clientWidth), so
+  // the chart fills whatever the container gives it and type renders at its
+  // true pixel size on every viewport — wide on desktop instead of square,
+  // no shrunken labels on mobile. Height stays fixed.
+  let measuredW = 0; // 0 until mounted; fall back to the old fixed width for SSR
+  $: W = Math.max(360, Math.round(measuredW) || 520);
   const H = 370;
   const PAD = { t: 14, r: 104, b: 26, l: 40 };
-  const innerW = W - PAD.l - PAD.r;
+  $: innerW = W - PAD.l - PAD.r;
   const innerH = H - PAD.t - PAD.b;
   const baselineY = PAD.t + innerH;
-  const xAt = (m: number) =>
+  $: xAt = (m: number) =>
     PAD.l + (endIdx === START_IDX ? innerW : ((m - START_IDX) / (endIdx - START_IDX)) * innerW);
   $: yAt = (v: number) => PAD.t + innerH - (v / maxModel) * innerH;
 
   // Stepped path: hold the previous value across the month, then jump.
-  const stepPath = (values: number[]): string => {
+  // Reactive so paths rebuild when the measured width changes.
+  $: stepPath = (values: number[]): string => {
     if (!values.length) return "";
     let d = `M${xAt(months[0]).toFixed(1)} ${yAt(values[0]).toFixed(1)}`;
     for (let i = 1; i < values.length; i++) {
@@ -131,12 +138,13 @@
   })();
   $: gridYs = yTicks.map((t) => yAt(t));
 
-  // x-axis: ~5 evenly spaced months including first and last, so a forced last
-  // tick never crowds its neighbour.
+  // x-axis: evenly spaced months including first and last, so a forced last
+  // tick never crowds its neighbour. Tick count scales with the measured plot
+  // width (~"Sep '25" needs ~55px each): 5 on desktop, 3 on narrow phones.
   $: ticks = (() => {
     const n = months.length;
     if (n <= 1) return months;
-    const count = Math.min(n, 5);
+    const count = Math.min(n, 5, Math.max(3, Math.floor(innerW / 90) + 1));
     const set = new Set<number>();
     for (let i = 0; i < count; i++) set.add(months[Math.round((i * (n - 1)) / (count - 1))]);
     return [...set];
@@ -155,31 +163,34 @@
 </script>
 
 <section class="border-b border-slate-200 bg-white px-4 py-10 sm:px-6 sm:py-12">
-  <div class="mx-auto max-w-[560px]">
-    <!-- State scope lives inline in the headline; parens show that scope’s agency count -->
-    <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">
-      How participation has grown in<span class="relative ml-1.5 inline-block whitespace-nowrap">
+  <div class="mx-auto max-w-[720px]">
+    <!-- Headline stays plain text; the scope control is an ordinary select on the header row -->
+    <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
+      <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">
+        How participation has grown
+      </h2>
+      <label class="flex items-center gap-2 text-sm text-slate-600">
+        <span>Show</span>
         <select
           bind:value={selectedState}
-          aria-label="Scope the chart to a state"
-          class="cursor-pointer appearance-none rounded border-0 bg-transparent py-0 pl-0 pr-5 font-serif text-xl font-bold text-blue-700 underline decoration-blue-300 decoration-2 underline-offset-4 hover:decoration-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-300 sm:text-2xl"
+          class="cursor-pointer rounded border border-slate-300 bg-white px-2 py-1 text-sm text-slate-800 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-300"
         >
-          <option value="">the U.S. ({nf.format(agencies.length)})</option>
+          <option value="">United States ({nf.format(agencies.length)})</option>
           {#each stateOptions as st}
             <option value={st}>{STATE_NAMES[st] ?? st} ({nf.format(stateCounts[st])})</option>
           {/each}
         </select>
-        <span aria-hidden="true" class="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 text-base text-blue-400">▾</span>
-      </span>
-    </h2>
+      </label>
+    </div>
     <p class="mt-1 text-sm text-slate-600">
-      Cumulative 287(g) agreements by model, since Dec&nbsp;2024.
+      Cumulative 287(g) agreements by model in {scopeLabel}, since Dec&nbsp;2024.
     </p>
     <!-- Distinct figures: an agency can hold more than one model -->
     <p class="mt-2 text-sm text-slate-500">
-      <span class="font-semibold text-slate-900">{nf.format(totalAgreements)}</span> agreements
+      <span class="font-semibold text-slate-900">{nf.format(totalAgreements)}</span>
+      {totalAgreements === 1 ? "agreement" : "agreements"}
       across <span class="font-semibold text-slate-900">{nf.format(totalAgencies)}</span>
-      {totalAgencies === 1 ? "agency" : "agencies"} in {scopeLabel}.
+      {totalAgencies === 1 ? "agency" : "agencies"}.
     </p>
 
     <!-- Legend (full names; mini codes match the in-chart labels) -->
@@ -194,7 +205,7 @@
       {/each}
     </div>
 
-    <div class="mt-4">
+    <div class="mt-4" bind:clientWidth={measuredW}>
       <svg viewBox="0 0 {W} {H}" class="block w-full" role="img" aria-label="Cumulative 287(g) agreements by model since December 2024">
         <!-- simple numeric y-axis: a few round ticks + faint gridlines -->
         {#each yTicks as t}
