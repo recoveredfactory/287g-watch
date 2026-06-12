@@ -522,7 +522,7 @@
   </section>
 
   <!-- ── National trend charts (experimental, #162) ───────────────────────── -->
-  <TrendCharts agencies={data.agencies} trendMonths={data.trendMonths} trend={data.trend} />
+  <TrendCharts trendMonths={data.trendMonths} trend={data.trend} />
 
 
   <!-- ── Search + filter + browse ──────────────────────────────────────────── -->
