@@ -1,27 +1,32 @@
 <script lang="ts">
   // ── National trend chart (#162) ────────────────────────────────────────────
-  // Low-key growth chart for the home page: a stepped multi-series line of
-  // cumulative agency–model *agreements*, since Dec 2024. Each model an agency
-  // holds is one agreement, so an agency with two models contributes to two
-  // series — the lines multi-count and their totals match the model cards'
-  // `modelCounts`. Cumulative counts are a step function by nature — the line
-  // only moves on the dates agencies actually signed — so the curve is stepped
-  // rather than interpolated.
+  // Low-key trend chart for the home page: a stepped multi-series line of
+  // *active* agency–model agreements over time, since Dec 2024. Each model an
+  // agency holds is one agreement, so an agency with two models contributes to
+  // two series — the lines multi-count and their right edges match the model
+  // cards' `modelCounts`. Unlike a cumulative curve, lines dip when agreements
+  // terminate or an agency drops a model.
   //
-  // The timeline begins Dec 2024 (the last pre-2025 archived snapshot, #169 —
-  // a pre-Trump baseline, same TIMELINE_START as the map). Pre-Dec-2024
-  // signings fold into the Dec 2024 baseline.
-  // A state selector (embedded in the headline) scopes the chart to one state.
-  import { MODEL_COLORS, MODEL_ORDER, MODEL_MINI } from "$lib/colors";
+  // The series arrive precomputed from +page.server.ts — history events (live
+  // + terminated agencies) replayed through the same buildTimeline as the
+  // state pages, sampled monthly — so the client never ships per-agency
+  // history (#135). The timeline begins Dec 2024 (the last pre-2025 archived
+  // snapshot, #169 — a pre-Trump baseline, same TIMELINE_START as the map);
+  // earlier history folds into the Dec 2024 level. A state selector in the
+  // header scopes the chart.
+  import { MODEL_COLORS, MODEL_ORDER, MODEL_MINI, MODEL_SLUG } from "$lib/colors";
   import { STATE_NAMES } from "$lib/states";
   import ModelLink from "$lib/components/ModelLink.svelte";
 
   type Agency = {
     models?: string[];
-    signed_date?: string | null;
     state?: string;
   };
+  type TrendSeries = { jail: number[]; taskforce: number[]; wso: number[] };
   export let agencies: Agency[] = [];
+  // "YYYY-MM" sample labels and per-scope series ("" = national), index-aligned.
+  export let trendMonths: string[] = [];
+  export let trend: Record<string, TrendSeries> = {};
 
   // Localized thousands separators for every displayed integer.
   const nf = new Intl.NumberFormat();
@@ -39,33 +44,24 @@
   $: scopeLabel = selectedState ? (STATE_NAMES[selectedState] ?? selectedState) : "the U.S.";
 
   // ── Time axis ───────────────────────────────────────────────────────────────
+  // Months are integer indices relative to a Jan 2025 epoch (Dec 2024 = -1),
+  // derived from the server's "YYYY-MM" sample labels.
   const EPOCH_YEAR = 2025;
-  const START_IDX = -1; // Dec 2024, relative to the Jan 2025 epoch
   const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const monthLabelShort = (idx: number) =>
     `${MONTH_NAMES[((idx % 12) + 12) % 12]} ’${String(EPOCH_YEAR + Math.floor(idx / 12)).slice(2)}`;
 
-  // Signing date → integer month index. Anything before Dec 2024 (or undated)
-  // folds into the Dec 2024 baseline so the line starts from the standing total.
-  const effectiveMonth = (d: string | null | undefined): number => {
-    if (!d || d.length < 7) return START_IDX;
-    const y = Number(d.slice(0, 4));
-    const mo = Number(d.slice(5, 7));
-    if (!y || !mo) return START_IDX;
-    return Math.max(START_IDX, (y - EPOCH_YEAR) * 12 + (mo - 1));
-  };
+  $: months = trendMonths.map(
+    (ym) => (Number(ym.slice(0, 4)) - EPOCH_YEAR) * 12 + (Number(ym.slice(5, 7)) - 1),
+  );
+  $: START_IDX = months[0] ?? -1;
+  $: endIdx = months[months.length - 1] ?? START_IDX;
 
-  const today = new Date();
-  const endIdx = Math.max(START_IDX, (today.getUTCFullYear() - EPOCH_YEAR) * 12 + today.getUTCMonth());
-  $: months = Array.from({ length: endIdx - START_IDX + 1 }, (_, i) => START_IDX + i);
-
-  // ── Series: cumulative agreements per model, over months ────────────────────
+  // ── Series: active agreements per model, over months ────────────────────────
   // An agency counts toward every model it holds, so series multi-count.
+  $: scopedTrend = trend[selectedState] ?? { jail: [], taskforce: [], wso: [] };
   $: series = MODEL_ORDER.map((model) => {
-    const signedMonths = scoped
-      .filter((a) => (a.models ?? []).includes(model))
-      .map((a) => effectiveMonth(a.signed_date));
-    const values = months.map((m) => signedMonths.filter((sm) => sm <= m).length);
+    const values = scopedTrend[MODEL_SLUG[model] as keyof TrendSeries] ?? [];
     return { model, values, first: values[0] ?? 0, final: values[values.length - 1] ?? 0 };
   });
   $: maxModel = Math.max(1, ...series.flatMap((s) => s.values));
@@ -183,7 +179,7 @@
       </label>
     </div>
     <p class="mt-1 text-sm text-slate-600">
-      Cumulative 287(g) agreements by model in {scopeLabel}, since Dec&nbsp;2024.
+      Active 287(g) agreements by model in {scopeLabel}, since Dec&nbsp;2024.
     </p>
     <!-- Distinct figures: an agency can hold more than one model -->
     <p class="mt-2 text-sm text-slate-500">
@@ -205,8 +201,9 @@
       {/each}
     </div>
 
+    {#if months.length > 1}
     <div class="mt-4" bind:clientWidth={measuredW}>
-      <svg viewBox="0 0 {W} {H}" class="block w-full" role="img" aria-label="Cumulative 287(g) agreements by model since December 2024">
+      <svg viewBox="0 0 {W} {H}" class="block w-full" role="img" aria-label="Active 287(g) agreements by model since December 2024">
         <!-- simple numeric y-axis: a few round ticks + faint gridlines -->
         {#each yTicks as t}
           <line x1={PAD.l} y1={yAt(t)} x2={W - PAD.r} y2={yAt(t)} stroke="#eef2f6" />
@@ -230,9 +227,10 @@
         {/each}
       </svg>
     </div>
+    {/if}
 
     <p class="mt-3 text-xs italic text-slate-400">
-      Experimental (#162). Each line counts agency–model agreements, so an agency with two models counts once per model; pre-Dec-2024 signings fold into the Dec 2024 baseline.
+      Experimental (#162). Each line counts active agency–model agreements, so an agency with two models counts once per model. Changes are dated by when they appear in ICE's published list; the Dec 2024 level carries everything signed before then.
     </p>
   </div>
 </section>
