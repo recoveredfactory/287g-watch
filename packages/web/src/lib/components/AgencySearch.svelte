@@ -3,7 +3,7 @@
   import { localizeHref } from "$lib/paraglide/runtime";
   import { STATE_NAMES } from "$lib/states";
   import { MODEL_SHORT, MODEL_COLORS, MODEL_TEXT_COLORS } from "$lib/colors";
-  import type { Agency } from "../../routes/+page.server";
+  import type { Agency } from "$lib/homeData.types";
 
   export let agencies: Agency[];
   export let currentSlug: string = "";
