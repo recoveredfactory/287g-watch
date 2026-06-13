@@ -10,7 +10,8 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "bake:og": "node scripts/bake-og.mjs",
-    "bake:map-video": "node scripts/bake-map-video.mjs"
+    "bake:map-video": "node scripts/bake-map-video.mjs",
+    "bake:map-trend-video": "node scripts/bake-map-trend-video.mjs"
   },
   "devDependencies": {
     "@fontsource/bitter": "^5.2.10",
