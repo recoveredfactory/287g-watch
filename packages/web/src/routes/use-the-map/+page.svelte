@@ -10,21 +10,43 @@
   // Downloadable assets come from the public archive bucket's `-latest-<lang>`
   // copies when configured (PUBLIC_MAP_ASSETS_URL, set by SST), else the bundled
   // /video/ fallback for local dev. The video text is baked per language, so we
-  // offer both cuts on every page. See scripts/publish-map-assets.mjs (#118).
+  // offer both languages on every page. See scripts/publish-map-assets.mjs (#118).
   const assetBase = env.PUBLIC_MAP_ASSETS_URL;
-  const asset = (ext: string, lang: string) =>
-    assetBase ? `${assetBase}/map-latest-${lang}.${ext}` : `/video/map-${lang}.${ext}`;
+  const asset = (prefix: string, ext: string, lang: string) =>
+    assetBase ? `${assetBase}/${prefix}-latest-${lang}.${ext}` : `/video/${prefix}-${lang}.${ext}`;
 
-  // Preview the cut in the page's own language; offer both as downloads.
+  // Preview each cut in the page's own language; offer both as downloads.
   const previewLang = getLocale();
   const DOWNLOAD_LANGS = [
     { lang: "en", label: "English" },
     { lang: "es", label: "Español" },
   ];
-  const FORMATS = [
-    { ext: "mp4", label: () => m.usemap_download_mp4() },
-    { ext: "gif", label: () => m.usemap_download_gif() },
-    { ext: "png", label: () => m.usemap_download_image() },
+  const MP4 = { ext: "mp4", label: () => m.usemap_download_mp4() };
+  const GIF = { ext: "gif", label: () => m.usemap_download_gif() };
+  const PNG = { ext: "png", label: () => m.usemap_download_image() };
+
+  // The two cuts we bake + publish (scripts/bake-map-*.mjs, publish-map-assets.mjs):
+  //   map        — the square, map-only clip: mp4 + gif + the peak-data still.
+  //   map-trend  — the 9:16 map+trend social cut: mp4 + gif, no still. Its
+  //                preview is width-constrained so the tall frame doesn't
+  //                dominate the page.
+  const CUTS = [
+    {
+      prefix: "map",
+      heading: () => m.usemap_square_heading(),
+      note: () => m.usemap_square_note(),
+      videoLabel: () => m.usemap_video_label(),
+      formats: [MP4, GIF, PNG],
+      previewClass: "w-full",
+    },
+    {
+      prefix: "map-trend",
+      heading: () => m.usemap_vertical_heading(),
+      note: () => m.usemap_vertical_note(),
+      videoLabel: () => m.usemap_vertical_video_label(),
+      formats: [MP4, GIF],
+      previewClass: "mx-auto w-full max-w-[320px]",
+    },
   ];
 
   $: title = m.usemap_meta_title();
@@ -63,49 +85,53 @@
     <p>{m.usemap_intro()}</p>
   </div>
 
-  <!-- Map preview -->
-  <figure class="mt-8">
-    <video
-      class="w-full rounded-lg border border-slate-200 shadow-sm"
-      src={asset("mp4", previewLang)}
-      autoplay
-      loop
-      muted
-      playsinline
-      aria-label={m.usemap_video_label()}
-    ></video>
-    {#if asOf}
-      <figcaption class="mt-2 text-xs italic text-slate-400">
-        {m.usemap_asof({ date: asOf })}
-      </figcaption>
-    {/if}
-  </figure>
+  <!-- Cuts: square map-only, then the vertical map+trend social cut -->
+  {#each CUTS as cut}
+    <section class="mt-10 sm:mt-12">
+      <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">{cut.heading()}</h2>
+      <p class="mt-2 text-sm text-slate-500">{cut.note()}</p>
 
-  <!-- Download -->
-  <div class="mt-8 sm:mt-10">
-    <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">{m.usemap_download_heading()}</h2>
-    <div class="mt-4 space-y-4">
-      {#each DOWNLOAD_LANGS as { lang, label }}
-        <div>
-          <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</p>
-          <div class="mt-2 flex flex-wrap gap-3">
-            {#each FORMATS as fmt}
-              <a
-                href={asset(fmt.ext, lang)}
-                download
-                class={fmt.ext === "mp4"
-                  ? "inline-flex items-center gap-2 rounded bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
-                  : "inline-flex items-center gap-2 rounded border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-900 hover:border-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"}
-              >
-                {fmt.label()}
-              </a>
-            {/each}
+      <figure class="mt-4">
+        <video
+          class="{cut.previewClass} rounded-lg border border-slate-200 shadow-sm"
+          src={asset(cut.prefix, "mp4", previewLang)}
+          autoplay
+          loop
+          muted
+          playsinline
+          aria-label={cut.videoLabel()}
+        ></video>
+      </figure>
+
+      <div class="mt-4 space-y-4">
+        {#each DOWNLOAD_LANGS as { lang, label }}
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</p>
+            <div class="mt-2 flex flex-wrap gap-3">
+              {#each cut.formats as fmt}
+                <a
+                  href={asset(cut.prefix, fmt.ext, lang)}
+                  download
+                  class={fmt.ext === "mp4"
+                    ? "inline-flex items-center gap-2 rounded bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                    : "inline-flex items-center gap-2 rounded border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-900 hover:border-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"}
+                >
+                  {fmt.label()}
+                </a>
+              {/each}
+            </div>
           </div>
-        </div>
-      {/each}
-    </div>
-    <p class="mt-3 text-sm text-slate-500">{m.usemap_download_note()}</p>
+        {/each}
+      </div>
+    </section>
+  {/each}
+
+  <div class="mt-8">
+    <p class="text-sm text-slate-500">{m.usemap_download_note()}</p>
     <p class="mt-2 text-sm text-slate-500">{m.usemap_aspect_note()}</p>
+    {#if asOf}
+      <p class="mt-2 text-xs italic text-slate-400">{m.usemap_asof({ date: asOf })}</p>
+    {/if}
   </div>
 
   <!-- License -->
