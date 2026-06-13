@@ -36,6 +36,12 @@ function pickLocaleFromCookie(header: string | null): Locale | null {
   return null;
 }
 
+// Bare-path routes that should NOT honor the saved-language cookie. The
+// social-video routes (#167) are baked/shared per-locale and aren't advertised,
+// so a stale toggle cookie shouldn't bounce /video/national to /es — fall back
+// to the browser's Accept-Language (then baseLocale) instead.
+const COOKIE_EXEMPT_PREFIXES = ["/video/"];
+
 const redirectBarePathToLocale: Handle = async ({ event, resolve }) => {
   const path = event.url.pathname;
 
@@ -47,8 +53,9 @@ const redirectBarePathToLocale: Handle = async ({ event, resolve }) => {
   );
   if (hasLocalePrefix) return resolve(event);
 
+  const cookieExempt = COOKIE_EXEMPT_PREFIXES.some((p) => path.startsWith(p));
   const target =
-    pickLocaleFromCookie(event.request.headers.get("cookie")) ??
+    (cookieExempt ? null : pickLocaleFromCookie(event.request.headers.get("cookie"))) ??
     pickLocaleFromAcceptLanguage(event.request.headers.get("accept-language"));
   const location = `/${target}${path === "/" ? "" : path}${event.url.search}`;
   return new Response(null, {
