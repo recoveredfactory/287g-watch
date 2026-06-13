@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Bake the vertical (9:16, 1080×1920) map + trend "dream video" (#167) to a
-// high-quality .mp4, plus the final frame as a standalone .png.
+// high-quality .mp4 and a .gif. The vertical cut ships video only — no still
+// (use --still below for a throwaway composition check, not a deliverable).
 //
 // Unlike bake-map-video.mjs (the square, map-only cut), this loads a DEDICATED
 // route — /<lang>/video/national — that already renders the exact composition
@@ -13,7 +14,8 @@
 //   frame-step   → window.__bake.seek(tSeconds) per frame, screenshot the
 //                  [data-video-canvas] element (rAF is not used; we don't pace
 //                  frames against wall-clock)
-//   ffmpeg       → encode the PNG sequence to map-trend-<lang>.mp4 (h264)
+//   ffmpeg       → encode the PNG sequence to map-trend-<lang>.mp4 (h264) and
+//                  map-trend-<lang>.gif (palettegen + paletteuse, downscaled)
 //
 // Storyboard timing comes from the page (window.__bake.bounds().totalSeconds,
 // defined in src/lib/video/storyboard.ts) — there is no --duration flag.
@@ -25,11 +27,12 @@
 //   pnpm bake:map-trend-video --fps=30
 //   pnpm bake:map-trend-video --skip-frames   # re-encode existing frames only
 //   pnpm bake:map-trend-video --keep-frames   # keep .assets/video/frames-* around
-//   pnpm bake:map-trend-video --still         # just the final frame → .png
+//   pnpm bake:map-trend-video --gif-width=540 # downscale width for the .gif
+//   pnpm bake:map-trend-video --still         # throwaway composition check → .png
 
 import { chromium } from "playwright";
 import { spawn } from "node:child_process";
-import { mkdir, rm, access, copyFile } from "node:fs/promises";
+import { mkdir, rm, access } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -64,6 +67,13 @@ const SKIP_FRAMES = args.includes("--skip-frames");
 // --still: snapshot a single representative frame (the intro "today" hold) to
 // map-trend-<lang>.png and skip the encode — a fast composition check.
 const STILL = args.includes("--still");
+// GIF: a downscaled, palette-quantized loop of the same sweep. 9:16 is tall, so
+// the gif width defaults well below the mp4's 1080 to keep the file size sane.
+const GIF_FPS = Math.min(FPS, 15);
+const GIF_WIDTH = Number(argValue("--gif-width") ?? 540);
+// Hold the final frame for this many seconds before the gif loops — a beat to
+// absorb the "today" outro before it restarts.
+const GIF_HOLD = Number(argValue("--gif-hold") ?? 2);
 
 await mkdir(OUT_DIR, { recursive: true });
 
@@ -195,6 +205,8 @@ const run = (cmd, argv) =>
 
 const FRAME_GLOB = path.join(FRAMES_DIR, "frame_%05d.png");
 const MP4_PATH = path.join(OUT_DIR, `map-trend-${LANG}.mp4`);
+const GIF_PATH = path.join(OUT_DIR, `map-trend-${LANG}.gif`);
+const PALETTE_PATH = path.join(OUT_DIR, `_palette-trend-${LANG}.png`);
 
 console.log(`[mp4] encoding ${MP4_PATH}…`);
 await run("ffmpeg", [
@@ -211,17 +223,34 @@ await run("ffmpeg", [
   MP4_PATH,
 ]);
 
-// Also emit the final frame as a standalone static image — the "today" hold
-// (full data). Copied straight from the captured PNG so it stays lossless.
-const PNG_PATH = path.join(OUT_DIR, `map-trend-${LANG}.png`);
-const lastFramePath = path.join(
-  FRAMES_DIR,
-  `frame_${String(TOTAL_FRAMES - 1).padStart(5, "0")}.png`,
-);
-await copyFile(lastFramePath, PNG_PATH);
+// tpad clones the last frame for GIF_HOLD seconds, so the gif holds on the
+// "today" outro before looping. Applied to both palettegen and paletteuse so
+// the palette includes the hold frame and the output actually contains it.
+const TAIL_HOLD = `tpad=stop_duration=${GIF_HOLD}:stop_mode=clone`;
 
+console.log(`[gif] palettegen…`);
+await run("ffmpeg", [
+  "-y",
+  "-framerate", String(FPS),
+  "-i", FRAME_GLOB,
+  "-vf", `${TAIL_HOLD},fps=${GIF_FPS},scale=${GIF_WIDTH}:-1:flags=lanczos,palettegen=stats_mode=diff`,
+  PALETTE_PATH,
+]);
+
+console.log(`[gif] paletteuse → ${GIF_PATH}…`);
+await run("ffmpeg", [
+  "-y",
+  "-framerate", String(FPS),
+  "-i", FRAME_GLOB,
+  "-i", PALETTE_PATH,
+  "-lavfi",
+  `${TAIL_HOLD},fps=${GIF_FPS},scale=${GIF_WIDTH}:-1:flags=lanczos [x]; [x][1:v] paletteuse=dither=bayer:bayer_scale=5`,
+  GIF_PATH,
+]);
+
+await rm(PALETTE_PATH, { force: true });
 if (!KEEP_FRAMES) await rm(FRAMES_DIR, { recursive: true, force: true });
 
 console.log(`\n✓ ${MP4_PATH}`);
-console.log(`✓ ${PNG_PATH}`);
+console.log(`✓ ${GIF_PATH}`);
 process.exit(0);

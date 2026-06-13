@@ -6,7 +6,7 @@
 //   pnpm publish:map-assets          # = sst shell node scripts/publish-map-assets.mjs
 //
 // Uploads the square map cut (map.{mp4,gif,png}) and, when present, the
-// vertical map+trend social video (map-trend.{mp4,png}, #167). For each file:
+// vertical map+trend social video (map-trend.{mp4,gif}, #167). For each file:
 //   • <prefix>-latest-<lang>.<ext>          — overwritten every release; the
 //                                             licensing page links these (short cache).
 //   • <prefix>-<date>-<hash8>-<lang>.<ext>  — immutable archive copy per ICE
@@ -63,7 +63,7 @@ const PNG = { ext: "png", type: "image/png" };
 //                square-only publish still works.
 const ASSETS = [
   { prefix: "map", bake: "map-video", required: true, formats: [MP4, GIF, PNG] },
-  { prefix: "map-trend", bake: "map-trend-video", required: false, formats: [MP4, PNG] },
+  { prefix: "map-trend", bake: "map-trend-video", required: false, formats: [MP4, GIF] },
 ];
 
 const bucket = await bucketName();
