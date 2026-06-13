@@ -3,11 +3,14 @@
 The `data-refresh.yml` workflow assumes an AWS IAM role via GitHub OIDC (no
 long-lived keys), runs `pnpm pipeline`, and — if the dataset moved — deploys the
 stage and re-bakes/publishes the map videos + OG cards. It can't run until the
-role exists and the repo's Actions secrets/variables are set. One-time setup:
+role trusts GitHub and the repo's Actions secrets/variables are set. One-time
+setup:
 
 Account: `647111127395` · Repo: `recoveredfactory/287g-explorer`
 
 ## 1. Create the GitHub OIDC provider (once per account)
+
+The account has no OIDC provider yet, so add it:
 
 ```bash
 aws iam create-open-id-connect-provider \
@@ -17,18 +20,32 @@ aws iam create-open-id-connect-provider \
 ```
 
 The thumbprint is no longer used for this provider (AWS validates against its
-trusted CA store) but the API still requires the field. If you add the provider
-in the IAM console instead, it auto-fills it.
+trusted CA store) but the API still requires the field. The IAM console
+auto-fills it if you add the provider there instead.
 
-## 2. Create the deploy role
+## 2. Let GitHub assume the existing `sst-deployer` role (preferred)
 
-Trust policy — only this repo, only the `main` branch, can assume it
+Reuse the role we already deploy with — `arn:aws:iam::647111127395:role/sst-deployer`
+(attached policy `sst-deployer-policy`, the RF-asset-scoped permission set). No
+new role, no new permissions; we just add a second trust statement so the GitHub
+OIDC provider can assume it, scoped to this repo's `main` branch. Its current
+trust only allows `user/eads` + `user/cidmonster` — keep that, add OIDC
 (`trust.json`):
 
 ```json
 {
   "Version": "2012-10-17",
   "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": [
+          "arn:aws:iam::647111127395:user/eads",
+          "arn:aws:iam::647111127395:user/cidmonster"
+        ]
+      },
+      "Action": "sts:AssumeRole"
+    },
     {
       "Effect": "Allow",
       "Principal": {
@@ -48,54 +65,54 @@ Trust policy — only this repo, only the `main` branch, can assume it
 }
 ```
 
-The workflow is `workflow_dispatch` and the Action only appears once the file is
-on the default branch (`main`), so dispatching from `main` is the normal path —
-hence scoping `sub` to `refs/heads/main`. If you ever need to dispatch from
-another branch, widen that line to `repo:recoveredfactory/287g-explorer:*`.
+```bash
+aws iam update-assume-role-policy --role-name sst-deployer \
+  --policy-document file://trust.json
+```
+
+The workflow is `workflow_dispatch` and only appears once it's on the default
+branch (`main`), so dispatching from `main` is the normal path — hence scoping
+`sub` to `refs/heads/main`. To dispatch from another branch, widen that line to
+`repo:recoveredfactory/287g-explorer:*`. This accepts the known cross-project
+blast radius of reusing `sst-deployer` (AWS is rebuildable; the OIDC `sub`
+condition is the boundary that matters).
+
+### Alternative: a new dedicated role
+
+If you'd rather isolate this repo, create a fresh role with the same trust
+statement (the OIDC half above) and attach permissions. Least-privilege for an
+IaC role that also creates IAM is impractical, so attach a broad managed policy
+to a dedicated role and let the trust scope bound it:
 
 ```bash
 aws iam create-role --role-name 287g-github-deploy \
-  --assume-role-policy-document file://trust.json
-```
-
-## 3. Attach permissions
-
-SST (Pulumi) provisions Lambda, IAM, S3, CloudFront, ACM, Route53, and logs, and
-the publish step writes to the MapArchive S3 bucket. Least-privilege for an IaC
-deploy role that also creates IAM is impractical to hand-maintain, so the
-pragmatic pattern is a broad managed policy on a **dedicated** role whose trust
-policy (step 2) is the real boundary:
-
-```bash
-# Simplest — dedicated role, repo+branch-scoped trust:
+  --assume-role-policy-document file://trust.json   # just the OIDC statement
 aws iam attach-role-policy --role-name 287g-github-deploy \
   --policy-arn arn:aws:iam::aws:policy/AdministratorAccess
-
-# Slightly tighter alternative (no org/account/billing actions):
-#   arn:aws:iam::aws:policy/PowerUserAccess  +  arn:aws:iam::aws:policy/IAMFullAccess
+# tighter: PowerUserAccess + IAMFullAccess
 ```
 
-Role ARN: `arn:aws:iam::647111127395:role/287g-github-deploy`
-
-## 4. Set the repo's Actions secrets + variables
+## 3. Set the repo's Actions secrets + variables
 
 ```bash
-gh secret  set AWS_ROLE_ARN       --body "arn:aws:iam::647111127395:role/287g-github-deploy"
-gh variable set WEB_STAGING_DOMAIN --body "staging.287g.recoveredfactory.net"
-gh variable set WEB_DOMAIN         --body "287g.recoveredfactory.net"
-gh variable set AWS_REGION         --body "us-east-1"   # optional; this is the default
+gh secret   set AWS_ROLE_ARN        --body "arn:aws:iam::647111127395:role/sst-deployer"
+gh variable set WEB_STAGING_DOMAIN  --body "staging.287g.recoveredfactory.net"
+gh variable set WEB_DOMAIN          --body "287g.recoveredfactory.net"
+gh variable set AWS_REGION          --body "us-east-1"   # optional; this is the default
 ```
 
-## 5. Run it (staging first)
+(If you went with the dedicated role, use its ARN for `AWS_ROLE_ARN`.)
+
+## 4. Run it (staging first)
 
 ```bash
 gh workflow run "Data refresh" --ref main -f stage=staging -f force=true
+gh run watch
 ```
 
 `force=true` bypasses the change gate so the run actually deploys + bakes +
 publishes even when the upstream data hasn't moved — what you want for a test.
-Drop `force` for real runs so an unchanged snapshot is a cheap no-op. Watch the
-run with `gh run watch`.
+Drop `force` for real runs so an unchanged snapshot is a cheap no-op.
 
 ### Known staging-deploy traps (past burns)
 
