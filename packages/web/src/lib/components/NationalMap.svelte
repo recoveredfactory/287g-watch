@@ -3,7 +3,7 @@
   import { goto } from "$app/navigation";
   import { browser } from "$app/environment";
   import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_SHORT } from "$lib/colors";
-  import { toInsetCoords } from "$lib/insetTransforms";
+  import { toInsetCoords, INSET_TRANSFORMS } from "$lib/insetTransforms";
   import { ensurePmtilesProtocol, pmtilesBaseSource, PMTILES_GLYPHS } from "$lib/map/pmtiles";
 
   export let selectedStates: Set<string> = new Set();
@@ -34,6 +34,11 @@
   // signed_idx so they're shown unconditionally. null = no timeline; the layer
   // renders all dots at full opacity.
   export let cursorIdx: number | null = null;
+
+  // Lower-48-only framing (#167 video): hide the AK/HI/territory insets (dots +
+  // shapes) and fit tight to the continental US so it fills the frame bigger.
+  // The hidden jurisdictions are surfaced in the social caption instead.
+  export let lower48 = false;
 
   let container: HTMLDivElement;
   let map: any = null;
@@ -74,17 +79,26 @@
     ? { top: 95, bottom: 8, left: 6, right: 6 }
     : { top: 14, bottom: 70, left: 14, right: 14 };
 
+  // Lower-48-only framing: tight continental bounds (no inset band below 24°)
+  // and near-uniform padding, so the country fills the frame.
+  const LOWER48_BOUNDS: [[number, number], [number, number]] = [[-125, 24.4], [-66.95, 49.5]];
+  const LOWER48_PADDING: any = { top: 16, bottom: 16, left: 16, right: 16 };
+  const activeBounds = lower48 ? LOWER48_BOUNDS : FULL_BOUNDS;
+  const activePadding = lower48 ? LOWER48_PADDING : FIT_PADDING;
+  // Layer filter that drops the AK/HI/territory inset features when lower-48.
+  const insetFilter: any = lower48 ? ["!", ["has", "inset"]] : undefined;
+
   function fitToSelection() {
     if (!map) return;
     if (selectedStates.size === 0) {
-      map.fitBounds(FULL_BOUNDS, { padding: FIT_PADDING, duration: 500 });
+      map.fitBounds(activeBounds, { padding: activePadding, duration: 500 });
       return;
     }
     const points = agencies
       .filter((a) => selectedStates.has(a.state) && a.lat != null && a.lng != null)
       .map((a) => toInsetCoords(a.lng!, a.lat!, a.state));
     if (points.length === 0) {
-      map.fitBounds(FULL_BOUNDS, { padding: FIT_PADDING, duration: 500 });
+      map.fitBounds(activeBounds, { padding: activePadding, duration: 500 });
       return;
     }
     let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
@@ -131,7 +145,7 @@
   $: geojson = {
     type: "FeatureCollection",
     features: [...agencies, ...terminatedAgencies]
-      .filter((a) => a.lat != null && a.lng != null)
+      .filter((a) => a.lat != null && a.lng != null && !(lower48 && INSET_TRANSFORMS[a.state]))
       .map((a) => {
         const [lng, lat] = toInsetCoords(a.lng!, a.lat!, a.state);
         return {
@@ -222,8 +236,8 @@
     const ml = await import("maplibre-gl");
     await ensurePmtilesProtocol(ml);
 
-    const FIT_BOUNDS = FULL_BOUNDS;
-    const FIT_OPTIONS = { padding: FIT_PADDING, animate: false };
+    const FIT_BOUNDS = activeBounds;
+    const FIT_OPTIONS = { padding: activePadding, animate: false };
 
     const ro = new ResizeObserver(() => {
       if (!map) return;
@@ -284,6 +298,7 @@
         id: "state-fills",
         type: "fill",
         source: "states",
+        filter: insetFilter,
         paint: { "fill-color": C.state, "fill-opacity": 1 },
       });
 
@@ -291,6 +306,7 @@
         id: "state-lines",
         type: "line",
         source: "states",
+        filter: insetFilter,
         paint: {
           "line-color": C.line,
           "line-width": C.lineWidth,
@@ -311,6 +327,7 @@
         id: "county-lines",
         type: "line",
         source: "counties",
+        filter: insetFilter,
         minzoom: 5,
         paint: {
           "line-color": C.county,
@@ -322,7 +339,11 @@
       // Static inset highways for the lowest zoom levels — PMTiles' roads
       // source starts at zoom 3, but mobile's locked-floor view sits below
       // that. The hand-baked geojson covers the inset layout (incl. AK/HI)
-      // and fades out by ~zoom 4.5 as PMTiles takes over.
+      // and fades out by ~zoom 4.5 as PMTiles takes over. Skipped in lower-48
+      // mode: it carries no inset flag to filter on, and its AK/HI lines would
+      // otherwise float over open ocean once the inset shapes are hidden;
+      // PMTiles interstates cover the continental US at the video's zoom.
+      if (!lower48) {
       map.addSource("highways-static", {
         type: "geojson",
         data: "/us-highways.geojson",
@@ -354,6 +375,7 @@
           "line-opacity": ["interpolate", ["linear"], ["zoom"], 1, 0.5, 3.5, 0.5, 4.5, 0],
         },
       });
+      }
 
       // Shared PMTiles base — roads + place labels. Standard web-mercator,
       // so layers only align with the lower-48; AK/HI/territory insets are
