@@ -43,6 +43,12 @@
   $: basePath = deLocalizeHref($page.url.pathname);
   $: origin = $page.url.origin;
 
+  // The /video/national route is a bare 1080×1920 canvas baked into a social
+  // video (#167) — it must render with no site chrome (header, footer, banners,
+  // source notice) so the capture is clean. Suppress all of that here rather
+  // than stripping the DOM in the bake script.
+  $: isVideoRoute = basePath === "/video/national";
+
   function hrefFor(targetLocale: Locale) {
     return localizeHref(basePath, { locale: targetLocale });
   }
@@ -156,10 +162,10 @@
 </a>
 
 <div
-  class={`page-fade ${isNavigating ? "page-fade--loading" : ""} ${bannerVisible ? "pb-28" : ""}`}
+  class={`page-fade ${isNavigating ? "page-fade--loading" : ""} ${bannerVisible && !isVideoRoute ? "pb-28" : ""}`}
   style:--staging-banner-height={isProdStage ? "0px" : "28px"}
 >
-  {#if !isProdStage}
+  {#if !isProdStage && !isVideoRoute}
     <div
       class="sticky top-0 z-[60] flex items-center justify-center gap-2 bg-red-600 px-4 py-1 text-center text-xs font-semibold uppercase tracking-wider text-white"
       role="alert"
@@ -171,7 +177,7 @@
       <code class="font-mono normal-case tracking-normal">{stage}</code>
     </div>
   {/if}
-  {#if mismatchTarget}
+  {#if mismatchTarget && !isVideoRoute}
     <div
       class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-blue-200 bg-blue-50 px-4 py-2 text-center text-sm text-blue-950"
       role="region"
@@ -206,6 +212,7 @@
       {/if}
     </div>
   {/if}
+  {#if !isVideoRoute}
   <header
     class="sticky z-50 border-b border-black/20 backdrop-blur"
     style="top: var(--staging-banner-height); background-color: #191919;"
@@ -283,8 +290,9 @@
       </div>
     </div>
   </header>
+  {/if}
 
-  {#if isEs}
+  {#if isEs && !isVideoRoute}
     <p
       class="mx-auto max-w-6xl px-4 py-2 text-xs italic text-slate-500 sm:px-6"
       role="note"
@@ -296,6 +304,7 @@
 
   <slot />
 
+  {#if !isVideoRoute}
   <footer class="mt-16 border-t border-black/20 px-4 py-8 text-sm" style="background-color: #191919; color: rgba(255,255,255,0.6);">
     <div class="mx-auto max-w-6xl space-y-3 text-left sm:text-center">
       <p>
@@ -318,9 +327,10 @@
       </p>
     </div>
   </footer>
+  {/if}
 </div>
 
-{#if bannerVisible}
+{#if bannerVisible && !isVideoRoute}
   <div
     class="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between gap-4 px-4 py-4 sm:px-6"
     style="background-color: #2c2c2c;"
