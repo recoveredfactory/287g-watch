@@ -12,7 +12,8 @@
 // Flags:
 //   --stage <name>   required. prod | staging (asset steps only support these).
 //   --bake-og        after deploy: bake OG cards, then publish them to the bucket.
-//   --bake-video     after deploy: bake the map video (en + es), then publish.
+//   --bake-video     after deploy: bake the map videos — the square map-only cut
+//                    and the vertical map+trend cut (en + es each) — then publish.
 //   --no-deploy      skip `sst deploy` — only run the selected bake/publish steps.
 //   --url <base>     override the site base URL to bake against. Default is
 //                    https://<WEB_DOMAIN|WEB_STAGING_DOMAIN> read from .env
@@ -94,11 +95,19 @@ if (bakeOg) {
 
 if (bakeVideo) {
   const base = baseUrl();
+  // Square, map-only cut — bakes against the homepage.
   for (const lang of ["en", "es"]) {
     run(`Bake map video (${lang})`, "pnpm", [
       "-F", "web", "bake:map-video", `--lang=${lang}`, `--url=${base}/${lang}`,
     ]);
   }
+  // Vertical map+trend social cut (#167) — bakes against its dedicated route.
+  for (const lang of ["en", "es"]) {
+    run(`Bake map+trend video (${lang})`, "pnpm", [
+      "-F", "web", "bake:map-trend-video", `--lang=${lang}`, `--url=${base}/${lang}/video/national`,
+    ]);
+  }
+  // One publish handles both cuts (publish-map-assets walks all prefixes).
   run("Publish map assets", "pnpm", [`publish:map-assets:${stage}`]);
 }
 
