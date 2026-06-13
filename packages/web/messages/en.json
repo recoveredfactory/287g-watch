@@ -199,5 +199,12 @@
   "usemap_custom_body_prefix": "Want a map of just your state or region, or a white-labeled version?",
   "usemap_custom_link": "Contact us",
   "usemap_custom_body_suffix": "to discuss licensing.",
-  "usemap_back_to_map": "← Back to the map"
+  "usemap_back_to_map": "← Back to the map",
+  "video_title": "Active agreements",
+  "video_agencies": "Agencies",
+  "video_agencies_sub": "with active agreements",
+  "video_agreements": "agreements",
+  "video_pop_sub": "pop covered",
+  "video_source": "Source: ICE 287(g) rosters, archived by Elijah Appelson",
+  "video_data_as_of": "Data as of"
 }
