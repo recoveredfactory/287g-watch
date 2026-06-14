@@ -12,6 +12,17 @@
 #   Variable AWS_REGION          optional; defaults to us-east-1
 # GITHUB_TOKEN is the built-in Actions token — the pipeline uses it for the
 # (public) appelson/Tracking_287g GitHub API reads.
+#
+# Bake compute (issue #186 — the video bake is GPU-accelerated to beat the
+# timeout). Both default safely so an unconfigured repo still runs (slow):
+#   Variable BAKE_RUNNER_LABEL  label of a GPU larger runner created in org
+#                               Settings → Actions → Runners (e.g. gpu-t4).
+#                               Defaults to ubuntu-latest.
+#   Variable BAKE_GL            gpu | swiftshader. Set to `gpu` ONLY alongside a
+#                               GPU BAKE_RUNNER_LABEL. Default swiftshader
+#                               (software WebGL — works anywhere, but slow).
+# With BAKE_GL=gpu the bake runs headed under xvfb and FAILS LOUD if it can't
+# reach the GPU (so you never silently pay GPU minutes for a software bake).
 
 name: Data refresh
 
@@ -45,13 +56,15 @@ permissions:
 
 jobs:
   refresh:
-    runs-on: ubuntu-latest
+    # GPU larger runner when configured (issue #186), else the standard runner.
+    runs-on: ${{ vars.BAKE_RUNNER_LABEL || 'ubuntu-latest' }}
     timeout-minutes: 45
     env:
       STAGE: ${{ inputs.stage || 'prod' }}
       FORCE: ${{ inputs.force || 'false' }}
       WEB_DOMAIN: ${{ vars.WEB_DOMAIN }}
       WEB_STAGING_DOMAIN: ${{ vars.WEB_STAGING_DOMAIN }}
+      BAKE_GL: ${{ vars.BAKE_GL || 'swiftshader' }}
     steps:
       # Actions are pinned to commit SHAs (not mutable tags) so a hijacked tag
       # can't inject code that exfiltrates GITHUB_TOKEN or abuses the OIDC step.
@@ -116,13 +129,25 @@ jobs:
         # (allowBuilds), so fetch the browser + system libs explicitly.
         run: pnpm --filter web exec playwright install --with-deps chromium
 
+      # GPU path only: headed Chromium needs a display. (NVIDIA drivers are
+      # already on the GPU runner image.)
+      - name: Install xvfb (GPU bake)
+        if: steps.gate.outputs.changed == 'true' && env.BAKE_GL == 'gpu'
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
       - name: Ensure ffmpeg
         if: steps.gate.outputs.changed == 'true'
         run: ffmpeg -version >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y ffmpeg)
 
       - name: Deploy + bake + publish assets
         if: steps.gate.outputs.changed == 'true'
-        run: pnpm "deploy:${STAGE}:assets"
+        # Under BAKE_GL=gpu the bake runs headed → wrap in a virtual display.
+        run: |
+          if [ "$BAKE_GL" = "gpu" ]; then
+            xvfb-run -a pnpm "deploy:${STAGE}:assets"
+          else
+            pnpm "deploy:${STAGE}:assets"
+          fi
 
       - name: Summary
         if: always()
