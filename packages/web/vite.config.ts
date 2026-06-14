@@ -12,6 +12,11 @@ const repoRoot = resolve(__dirname, "..", "..");
 export default defineConfig({
   envDir: repoRoot,
   envPrefix: ["VITE_", "PUBLIC_"],
+  // Build timestamp, frozen at build time and surfaced in the footer as a
+  // quiet "last deployed" flag — a data-refresh run that redeploys bumps it.
+  define: {
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+  },
   server: {
     cors: true,
   },
