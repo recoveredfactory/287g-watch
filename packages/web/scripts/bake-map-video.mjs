@@ -22,9 +22,10 @@
 
 import { chromium } from "playwright";
 import { spawn } from "node:child_process";
-import { mkdir, rm, access, copyFile } from "node:fs/promises";
+import { mkdir, rm, access } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { launchOptions, FRAME_EXT, frameShotOpts, assertRenderer } from "./bake-common.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Output to .assets/ (NOT static/) — these are big and belong in the asset
@@ -58,7 +59,7 @@ const STRINGS = STRINGS_BY_LANG[LANG] ?? STRINGS_BY_LANG.en;
 const FRAMES_DIR = path.join(OUT_DIR, `frames-${LANG}`);
 
 const URL = argValue("--url") ?? `https://287g.recoveredfactory.net/${LANG}`;
-const FPS = Number(argValue("--fps") ?? 30);
+const FPS = Number(argValue("--fps") ?? 24);
 const DURATION = Number(argValue("--duration") ?? 8);
 // Defaults give a roughly square output (good for social): 1080 viewport
 // width × map-height 1010 + title bar ~70 = ~1080 tall. Override either to
@@ -116,19 +117,7 @@ if (!SKIP_FRAMES) {
   await mkdir(FRAMES_DIR, { recursive: true });
 
   console.log(`[snap] launching chromium…`);
-  const browser = await chromium.launch({
-    args: [
-      "--use-angle=swiftshader",
-      "--use-gl=angle",
-      "--enable-webgl",
-      "--ignore-gpu-blocklist",
-      // Headless Chromium (esp. WSL/containers) gives /dev/shm only ~64MB; the
-      // WebGL map + per-frame screenshots overrun it and the renderer dies with
-      // "Target crashed". Route shared memory to /tmp instead.
-      "--disable-dev-shm-usage",
-      "--no-sandbox",
-    ],
-  });
+  const browser = await chromium.launch(launchOptions());
   const context = await browser.newContext({
     viewport: { width: VIEWPORT_W, height: VIEWPORT_H },
     deviceScaleFactor: 1,
@@ -402,6 +391,8 @@ if (!SKIP_FRAMES) {
   };
   console.log(`[snap] clip ${clip.width}x${clip.height} at (${clip.x},${clip.y})`);
 
+  await assertRenderer(page);
+
   // --still: just the final state (cursor at maxIdx) → PNG, then bail. Fast
   // composition check without the frame sweep + encode.
   if (STILL) {
@@ -423,14 +414,17 @@ if (!SKIP_FRAMES) {
     const idx = bounds.minIdx + (bounds.maxIdx - bounds.minIdx) * t;
     await page.evaluate((v) => window.__setCursor(v), idx);
     await page.waitForTimeout(20);
-    const frameName = `frame_${String(i).padStart(5, "0")}.png`;
-    await page.screenshot({ path: path.join(FRAMES_DIR, frameName), clip });
+    const frameName = `frame_${String(i).padStart(5, "0")}.${FRAME_EXT}`;
+    await page.screenshot({ path: path.join(FRAMES_DIR, frameName), clip, ...frameShotOpts() });
     if ((i + 1) % 30 === 0 || i === TOTAL_FRAMES - 1) {
       const elapsed = (Date.now() - t0) / 1000;
       process.stdout.write(`  ${i + 1}/${TOTAL_FRAMES} (${elapsed.toFixed(1)}s)\r`);
     }
   }
   console.log(`\n[snap] ${TOTAL_FRAMES} frames in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+  // Lossless final still (PNG, peak state) — the sweep frames are JPEG now, so
+  // capture this straight from the live canvas. Cursor is already at maxIdx.
+  await page.screenshot({ path: path.join(OUT_DIR, `map-${LANG}.png`), clip });
   await browser.close();
 } else {
   if (!(await exists(FRAMES_DIR))) {
@@ -447,7 +441,7 @@ const run = (cmd, argv) =>
     p.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`${cmd} exited ${code}`))));
   });
 
-const FRAME_GLOB = path.join(FRAMES_DIR, "frame_%05d.png");
+const FRAME_GLOB = path.join(FRAMES_DIR, `frame_%05d.${FRAME_EXT}`);
 const MP4_PATH = path.join(OUT_DIR, `map-${LANG}.mp4`);
 const GIF_PATH = path.join(OUT_DIR, `map-${LANG}.gif`);
 const PALETTE_PATH = path.join(OUT_DIR, `_palette-${LANG}.png`);
@@ -491,15 +485,14 @@ await run("ffmpeg", [
   GIF_PATH,
 ]);
 
-// Also emit the final frame as a standalone static image — the climax of the
-// animation (full data, peak count), offered as a download alongside the clip.
-// Copied straight from the captured PNG so it stays lossless (not the h264 mp4).
+// The final static image (peak data) is captured losslessly from the live
+// canvas during the sweep (above). With --skip-frames there was no live capture,
+// so derive it from the last (JPEG) frame instead.
 const PNG_PATH = path.join(OUT_DIR, `map-${LANG}.png`);
-const lastFramePath = path.join(
-  FRAMES_DIR,
-  `frame_${String(TOTAL_FRAMES - 1).padStart(5, "0")}.png`,
-);
-await copyFile(lastFramePath, PNG_PATH);
+if (!(await exists(PNG_PATH))) {
+  const lastFrame = path.join(FRAMES_DIR, `frame_${String(TOTAL_FRAMES - 1).padStart(5, "0")}.${FRAME_EXT}`);
+  await run("ffmpeg", ["-y", "-i", lastFrame, PNG_PATH]);
+}
 
 await rm(PALETTE_PATH, { force: true });
 if (!KEEP_FRAMES) await rm(FRAMES_DIR, { recursive: true, force: true });

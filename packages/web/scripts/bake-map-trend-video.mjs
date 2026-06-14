@@ -35,6 +35,7 @@ import { spawn } from "node:child_process";
 import { mkdir, rm, access } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { launchOptions, FRAME_EXT, frameShotOpts, assertRenderer } from "./bake-common.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Output to .assets/ (NOT static/) — big files belong in the asset bucket, not
@@ -58,7 +59,7 @@ const LANG = argValue("--lang") ?? "en";
 const FRAMES_DIR = path.join(OUT_DIR, `frames-trend-${LANG}`);
 
 const URL = argValue("--url") ?? `https://287g.recoveredfactory.net/${LANG}/video/national`;
-const FPS = Number(argValue("--fps") ?? 30);
+const FPS = Number(argValue("--fps") ?? 24);
 // 9:16, the format for Reels / Shorts / TikTok.
 const VIEWPORT_W = Number(argValue("--width") ?? 1080);
 const VIEWPORT_H = Number(argValue("--height") ?? 1920);
@@ -99,19 +100,7 @@ if (!SKIP_FRAMES) {
   await mkdir(FRAMES_DIR, { recursive: true });
 
   console.log(`[snap] launching chromium…`);
-  const browser = await chromium.launch({
-    args: [
-      "--use-angle=swiftshader",
-      "--use-gl=angle",
-      "--enable-webgl",
-      "--ignore-gpu-blocklist",
-      // Headless Chromium (esp. WSL/containers) gives /dev/shm only ~64MB; the
-      // WebGL map + per-frame screenshots overrun it and the renderer dies with
-      // "Target crashed". Route shared memory to /tmp instead.
-      "--disable-dev-shm-usage",
-      "--no-sandbox",
-    ],
-  });
+  const browser = await chromium.launch(launchOptions());
   const context = await browser.newContext({
     viewport: { width: VIEWPORT_W, height: VIEWPORT_H },
     deviceScaleFactor: 1,
@@ -140,6 +129,8 @@ if (!SKIP_FRAMES) {
   // One extra settle so MapLibre's first idle paint and the chart's width-driven
   // viewBox are committed before the first capture.
   await page.waitForTimeout(600);
+
+  await assertRenderer(page);
 
   const bounds = await page.evaluate(() => window.__bake.bounds());
   const totalSeconds = Number(bounds.totalSeconds);
@@ -174,8 +165,8 @@ if (!SKIP_FRAMES) {
     const t = TOTAL_FRAMES === 1 ? 0 : (i / (TOTAL_FRAMES - 1)) * totalSeconds;
     await page.evaluate((v) => window.__bake.seek(v), t);
     await page.waitForTimeout(30);
-    const frameName = `frame_${String(i).padStart(5, "0")}.png`;
-    await canvas.screenshot({ path: path.join(FRAMES_DIR, frameName) });
+    const frameName = `frame_${String(i).padStart(5, "0")}.${FRAME_EXT}`;
+    await canvas.screenshot({ path: path.join(FRAMES_DIR, frameName), ...frameShotOpts() });
     if ((i + 1) % 30 === 0 || i === TOTAL_FRAMES - 1) {
       const elapsed = (Date.now() - t0) / 1000;
       process.stdout.write(`  ${i + 1}/${TOTAL_FRAMES} (${elapsed.toFixed(1)}s)\r`);
@@ -190,7 +181,7 @@ if (!SKIP_FRAMES) {
   console.log(`[snap] --skip-frames: reusing ${FRAMES_DIR}`);
   // Count existing frames so the encoder's glob and the final-frame copy line up.
   const { readdir } = await import("node:fs/promises");
-  const files = (await readdir(FRAMES_DIR)).filter((f) => /^frame_\d+\.png$/.test(f));
+  const files = (await readdir(FRAMES_DIR)).filter((f) => new RegExp(`^frame_\\d+\\.${FRAME_EXT}$`).test(f));
   TOTAL_FRAMES = files.length;
   if (!TOTAL_FRAMES) throw new Error(`--skip-frames: no frames in ${FRAMES_DIR}`);
 }
@@ -203,7 +194,7 @@ const run = (cmd, argv) =>
     p.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`${cmd} exited ${code}`))));
   });
 
-const FRAME_GLOB = path.join(FRAMES_DIR, "frame_%05d.png");
+const FRAME_GLOB = path.join(FRAMES_DIR, `frame_%05d.${FRAME_EXT}`);
 const MP4_PATH = path.join(OUT_DIR, `map-trend-${LANG}.mp4`);
 const GIF_PATH = path.join(OUT_DIR, `map-trend-${LANG}.gif`);
 const PALETTE_PATH = path.join(OUT_DIR, `_palette-trend-${LANG}.png`);

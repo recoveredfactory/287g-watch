@@ -22,7 +22,7 @@
 // Order matters: we deploy FIRST, then bake against the just-deployed site, so
 // the OG snapshot and the video reflect the new build rather than the previous
 // one (the stale-bake gotcha — bake after the change is live, not before).
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -88,6 +88,22 @@ const run = (label, cmd, cmdArgs) => {
   execFileSync(cmd, cmdArgs, { cwd: ROOT, stdio: "inherit" });
 };
 
+// Run a command async, BUFFERING its output and flushing it as one block on
+// exit — so several of these running in parallel don't interleave into garbage.
+const runBuffered = (label, cmd, cmdArgs) =>
+  new Promise((resolve, reject) => {
+    console.log(`  ▶ start: ${label}`);
+    const p = spawn(cmd, cmdArgs, { cwd: ROOT });
+    let out = "";
+    p.stdout.on("data", (d) => (out += d));
+    p.stderr.on("data", (d) => (out += d));
+    p.on("error", reject);
+    p.on("exit", (code) => {
+      console.log(`\n──── ${label} (exit ${code}) ────\n${out.trimEnd()}\n`);
+      code === 0 ? resolve() : reject(new Error(`${label} failed (exit ${code})`));
+    });
+  });
+
 if (!noDeploy) run("Deploy", "sst", ["deploy", "--stage", stage]);
 
 if (bakeOg) {
@@ -98,17 +114,25 @@ if (bakeOg) {
 
 if (bakeVideo) {
   const base = baseUrl();
-  // Square, map-only cut — bakes against the homepage.
-  for (const lang of ["en", "es"]) {
-    run(`Bake map video (${lang})`, "pnpm", [
-      "-F", "web", "bake:map-video", `--lang=${lang}`, `--url=${base}/${lang}`,
-    ]);
-  }
-  // Vertical map+trend social cut (#167) — bakes against its dedicated route.
-  for (const lang of ["en", "es"]) {
-    run(`Bake map+trend video (${lang})`, "pnpm", [
-      "-F", "web", "bake:map-trend-video", `--lang=${lang}`, `--url=${base}/${lang}/video/national`,
-    ]);
+  // All four cuts (square + vertical, en + es) bake concurrently — each writes
+  // its own frames dir / palette / outputs, so there's no collision. On a GPU
+  // runner this is a big win; under software GL it still uses spare cores.
+  const cuts = [
+    ["bake:map-video", "en", `${base}/en`],
+    ["bake:map-video", "es", `${base}/es`],
+    ["bake:map-trend-video", "en", `${base}/en/video/national`],
+    ["bake:map-trend-video", "es", `${base}/es/video/national`],
+  ];
+  console.log(`\n▶ Baking ${cuts.length} cuts in parallel…`);
+  const results = await Promise.allSettled(
+    cuts.map(([script, lang, url]) =>
+      runBuffered(`${script} (${lang})`, "pnpm", ["-F", "web", script, `--lang=${lang}`, `--url=${url}`]),
+    ),
+  );
+  const failed = results.filter((r) => r.status === "rejected");
+  if (failed.length) {
+    for (const f of failed) console.error(`✗ ${f.reason?.message ?? f.reason}`);
+    die(`${failed.length} of ${cuts.length} bakes failed.`);
   }
   // One publish handles both cuts (publish-map-assets walks all prefixes).
   run("Publish map assets", "pnpm", [`publish:map-assets:${stage}`]);
