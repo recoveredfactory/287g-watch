@@ -1,8 +1,9 @@
 // One-time helper: mint a YouTube refresh token via a localhost OAuth consent.
 //
-// Run this ONCE per account (your burner channel for staging, the real channel
-// for prod). It opens a consent page, you sign in AS THAT CHANNEL'S Google
-// account, approve, and it prints a refresh token to stash as a secret.
+// Run this ONCE per channel (burner for staging, the real one for prod). It opens
+// a consent page: sign in with the Google account that manages the channel, pick
+// the Brand Account on the "Choose a channel" screen, and approve. It then prints
+// which channel the token acts as (confirm it's the brand) plus the refresh token.
 //
 //   YOUTUBE_CLIENT_ID=... YOUTUBE_CLIENT_SECRET=... \
 //     node packages/web/scripts/youtube-auth.mjs
@@ -42,12 +43,16 @@ if (!clientId || !clientSecret)
 const port = Number(valueOf("--port") || 4180);
 const redirectUri = `http://localhost:${port}`;
 
-const { auth: googleAuth } = await import("@googleapis/youtube");
+const { auth: googleAuth, youtube: youtubeApi } = await import("@googleapis/youtube");
 const oauth2 = new googleAuth.OAuth2(clientId, clientSecret, redirectUri);
 const authUrl = oauth2.generateAuthUrl({
   access_type: "offline", // ask for a refresh token
   prompt: "consent", // force a fresh refresh token even if previously granted
-  scope: ["https://www.googleapis.com/auth/youtube.upload"],
+  scope: [
+    "https://www.googleapis.com/auth/youtube.upload",
+    // readonly lets us read back WHICH channel the token acts as (Brand vs personal)
+    "https://www.googleapis.com/auth/youtube.readonly",
+  ],
 });
 
 const server = createServer(async (req, res) => {
@@ -68,7 +73,28 @@ const server = createServer(async (req, res) => {
           "https://myaccount.google.com/permissions and re-run (consent must be fresh).\n",
       );
     } else {
-      console.log("\n✓ Refresh token (save as the YOUTUBE_REFRESH_TOKEN secret):\n");
+      // Read back WHICH channel this token acts as. The whole reason to use a
+      // Brand Account is that the token must bind to it — not your personal
+      // channel — so confirm it here before stashing the token.
+      oauth2.setCredentials(tokens);
+      try {
+        const yt = youtubeApi({ version: "v3", auth: oauth2 });
+        const { data } = await yt.channels.list({ part: ["snippet"], mine: true });
+        const ch = data.items?.[0];
+        if (ch) {
+          console.log(`\n✓ This token acts as channel: ${ch.snippet.title}  (${ch.id})`);
+          console.log("  Not the Brand Account you wanted? Revoke at");
+          console.log("  https://myaccount.google.com/permissions and re-run, picking the");
+          console.log('  brand on the "Choose a channel" screen.');
+        } else {
+          console.log("\n! Token issued, but no channel came back for this account —");
+          console.log("  make sure it actually has a YouTube channel.");
+        }
+      } catch (e) {
+        console.log(`\n! Couldn't read back the channel (${e?.message || e}).`);
+        console.log("  The refresh token below is still valid for uploading.");
+      }
+      console.log("\n✓ Refresh token (save as YOUTUBE_REFRESH_TOKEN — in .env locally for now):\n");
       console.log(tokens.refresh_token + "\n");
     }
   } catch (err) {

@@ -132,9 +132,32 @@ const tags = ["287g", "ICE", "immigration", "data", "map"];
 
 const src = await videoSource();
 
+// Best-effort: which channel would this go to? Resolves only when creds are
+// present and the token carries read scope (minted by youtube-auth.mjs). Never
+// fatal — a no-creds caption preview must still work.
+async function previewChannel() {
+  const id = process.env.YOUTUBE_CLIENT_ID;
+  const secret = process.env.YOUTUBE_CLIENT_SECRET;
+  const token = process.env.YOUTUBE_REFRESH_TOKEN;
+  if (!id || !secret || !token) return "(set YOUTUBE_* in env/.env to preview the channel)";
+  try {
+    const { auth: googleAuth, youtube: youtubeApi } = await import("@googleapis/youtube");
+    const oauth2 = new googleAuth.OAuth2(id, secret);
+    oauth2.setCredentials({ refresh_token: token });
+    const yt = youtubeApi({ version: "v3", auth: oauth2 });
+    const { data } = await yt.channels.list({ part: ["snippet"], mine: true });
+    const ch = data.items?.[0];
+    return ch ? `${ch.snippet.title} (${ch.id})` : "(token valid, but no channel returned)";
+  } catch (e) {
+    return `(couldn't resolve: ${e?.message || e})`;
+  }
+}
+const channelLine = await previewChannel();
+
 // --- Print the plan (shown for both dry run and real upload) ---------------
 console.log(`\nYouTube Short upload — ${confirm ? "LIVE (--confirm)" : "DRY RUN (no --confirm)"}`);
 console.log(`  stage:       ${stage}`);
+console.log(`  channel:     ${channelLine}`);
 console.log(`  language:    ${lang}`);
 console.log(`  privacy:     ${privacy}${privacy === "public" ? "  (unverified API projects force private — best-effort)" : ""}`);
 console.log(`  video:       ${src.kind === "unresolved" ? "(UNRESOLVED — run via sst shell, or pass --file / --video-url)" : src.value}`);
