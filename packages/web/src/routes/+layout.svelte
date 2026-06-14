@@ -25,6 +25,11 @@
 
   const siteName = "287(g) Watch";
 
+  // Build timestamp, frozen at build time via Vite `define` (vite.config.ts) —
+  // a quiet "last deployed" flag in the footer. A data-refresh run that
+  // redeploys bumps it. UTC, minute precision: "2026-06-14 03:47 UTC".
+  const buildStamp = `${__BUILD_TIME__.slice(0, 10)} ${__BUILD_TIME__.slice(11, 16)} UTC`;
+
   const stage = (import.meta.env.PUBLIC_STAGE || "local").toString();
   const isProdStage = stage === "prod" || stage === "production";
   const faviconHref = isProdStage ? "/favicon.svg" : "/favicon-staging.svg";
@@ -324,6 +329,9 @@
         {m.footer_credit_prefix()}
         <a href="https://vsr.recoveredfactory.net/en" target="_blank" rel="noreferrer" class="hover:text-white/60" style="color: rgba(255,255,255,0.45);">{m.footer_credit_org_name()}</a>.
         {m.footer_credit_suffix()}
+      </p>
+      <p class="text-xs" style="color: rgba(255,255,255,0.3);">
+        {m.footer_build()} {buildStamp}
       </p>
     </div>
   </footer>
