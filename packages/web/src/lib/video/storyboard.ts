@@ -9,11 +9,14 @@
 //   fade-in    — dip to black; under cover, snap the cursor back to the start
 //   start hold — hold on the Dec 2024 starting state before the sweep
 //   run        — sweep start → today; map dots fade in, trend playhead tracks
-//   fade-out   — dip to black; settle back on today
-//   outro hold — today, big counter
+//   outro hold — settle on today, big counter
 //
-// One counter (always reads the count at the cursor); the fades dip the whole
-// frame to a *full-black plateau* and the cursor snap happens inside that
+// The run ENDS on today, so there's no fade-out — the clip just holds on the
+// latest date (a trailing fade dipped to black and back to the same frame,
+// which read as an odd flash). On loop, outro(today) → intro(today) is seamless.
+//
+// One counter (always reads the count at the cursor); the single fade dips the
+// whole frame to a *full-black plateau* and the cursor snap happens inside that
 // plateau, so the number never visibly jumps. All beats are wall-clock seconds;
 // `t` is seconds from the start of the clip.
 
@@ -22,7 +25,6 @@ export const BEATS = {
   fadeIn: 0.7,
   startHold: 1.5,
   run: 8.0,
-  fadeOut: 0.7,
   outroHold: 2.0,
 } as const;
 
@@ -31,15 +33,14 @@ export const BEATS = {
 const VEIL_HOLD = 0.34;
 
 export const TOTAL_SECONDS =
-  BEATS.introHold + BEATS.fadeIn + BEATS.startHold + BEATS.run + BEATS.fadeOut + BEATS.outroHold; // 14.4
+  BEATS.introHold + BEATS.fadeIn + BEATS.startHold + BEATS.run + BEATS.outroHold; // 13.7
 
 // Beat boundaries (cumulative end times), so phase tests read top-to-bottom.
 const T_INTRO_END = BEATS.introHold; // 1.5
 const T_FADEIN_END = T_INTRO_END + BEATS.fadeIn; // 2.2
 const T_STARTHOLD_END = T_FADEIN_END + BEATS.startHold; // 3.7
 const T_RUN_END = T_STARTHOLD_END + BEATS.run; // 11.7
-const T_FADEOUT_END = T_RUN_END + BEATS.fadeOut; // 12.4
-// outro ends at TOTAL_SECONDS (14.4)
+// outro ends at TOTAL_SECONDS (13.7)
 
 export type FrameState = {
   // Fractional-month cursor for the map, the trend playhead, and the counter.
@@ -48,7 +49,7 @@ export type FrameState = {
   veilOpacity: number;
 };
 
-export type Scene = "intro" | "fade-in" | "start-hold" | "run" | "fade-out" | "outro";
+export type Scene = "intro" | "fade-in" | "start-hold" | "run" | "outro";
 
 const clamp01 = (p: number) => (p < 0 ? 0 : p > 1 ? 1 : p);
 
@@ -67,7 +68,6 @@ export function sceneAt(t: number): Scene {
   if (t < T_FADEIN_END) return "fade-in";
   if (t < T_STARTHOLD_END) return "start-hold";
   if (t < T_RUN_END) return "run";
-  if (t < T_FADEOUT_END) return "fade-out";
   return "outro";
 }
 
@@ -81,8 +81,6 @@ export function sceneLabel(t: number): string {
       return "Hold on start (Dec 2024)";
     case "run":
       return "Run";
-    case "fade-out":
-      return "Fade to today";
     case "outro":
       return "Outro hold (today)";
   }
@@ -116,12 +114,6 @@ export function frameState(t: number, minIdx: number, maxIdx: number): FrameStat
     return { cursorIdx: minIdx + (maxIdx - minIdx) * p, veilOpacity: 0 };
   }
 
-  // Fade-out — dip to black, settle on today (cursor already there).
-  if (time < T_FADEOUT_END) {
-    const p = (time - T_RUN_END) / BEATS.fadeOut;
-    return { cursorIdx: maxIdx, veilOpacity: veilTrapezoid(p) };
-  }
-
-  // Outro hold — today.
+  // Outro hold — today. The run already ended here, so just hold (no fade).
   return { cursorIdx: maxIdx, veilOpacity: 0 };
 }
