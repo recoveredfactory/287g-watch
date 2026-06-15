@@ -21,6 +21,7 @@
     activeCountAt,
     coveredPopAt,
     overlayExactDate,
+    signedIdx,
   } from "$lib/timelineCursor";
   import { monthsToIdx, interpAt } from "$lib/trendSample";
   import { frameState, sceneLabel, TOTAL_SECONDS } from "$lib/video/storyboard";
@@ -63,6 +64,21 @@
     interpAt(nat.jail, trendIdx, cursorIdx) +
     interpAt(nat.taskforce, trendIdx, cursorIdx) +
     interpAt(nat.wso, trendIdx, cursorIdx);
+
+  // Distinct U.S. STATES with an active agency at the cursor — earliest signing
+  // per state, counted in as the cursor passes it. Territories (Guam, N.
+  // Mariana, etc.) are excluded from the count and called out in a footnote.
+  const TERRITORY_CODES = new Set(["GU", "MP", "PR", "VI", "AS"]);
+  $: earliestByState = (() => {
+    const m: Record<string, number> = {};
+    for (const a of data.agencies) {
+      if (!a.state || TERRITORY_CODES.has(a.state)) continue;
+      const idx = signedIdx(a.signed_date);
+      if (!(a.state in m) || idx < m[a.state]) m[a.state] = idx;
+    }
+    return m;
+  })();
+  $: statesAtCursor = Object.values(earliestByState).filter((idx) => idx <= cursorIdx).length;
 
   // Watermark data-freshness stamp (falls back to nothing if no snapshot).
   $: asOf = data.snapshotDate
@@ -143,36 +159,53 @@
     data-video-canvas
     style:transform={previewMode ? `scale(${previewScale})` : "none"}
   >
-    <!-- Title bar: brand lockup — 287(g) WATCH | ACTIVE AGREEMENTS -->
+    <!-- Title bar: centered brand wordmark -->
     <div class="vid-titlebar">
       <span class="vid-brand">287(g) Watch</span>
-      <span class="vid-divider" aria-hidden="true">|</span>
-      <span class="vid-headline">{m.video_title()}</span>
     </div>
 
-    <!-- Map + chart, pushed to the top, with the date ticker between them -->
-    <div class="vid-top">
-      <div class="vid-map">
-        <NationalMap agencies={data.agencies} terminatedAgencies={data.terminatedAgencies} {cursorIdx} lower48 />
+    <!-- Hero: agencies is the headline number (ticks up to 1,616). The
+         growth/delta line will slot in directly under the unit later. -->
+    <div class="vid-hero">
+      <div class="vid-hero-num">{intFmt.format(Math.round(countAtCursor))}</div>
+      <div class="vid-hero-unit">{m.video_hero_unit()}</div>
+    </div>
+
+    <!-- Stat row: agreements · states · population covered (all tick) -->
+    <div class="vid-statrow">
+      <div class="vid-stat">
+        <div class="vid-stat-num">{intFmt.format(Math.round(agreementsAtCursor))}</div>
+        <div class="vid-stat-label">{m.video_agreements()}</div>
       </div>
-      <div class="vid-datestrip">{exactDate}</div>
-      <div class="vid-chart" bind:clientWidth={chartW}>
-        <VideoTrendChart trendMonths={data.trendMonths} trend={data.trend} {cursorIdx} height={520} />
+      <div class="vid-stat-div" aria-hidden="true"></div>
+      <div class="vid-stat">
+        <div class="vid-stat-num">{statesAtCursor}</div>
+        <div class="vid-stat-label">{m.video_states()}<span class="vid-ast">*</span></div>
+      </div>
+      <div class="vid-stat-div" aria-hidden="true"></div>
+      <div class="vid-stat">
+        <div class="vid-stat-num">{popFmt.format(Math.max(0, popAtCursor))}</div>
+        <div class="vid-stat-label">{m.video_pop_sub()}</div>
       </div>
     </div>
 
-    <!-- Counter: agencies as the hero, agreements + pop as secondary lines -->
-    <div class="vid-counter">
-      <div class="vid-hero-num">{intFmt.format(Math.round(countAtCursor))} <span class="vid-hero-unit">{m.video_agencies()}</span></div>
-      <div class="vid-hero-sub">{m.video_agencies_sub()}</div>
-      <div class="vid-secondary">
-        {intFmt.format(Math.round(agreementsAtCursor))} <span class="vid-sec-unit">{m.video_agreements()}</span>
-        <span class="vid-sec-div" aria-hidden="true">⁘</span>
-        {popFmt.format(Math.max(0, popAtCursor))} <span class="vid-sec-unit">{m.video_pop_sub()}</span>
-      </div>
+    <!-- Territories footnote, keyed to the states asterisk -->
+    <div class="vid-territories">*{m.video_territories_note()}</div>
+
+    <!-- Date ticker -->
+    <div class="vid-datestrip">{exactDate}</div>
+
+    <!-- Trend chart: the climb, broken out by model -->
+    <div class="vid-chart" bind:clientWidth={chartW}>
+      <VideoTrendChart trendMonths={data.trendMonths} trend={data.trend} {cursorIdx} height={460} />
     </div>
 
-    <!-- Source, lower-left corner -->
+    <!-- Map: supporting "where", a real beat in the bottom band -->
+    <div class="vid-map">
+      <NationalMap agencies={data.agencies} terminatedAgencies={data.terminatedAgencies} {cursorIdx} lower48 />
+    </div>
+
+    <!-- Source, lower-left corner (over the map) -->
     <div class="vid-source">{m.video_source()}</div>
 
     <!-- Provenance, lower-right corner (brand now lives in the title lockup) -->
@@ -237,12 +270,12 @@
     transform-origin: center center;
   }
 
-  /* Title bar */
+  /* Title bar: centered brand wordmark */
   .vid-titlebar {
     flex: 0 0 auto;
     display: flex;
     align-items: baseline;
-    gap: 18px;
+    justify-content: center;
     padding: 30px 40px 24px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     font-family: "Inter", system-ui, sans-serif;
@@ -256,21 +289,14 @@
   .vid-brand {
     color: #be6079;
   }
-  .vid-divider {
-    color: rgba(255, 255, 255, 0.28);
-    font-weight: 400;
-  }
-  .vid-headline {
-    color: #ffffff;
-  }
 
-  /* Map + chart, pushed to the top */
-  .vid-top {
-    flex: 0 0 auto;
-  }
+  /* Map: the supporting bottom beat — flex-fills the height left under the
+     numbers + chart, so the country still reads at a real size (not a
+     thumbnail), with the source/watermark sitting over its lower corners. */
   .vid-map {
     position: relative;
-    height: 620px;
+    flex: 1 1 auto;
+    min-height: 0;
   }
   /* Hide MapLibre's on-canvas controls + attribution — the watermark carries
      attribution, and the zoom/nav chrome shouldn't bake into the video. */
@@ -280,7 +306,7 @@
   .vid-map :global(.maplibregl-ctrl-bottom-right) {
     display: none !important;
   }
-  /* Date ticker, centered between the map and the chart */
+  /* Date ticker, centered above the chart */
   .vid-datestrip {
     text-align: center;
     font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -297,58 +323,95 @@
     padding: 6px 40px 0;
   }
 
-  /* Counter: agencies is the hero; agreements + pop are secondary lines */
-  .vid-counter {
-    flex: 1 1 auto;
+  /* Hero: the agreements headline number, with its unit stacked tight below
+     (no inline gap — the unit hugs the number). */
+  .vid-hero {
+    flex: 0 0 auto;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding-bottom: 70px;
+    padding: 30px 40px 6px;
   }
   .vid-hero-num {
+    /* Reserve room for the widest value (mono → 1ch is exact) so the number
+       grows in place as it ticks past a digit instead of jolting the frame. */
+    display: inline-block;
+    min-width: 5ch;
+    text-align: center;
     font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
     font-variant-numeric: tabular-nums;
-    font-size: 200px;
+    font-size: 172px;
     font-weight: 800;
-    line-height: 0.92;
+    line-height: 0.9;
     letter-spacing: -0.03em;
     color: #ffffff;
   }
   .vid-hero-unit {
+    margin-top: 10px;
     font-family: "Inter", system-ui, sans-serif;
     font-size: 42px;
     font-weight: 700;
-    letter-spacing: 0;
+    letter-spacing: 0.01em;
     color: #cbd5e1;
   }
-  .vid-hero-sub {
-    margin-top: 4px;
-    font-size: 32px;
-    font-weight: 600;
-    color: #94a3b8;
+
+  /* Stat row: agencies · states · pop, thin dividers between */
+  .vid-statrow {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 44px;
+    padding: 18px 40px 0;
   }
-  /* Agreements + pop, one line with a ⁘ separator */
-  .vid-secondary {
-    margin-top: 34px;
+  .vid-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .vid-stat-num {
+    /* Same digit-width reservation as the hero, so the divider columns hold
+       still as the stats tick past a digit (e.g. agreements 895 → 1,954). */
+    display: inline-block;
+    min-width: 5ch;
+    text-align: center;
     font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
     font-variant-numeric: tabular-nums;
-    font-size: 50px;
+    font-size: 66px;
     font-weight: 800;
+    line-height: 1;
     letter-spacing: -0.02em;
     color: #ffffff;
   }
-  .vid-sec-unit {
+  .vid-stat-label {
+    margin-top: 6px;
     font-family: "Inter", system-ui, sans-serif;
-    font-size: 32px;
+    font-size: 28px;
     font-weight: 600;
+    color: #94a3b8;
+  }
+  /* Footnote marker on the "states" label, keyed to the territories note */
+  .vid-ast {
+    vertical-align: super;
+    font-size: 0.65em;
     color: #cbd5e1;
   }
-  .vid-sec-div {
+  .vid-stat-div {
+    width: 1px;
+    align-self: stretch;
+    margin: 6px 0;
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  /* Territories footnote under the stat row (the +2 beyond the 38 states) */
+  .vid-territories {
+    flex: 0 0 auto;
+    text-align: center;
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 24px;
+    font-weight: 500;
     color: #64748b;
-    margin: 0 0.5em;
-    font-weight: 400;
+    padding: 14px 40px 0;
   }
 
   /* Source credit, lower-left corner */
