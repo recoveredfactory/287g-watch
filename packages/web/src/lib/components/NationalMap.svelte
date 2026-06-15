@@ -40,6 +40,11 @@
   // The hidden jurisdictions are surfaced in the social caption instead.
   export let lower48 = false;
 
+  // Multiplier on the dot radius scale. 1 = the live-map default (homepage).
+  // The video (#167) bumps this so the dots read heavier against the smaller
+  // lower-48 framing — the map is the data, not the basemap.
+  export let dotScale = 1;
+
   let container: HTMLDivElement;
   let map: any = null;
   const isMobile = browser && window.matchMedia("(max-width: 640px)").matches;
@@ -571,7 +576,7 @@
       // sheriff's offices, without erasing the small ones. Mobile gets a
       // tighter scale. Domain ceiling = ~1,000 officers (between p99 and the
       // dozen-or-so 1k+ outliers like Las Vegas Metro) → sqrt ≈ 31.6.
-      const SCALE = isMobile ? 0.7 : 1;
+      const SCALE = (isMobile ? 0.7 : 1) * dotScale;
       const sizeExpr: any = ["sqrt", ["coalesce", ["get", "officer_ct"], 0]];
       const sizeDomainMax = 32;
       const radius = (low: number, high: number) => [

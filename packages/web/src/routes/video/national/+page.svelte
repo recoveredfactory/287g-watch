@@ -202,7 +202,7 @@
 
     <!-- Map: supporting "where", a real beat in the bottom band -->
     <div class="vid-map">
-      <NationalMap agencies={data.agencies} terminatedAgencies={data.terminatedAgencies} {cursorIdx} lower48 />
+      <NationalMap agencies={data.agencies} terminatedAgencies={data.terminatedAgencies} {cursorIdx} lower48 dotScale={1.3} />
     </div>
 
     <!-- Source, lower-left corner (over the map) -->
@@ -297,6 +297,10 @@
     position: relative;
     flex: 1 1 auto;
     min-height: 0;
+    /* Match the chart's left/right gutter so the two columns align, and the
+       country reads a smidge smaller — less full-bleed-tight against the
+       frame edges. MapLibre re-fits to the narrower width automatically. */
+    padding: 0 40px;
   }
   /* Hide MapLibre's on-canvas controls + attribution — the watermark carries
      attribution, and the zoom/nav chrome shouldn't bake into the video. */
