@@ -361,7 +361,7 @@
 
   <!-- ── Trend chart ──────────────────────────────────────────────────────── -->
   {#if showTrend}
-    <TrendCharts {trendMonths} {trend} />
+    <TrendCharts {trendMonths} {trend} hideSelector />
   {/if}
 
 </main>

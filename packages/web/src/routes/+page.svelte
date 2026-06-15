@@ -11,7 +11,6 @@
   import { tweened } from "svelte/motion";
   import { cubicOut } from "svelte/easing";
   import { localizeHref, getLocale } from "$lib/paraglide/runtime";
-  import { buildTimelineModel, activeCountAt, coveredPopAt, overlayMonthLabel, TIMELINE_START_IDX } from "$lib/timelineCursor";
   import { m } from "$lib/paraglide/messages.js";
   import Gloss from "$lib/components/Gloss.svelte";
   import { ogImage } from "$lib/ogImage";
@@ -35,22 +34,113 @@
   // Continuous fractional-month index relative to Jan 2025 (idx 0). The map
   // fades and pops each dot in as the cursor passes its signing date. The
   // animation begins Dec 18 2024 (TIMELINE_START_IDX) — the most recent pre-2025
-  // archived snapshot (#169), a clean pre-Trump baseline. The ORI-deduped
-  // derivations and the at-cursor counts live in $lib/timelineCursor so the
-  // /video/national route shares them verbatim and the numbers can't diverge.
-  $: model = buildTimelineModel(data.agencies, data.terminatedAgencies);
-  $: todayIdx = model.todayIdx;
-  $: maxIdx = model.maxIdx;
+  // archived snapshot (#169), a clean pre-Trump baseline — so every signing on or
+  // before then is pinned as the baseline (always shown at frame 0). See caveat
+  // in MapTimelineScrubber.svelte.
+  const TIMELINE_EPOCH_YEAR = 2025;
+  const TIMELINE_START_IDX = -1 + 17 / 31; // Dec 18 2024, relative to the Jan 2025 epoch
+  const BASELINE_IDX = -10000;
+  const signedIdx = (d: string | null | undefined): number => {
+    if (!d || d.length < 10) return BASELINE_IDX;
+    const y = Number(d.slice(0, 4));
+    const m = Number(d.slice(5, 7));
+    const day = Number(d.slice(8, 10));
+    const idx = (y - TIMELINE_EPOCH_YEAR) * 12 + (m - 1) + (day - 1) / 31;
+    return idx < TIMELINE_START_IDX ? BASELINE_IDX : idx;
+  };
+  $: signedIndices = data.agencies.map((a) => signedIdx(a.signed_date));
+  $: agencyPops = data.agencies.map((a) => a.population ?? 0);
+
+  // ORI-deduped views for the map overlay counters. Two derivations because
+  // the hero shows two different unique-set semantics:
+  //   - count = all unique ORIs (state-level agencies still count as agencies)
+  //   - population sum = local-only (County + Municipality), because state-
+  //     level rows like state police report whole-state populations via LEE
+  //     and would compound with the city/county pops we're already summing
+  //     (see #99).
+  // Shared-ORI rows (sheriff + corrections under one FBI identifier) collapse
+  // to a single entry whose effective signed_date is the earliest of the
+  // group. Null-ORI rows pass through as singletons. See #92.
+  $: uniqueAgencyData = (() => {
+    const byOri = new Map<string, { idx: number }>();
+    const nullOri: { idx: number }[] = [];
+    for (const a of data.agencies) {
+      const idx = signedIdx(a.signed_date);
+      if (a.ori) {
+        const prev = byOri.get(a.ori);
+        if (!prev) byOri.set(a.ori, { idx });
+        else if (idx < prev.idx) byOri.set(a.ori, { idx });
+      } else {
+        nullOri.push({ idx });
+      }
+    }
+    return [...byOri.values(), ...nullOri];
+  })();
+  $: uniqueSignedIndices = uniqueAgencyData.map((d) => d.idx);
+
+  // Terminated agencies, ORI-deduped, with both their signing and termination
+  // indices — so the headline can show *net active at the cursor*: an agency
+  // counts once the cursor passes its signing date and is subtracted once the
+  // cursor passes its termination date. See #118.
+  $: uniqueTerminatedData = (() => {
+    const byOri = new Map<string, { signed: number; ended: number }>();
+    const nullOri: { signed: number; ended: number }[] = [];
+    for (const a of data.terminatedAgencies ?? []) {
+      const entry = { signed: signedIdx(a.signed_date), ended: signedIdx(a.terminated_date) };
+      if (a.ori) {
+        if (!byOri.has(a.ori)) byOri.set(a.ori, entry);
+      } else {
+        nullOri.push(entry);
+      }
+    }
+    return [...byOri.values(), ...nullOri];
+  })();
+
+  $: uniqueLocalPopData = (() => {
+    const byOri = new Map<string, { idx: number; pop: number }>();
+    const nullOri: { idx: number; pop: number }[] = [];
+    for (const a of data.agencies) {
+      if (a.agency_type !== "County" && a.agency_type !== "Municipality") continue;
+      const idx = signedIdx(a.signed_date);
+      const pop = a.population ?? 0;
+      if (a.ori) {
+        const prev = byOri.get(a.ori);
+        if (!prev) byOri.set(a.ori, { idx, pop });
+        else if (idx < prev.idx) byOri.set(a.ori, { idx, pop: prev.pop });
+      } else {
+        nullOri.push({ idx, pop });
+      }
+    }
+    return [...byOri.values(), ...nullOri];
+  })();
+  $: uniqueLocalSignedIndices = uniqueLocalPopData.map((d) => d.idx);
+  $: uniqueLocalPops = uniqueLocalPopData.map((d) => d.pop);
+  const today = new Date();
+  const todayIdx =
+    (today.getUTCFullYear() - TIMELINE_EPOCH_YEAR) * 12 +
+    today.getUTCMonth() +
+    (today.getUTCDate() - 1) / 31;
+  const minIdx = TIMELINE_START_IDX;
+  $: maxIdx = Math.max(
+    todayIdx,
+    ...signedIndices.filter((i) => i > BASELINE_IDX),
+  ) + 0.5;
+  let cursorIdx = NaN;
+  $: if (Number.isNaN(cursorIdx) && Number.isFinite(maxIdx)) cursorIdx = maxIdx;
+  // Net active at the cursor: active agencies signed by now, plus terminated
+  // agencies that were signed by now but haven't yet left — so the number dips
+  // as departures cross the cursor, instead of only ever climbing.
+  $: countAtCursor =
+    uniqueSignedIndices.filter((i) => i <= cursorIdx).length +
+    uniqueTerminatedData.filter((d) => d.signed <= cursorIdx && d.ended > cursorIdx).length;
   // Statewide agencies (state police, corrections, etc.) are intentionally not
   // plotted — a single dot would misrepresent a whole-state jurisdiction. We
   // surface the count below the scrubber instead.
-  $: statewideCount = model.statewideCount;
-  const minIdx = TIMELINE_START_IDX;
-  let cursorIdx = NaN;
-  $: if (Number.isNaN(cursorIdx) && Number.isFinite(maxIdx)) cursorIdx = maxIdx;
-  // Net active at the cursor (dips as departures cross), and local pop covered.
-  $: countAtCursor = activeCountAt(model, cursorIdx);
-  $: popAtCursor = coveredPopAt(model, cursorIdx);
+  $: statewideCount = data.agencies.filter((a) => a.agency_type === "State Agency").length;
+  $: popAtCursor = uniqueLocalSignedIndices.reduce(
+    (sum, idx, i) => (idx <= cursorIdx ? sum + uniqueLocalPops[i] : sum),
+    0,
+  );
 
   // Big number overlay on the map. Always visible — readers always see the
   // live count. Smooth tween catches up with easing so the digits feel like
@@ -73,12 +163,20 @@
   let scrubberRef: { restart: () => void } | null = null;
   const restartTimeline = () => scrubberRef?.restart();
 
-  // Month label for the overlay's date ticker.
-  $: overlayDateLabel = overlayMonthLabel(
-    cursorIdx,
-    todayIdx,
-    getLocale() === "es" ? "es-MX" : "en-US",
-  );
+  // Month label for the overlay's date ticker. Clamped to today so the label
+  // doesn't read "Jun 2026" during the small headroom past maxIdx.
+  const overlayMonthLabel = (idx: number): string => {
+    const clamped = Math.min(Math.max(TIMELINE_START_IDX, idx), todayIdx);
+    const month = Math.floor(clamped);
+    // Floored-division year + non-negative modulo month, so a pre-2025 (negative)
+    // index maps back correctly (e.g. month -1 → Dec 2024, not Dec 2023).
+    const y = TIMELINE_EPOCH_YEAR + Math.floor(month / 12);
+    const mm = (((month % 12) + 12) % 12) + 1;
+    const localeTag = getLocale() === "es" ? "es-MX" : "en-US";
+    return new Intl.DateTimeFormat(localeTag, { month: "short", year: "numeric", timeZone: "UTC" })
+      .format(new Date(Date.UTC(y, mm - 1, 1)));
+  };
+  $: overlayDateLabel = overlayMonthLabel(cursorIdx);
 
   // ── Search + filter ────────────────────────────────────────────────────────
   let searchQuery = "";
@@ -450,7 +548,7 @@
         </div>
       {/if}
     </div>
-    {#if data.agencies.length > 0 && Number.isFinite(maxIdx)}
+    {#if data.agencies.length > 0 && signedIndices.length > 0 && Number.isFinite(maxIdx)}
       <div class="bg-white">
         <div class="mx-auto max-w-6xl">
           <MapTimelineScrubber bind:this={scrubberRef} {minIdx} {maxIdx} labelMaxIdx={todayIdx} bind:cursorIdx bind:playing={timelinePlaying} {countAtCursor} />
@@ -522,7 +620,7 @@
   </section>
 
   <!-- ── National trend charts (experimental, #162) ───────────────────────── -->
-  <TrendCharts trendMonths={data.trendMonths} trend={data.trend} />
+  <TrendCharts agencies={data.agencies} trendMonths={data.trendMonths} trend={data.trend} />
 
 
   <!-- ── Search + filter + browse ──────────────────────────────────────────── -->
