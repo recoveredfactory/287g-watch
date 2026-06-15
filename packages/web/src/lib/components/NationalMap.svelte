@@ -86,7 +86,11 @@
   const activeBounds = lower48 ? LOWER48_BOUNDS : FULL_BOUNDS;
   const activePadding = lower48 ? LOWER48_PADDING : FIT_PADDING;
   // Layer filter that drops the AK/HI/territory inset features when lower-48.
-  const insetFilter: any = lower48 ? ["!", ["has", "inset"]] : undefined;
+  // Non-lower-48 must be a real (match-everything) filter, NOT undefined:
+  // MapLibre rejects `filter: undefined` ("array expected") and silently drops
+  // the layer, which is what blanked the homepage's state fills/borders/counties
+  // (dark-on-dark) after the lower-48 option landed. `["all"]` = no filter.
+  const insetFilter: any = lower48 ? ["!", ["has", "inset"]] : ["all"];
 
   function fitToSelection() {
     if (!map) return;
