@@ -78,17 +78,23 @@
 
   // Big end labels, anchored near each line's current value-y, spread so the
   // two-line blocks don't collide; clamped within the plot.
+  // Two-pass clamp-and-cascade: place each label near its line's value-y without
+  // overlap. Top-down enforces the min gap from the top bound; bottom-up from the
+  // bottom bound. A label only moves when it actually collides with a neighbour
+  // or an edge — unlike a global shift, which shoved *every* label whenever the
+  // top line spiked, making the mid-rank label visibly bob up then settle even
+  // though its own value rose monotonically.
   function spreadY(ys: number[], gap: number): number[] {
+    const top = PAD.t + 18;
+    const bottom = baselineY + 6;
     const order = ys.map((_, i) => i).sort((a, b) => ys[a] - ys[b]);
     const placed = order.map((i) => ys[i]);
+    placed[0] = Math.max(placed[0], top);
     for (let i = 1; i < placed.length; i++)
-      if (placed[i] - placed[i - 1] < gap) placed[i] = placed[i - 1] + gap;
-    const overflow = placed[placed.length - 1] - (baselineY + 6);
-    if (overflow > 0) for (let i = 0; i < placed.length; i++) placed[i] -= overflow;
-    if (placed[0] < PAD.t + 18) {
-      const under = PAD.t + 18 - placed[0];
-      for (let i = 0; i < placed.length; i++) placed[i] += under;
-    }
+      placed[i] = Math.max(placed[i], placed[i - 1] + gap);
+    placed[placed.length - 1] = Math.min(placed[placed.length - 1], bottom);
+    for (let i = placed.length - 2; i >= 0; i--)
+      placed[i] = Math.min(placed[i], placed[i + 1] - gap);
     const out = new Array(ys.length);
     order.forEach((orig, k) => (out[orig] = placed[k]));
     return out;
