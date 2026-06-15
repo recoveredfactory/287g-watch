@@ -28,7 +28,10 @@
   export let data: PageData;
 
   const intFmt = new Intl.NumberFormat();
-  const popFmt = new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 });
+  // Always one decimal (e.g. "5.0M", "48.4M") so the figure doesn't change width
+  // as it crosses whole numbers during the run — a bare "5M" vs "5.1M" made the
+  // centered secondary line jump horizontally.
+  const popFmt = new Intl.NumberFormat(undefined, { notation: "compact", minimumFractionDigits: 1, maximumFractionDigits: 1 });
   $: localeTag = getLocale() === "es" ? "es-MX" : "en-US";
 
   // Cursor-independent timeline derivations. Anchor the end to the data's
