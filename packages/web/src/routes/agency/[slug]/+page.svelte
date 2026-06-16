@@ -60,7 +60,14 @@
         "@type": "BreadcrumbList",
         itemListElement: [
           { "@type": "ListItem", position: 1, name: m.agency_breadcrumb_home(), item: siteUrl + localizeHref("/") },
-          { "@type": "ListItem", position: 2, name: agency.name, item: canonicalUrl },
+          ...(agency.state
+            ? [{
+                "@type": "ListItem", position: 2,
+                name: STATE_NAMES[agency.state] ?? agency.state,
+                item: siteUrl + localizeHref(`/state/${agency.state.toLowerCase()}`),
+              }]
+            : []),
+          { "@type": "ListItem", position: agency.state ? 3 : 2, name: agency.name, item: canonicalUrl },
         ],
       },
     ],
@@ -126,6 +133,10 @@
   <!-- Breadcrumb -->
   <nav class="text-sm text-slate-600" aria-label="Breadcrumb">
     <a href={localizeHref("/")} class="no-underline hover:underline">{m.agency_breadcrumb_home()}</a>
+    {#if agency.state}
+      <span class="mx-1.5">›</span>
+      <a href={localizeHref(`/state/${agency.state.toLowerCase()}`)} class="no-underline hover:underline">{STATE_NAMES[agency.state] ?? agency.state}</a>
+    {/if}
     <span class="mx-1.5">›</span>
     <span>{agency.name}</span>
   </nav>
@@ -138,9 +149,13 @@
           {agency.name}
         </h1>
         <p class="mt-1 text-base text-slate-600">
-          {[agency.agency_type, agency.city, agency.county, agency.state]
-            .filter(Boolean)
-            .join(" · ")}
+          {[agency.agency_type, agency.city, agency.county].filter(Boolean).join(" · ")}
+          {#if agency.state}
+            {#if agency.agency_type || agency.city || agency.county}<span class="mx-1">·</span>{/if}<a
+              href={localizeHref(`/state/${agency.state.toLowerCase()}`)}
+              class="text-slate-600 no-underline hover:underline"
+            >{agency.state}</a>
+          {/if}
         </p>
       </div>
       <div class="flex flex-wrap gap-1.5">
@@ -216,7 +231,10 @@
           {agency.county}{#if agency.state},{/if}
         {/if}
         {#if agency.state}
-          {STATE_NAMES[agency.state] ?? agency.state}
+          <a
+            href={localizeHref(`/state/${agency.state.toLowerCase()}`)}
+            class="text-slate-900 no-underline hover:underline"
+          >{STATE_NAMES[agency.state] ?? agency.state}</a>
         {/if}
         {#if agency.county && agency.city}
           <span class="ml-1 text-sm font-normal text-slate-600">({agency.county} County)</span>
