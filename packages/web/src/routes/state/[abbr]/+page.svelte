@@ -176,6 +176,11 @@
     </div>
   </section>
 
+  <!-- ── Trend chart ──────────────────────────────────────────────────────── -->
+  {#if showTrend}
+    <TrendCharts {trendMonths} {trend} hideSelector />
+  {/if}
+
   <!-- ── Agency list ──────────────────────────────────────────────────────── -->
   <section class="px-4 py-8 sm:px-6 sm:py-10">
     <div class="mx-auto max-w-6xl">
@@ -358,10 +363,5 @@
       {/if}
     </div>
   </section>
-
-  <!-- ── Trend chart ──────────────────────────────────────────────────────── -->
-  {#if showTrend}
-    <TrendCharts {trendMonths} {trend} hideSelector />
-  {/if}
 
 </main>

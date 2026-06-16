@@ -4,6 +4,7 @@
   import { browser } from "$app/environment";
   import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_SHORT } from "$lib/colors";
   import { toInsetCoords, INSET_TRANSFORMS } from "$lib/insetTransforms";
+  import { STATE_NAMES } from "$lib/states";
   import { ensurePmtilesProtocol, pmtilesBaseSource, PMTILES_GLYPHS } from "$lib/map/pmtiles";
 
   export let selectedStates: Set<string> = new Set();
@@ -49,6 +50,12 @@
   let map: any = null;
   const isMobile = browser && window.matchMedia("(max-width: 640px)").matches;
 
+  // State polygons (inset coords), loaded once the "states" source is ready.
+  // fitToSelection prefers these over agency points so a state with a sparse
+  // agency footprint (e.g. only 1-2 dots near its center) still fits its full
+  // shape instead of clipping the edges agency points don't reach.
+  let statesGeoJson: { features: any[] } | null = null;
+
   // Dark is the only palette — steely analytical mode, replaces the prior
   // slate/dark toggle so map tone reads consistently across the site.
   // Land is lifted to a readable slate (sea stays near-black) so the country
@@ -70,6 +77,15 @@
     dotStrokeWidth: 0.25,
     text: "#c2cad4",
     textHalo: "rgba(8,12,18,0.9)",
+  };
+
+  // Base (non-suppressed) filters for the three place-label tiers, keyed by
+  // layer id — shared between addLayer() and the inset-suppression toggle so
+  // re-enabling labels restores the original population_rank tiering exactly.
+  const PLACE_FILTERS: Record<string, any> = {
+    "places-major": ["all", ["==", ["get", "kind"], "locality"], ["<=", ["get", "population_rank"], 7]],
+    "places-minor": ["all", ["==", ["get", "kind"], "locality"], ["<=", ["get", "population_rank"], 9]],
+    "places-all": ["==", ["get", "kind"], "locality"],
   };
 
   const MODEL_FALLBACK = "#94a3b8";
@@ -97,10 +113,43 @@
   // (dark-on-dark) after the lower-48 option landed. `["all"]` = no filter.
   const insetFilter: any = lower48 ? ["!", ["has", "inset"]] : ["all"];
 
+  // Walk the state polygons (already in inset coordinate space) and return
+  // the bbox covering every selected state's full shape — agency points
+  // alone can leave a sparse state's edges (e.g. a panhandle with no dots)
+  // outside the fitted view.
+  function getPolygonBounds(abbrs: Set<string>): [[number, number], [number, number]] | null {
+    if (!statesGeoJson) return null;
+    const names = new Set([...abbrs].map((a) => STATE_NAMES[a] ?? a));
+    let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+    let found = false;
+    for (const f of statesGeoJson.features) {
+      if (!names.has(f.properties?.name)) continue;
+      const polys: number[][][][] =
+        f.geometry.type === "MultiPolygon" ? f.geometry.coordinates : [f.geometry.coordinates];
+      for (const poly of polys) {
+        for (const ring of poly) {
+          for (const [lng, lat] of ring) {
+            found = true;
+            if (lng < minLng) minLng = lng;
+            if (lat < minLat) minLat = lat;
+            if (lng > maxLng) maxLng = lng;
+            if (lat > maxLat) maxLat = lat;
+          }
+        }
+      }
+    }
+    return found ? [[minLng, minLat], [maxLng, maxLat]] : null;
+  }
+
   function fitToSelection() {
     if (!map) return;
     if (selectedStates.size === 0) {
       map.fitBounds(activeBounds, { padding: activePadding, duration: 500 });
+      return;
+    }
+    const polyBounds = getPolygonBounds(selectedStates);
+    if (polyBounds) {
+      map.fitBounds(polyBounds, { padding: 80, duration: 500, maxZoom: 6 });
       return;
     }
     const points = agencies
@@ -121,6 +170,19 @@
   }
 
   $: selectedStates, fitToSelection();
+
+  // AK/HI/territory insets sit at shifted coordinates that overlap real
+  // continental US geography in the base tiles — Protomaps' place labels are
+  // keyed by true lat/lng, so zooming into an inset shows the wrong city
+  // names (e.g. Anchorage's inset position lands on some Montana town).
+  // Suppress all place labels while an inset state is the selection.
+  $: insetSelected = [...selectedStates].some((s) => s in INSET_TRANSFORMS);
+  const HIDE_FILTER = ["==", ["get", "kind"], "__none__"];
+  $: if (map) {
+    for (const [id, baseFilter] of Object.entries(PLACE_FILTERS)) {
+      if (map.getLayer(id)) map.setFilter(id, insetSelected ? HIDE_FILTER : baseFilter);
+    }
+  }
 
   // Fractional month index from Jan 2025 (idx 0). The animation begins Dec 18
   // 2024 (TIMELINE_START_IDX) — the most recent pre-2025 archived snapshot (#169)
@@ -302,6 +364,11 @@
 
       const statesGj = await fetch("/us-inset.geojson").then((r) => r.json());
       map.addSource("states", { type: "geojson", data: statesGj });
+      // Loaded after the initial fitToSelection() call (selectedStates may
+      // already be set on mount, e.g. a state page) — re-fit now that polygon
+      // bounds are available so it doesn't fall back to agency points.
+      statesGeoJson = statesGj;
+      fitToSelection();
 
       map.addLayer({
         id: "state-fills",
@@ -499,11 +566,7 @@
         source: "base",
         "source-layer": "places",
         minzoom: 4,
-        filter: [
-          "all",
-          ["==", ["get", "kind"], "locality"],
-          ["<=", ["get", "population_rank"], 7],
-        ],
+        filter: PLACE_FILTERS["places-major"],
         layout: {
           "text-field": ["coalesce", ["get", "name:en"], ["get", "name"]],
           "text-font": ["Noto Sans Regular"],
@@ -526,11 +589,7 @@
         source: "base",
         "source-layer": "places",
         minzoom: 6,
-        filter: [
-          "all",
-          ["==", ["get", "kind"], "locality"],
-          ["<=", ["get", "population_rank"], 9],
-        ],
+        filter: PLACE_FILTERS["places-minor"],
         layout: {
           "text-field": ["coalesce", ["get", "name:en"], ["get", "name"]],
           "text-font": ["Noto Sans Regular"],
@@ -553,7 +612,7 @@
         source: "base",
         "source-layer": "places",
         minzoom: 8,
-        filter: ["==", ["get", "kind"], "locality"],
+        filter: PLACE_FILTERS["places-all"],
         layout: {
           "text-field": ["coalesce", ["get", "name:en"], ["get", "name"]],
           "text-font": ["Noto Sans Regular"],
