@@ -39,6 +39,7 @@ import { createReadStream, readFileSync, existsSync, writeFileSync } from "node:
 import { dirname, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
+import { notify } from "./social-notify.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const INDEX_PATH = resolve(__dirname, "../static/data/dist/agency_index.json");
@@ -211,6 +212,16 @@ const { data } = await youtube.videos.insert({
   media: { body: createReadStream(localPath) },
 });
 
-console.log(`\n✓ Uploaded: https://youtu.be/${data.id}  (privacy: ${data.status?.privacyStatus})`);
+const videoUrl = `https://youtu.be/${data.id}`;
+console.log(`\n✓ Uploaded: ${videoUrl}  (privacy: ${data.status?.privacyStatus})`);
 if (data.status?.privacyStatus !== privacy)
   console.log(`  Note: requested "${privacy}" but YouTube set "${data.status?.privacyStatus}" (unverified project → private until audited).`);
+
+// Best-effort email notification (never fails the post — see social-notify.mjs).
+await notify({
+  platform: "youtube",
+  status: "posted",
+  stage,
+  url: videoUrl,
+  detail: `lang=${lang}, privacy=${data.status?.privacyStatus}, channel=${channelLine}`,
+});
