@@ -665,7 +665,10 @@
                   class="font-semibold leading-snug text-slate-900 no-underline hover:underline"
                 >{agency.name}</a>
                 <p class="text-xs text-slate-600">
-                  {[agency.city, agency.state].filter(Boolean).join(", ")}
+                  {#if agency.city}{agency.city}{/if}{#if agency.city && agency.state}, {/if}{#if agency.state}<a
+                    href={localizeHref(`/state/${agency.state.toLowerCase()}`)}
+                    class="no-underline hover:underline"
+                  >{agency.state}</a>{/if}
                 </p>
               </div>
               <div class="px-2 py-2 sm:px-3 sm:py-3">
