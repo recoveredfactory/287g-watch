@@ -30,10 +30,9 @@
   //   map-trend  — the 9:16 map+trend social cut: mp4 + gif, no still. Its
   //                preview is width-constrained so the tall frame doesn't
   //                dominate the page.
-  // `published: false` keeps a baked cut off the page without deleting it —
-  // flip to true (or drop the flag) to expose it. The vertical cut is gated
-  // until the cron/Actions publish pipeline is proven on staging → prod, so we
-  // don't link readers at a `map-trend-latest-*` asset that may not be live yet.
+  // `published: false` keeps a baked-but-not-yet-published cut off the page
+  // without deleting it (when its `<prefix>-latest-*` assets may not be live on
+  // prod yet). Both current cuts are published; set false to stage a future one.
   const CUTS = [
     {
       prefix: "map",
@@ -51,7 +50,7 @@
       videoLabel: () => m.usemap_vertical_video_label(),
       formats: [MP4, GIF],
       previewClass: "mx-auto w-full max-w-[320px]",
-      published: false,
+      published: true,
     },
   ];
   const VISIBLE_CUTS = CUTS.filter((cut) => cut.published);
@@ -92,8 +91,8 @@
     <p>{m.usemap_intro()}</p>
   </div>
 
-  <!-- Cuts: the square map-only clip (the vertical map+trend cut is baked but
-       gated off via `published: false` until the publish pipeline is proven) -->
+  <!-- Cuts: square map-only clip, then the vertical 9:16 map+trend social cut
+       (VISIBLE_CUTS = the published ones; see the CUTS table above) -->
   {#each VISIBLE_CUTS as cut}
     <section class="mt-10 sm:mt-12">
       <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">{cut.heading()}</h2>
