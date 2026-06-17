@@ -1,6 +1,7 @@
 import { error } from "@sveltejs/kit";
 import { STATE_NAMES } from "$lib/states";
 import type { Agency, StateMeta } from "../../+page.server";
+import type { HomeAgency } from "$lib/homeData.types";
 import { buildTimeline, type TimelinePoint } from "$lib/timeline";
 import { MODEL_SLUG } from "$lib/colors";
 
@@ -10,6 +11,11 @@ export type StatePageData = {
   abbr: string;
   stateName: string;
   agencies: Agency[];
+  // Slim, national, map-only list (every active agency). The map shows the
+  // whole footprint and dims dots outside the selected state; `agencies` above
+  // stays state-only for the table/counts/filters. See focusSelected in
+  // NationalMap.
+  mapAgencies: HomeAgency[];
   stateMeta: StateMeta | null;
   snapshotDate: string | null;
   modelCounts: Record<string, number>;
@@ -36,6 +42,27 @@ export const load = async ({ fetch, params }): Promise<StatePageData> => {
   const terminatedRaw: Agency[] = terminatedRes.ok ? await terminatedRes.json() : [];
   const agencies = allAgencies.filter((a) => a.state === abbr);
   if (agencies.length === 0) throw error(404, `No 287(g) agencies found for ${abbr}`);
+
+  // National, slim, map-only projection — the same shape the homepage ships to
+  // NationalMap (#135). Lets the state map render every dot while keeping the
+  // selected state's dots in focus and the rest dimmed.
+  const mapAgencies: HomeAgency[] = allAgencies.map((a) => ({
+    slug: a.slug,
+    name: a.name,
+    state: a.state,
+    county: a.county,
+    city: a.city,
+    agency_type: a.agency_type,
+    models: a.models,
+    primary_model: a.primary_model,
+    signed_date: a.signed_date,
+    population: a.population,
+    lat: a.lat,
+    lng: a.lng,
+    moa_url: a.moa_url,
+    ori: a.ori,
+    lee: a.lee ? { officer_ct: a.lee.officer_ct } : null,
+  }));
 
   const stateMetaArr: StateMeta[] = metaRes.ok ? await metaRes.json() : [];
   const stateMeta = stateMetaArr.find((s) => s.state === abbr) ?? null;
@@ -117,7 +144,7 @@ export const load = async ({ fetch, params }): Promise<StatePageData> => {
   };
 
   return {
-    abbr, stateName, agencies, stateMeta, snapshotDate, modelCounts, agencyTypeCounts,
+    abbr, stateName, agencies, mapAgencies, stateMeta, snapshotDate, modelCounts, agencyTypeCounts,
     timeline: buildTimeline([...agencies, ...terminatedRaw.filter((a) => a.state === abbr)]),
     nationalTimeline: buildTimeline([...allAgencies, ...terminatedRaw]),
     trendMonths,

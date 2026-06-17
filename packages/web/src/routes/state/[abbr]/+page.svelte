@@ -168,9 +168,10 @@
       aria-label="Map showing 287(g) agency locations in {stateName}"
     >
       <NationalMap
-        agencies={data.agencies}
+        agencies={data.mapAgencies}
         terminatedAgencies={[]}
         {selectedStates}
+        focusSelected
         cursorIdx={null}
       />
     </div>

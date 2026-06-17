@@ -46,6 +46,12 @@
   // lower-48 framing — the map is the data, not the basemap.
   export let dotScale = 1;
 
+  // State-page "focus" mode: highlight the selected state(s) with a brighter
+  // fill + accent border and dim every agency dot outside the selection. Lets a
+  // state page show the whole national footprint while keeping its own state
+  // the clear subject. Off (homepage) leaves all states and dots uniform.
+  export let focusSelected = false;
+
   let container: HTMLDivElement;
   let map: any = null;
   const isMobile = browser && window.matchMedia("(max-width: 640px)").matches;
@@ -77,6 +83,11 @@
     dotStrokeWidth: 0.25,
     text: "#c2cad4",
     textHalo: "rgba(8,12,18,0.9)",
+    // Focus mode (focusSelected): the selected state's fill is lifted above the
+    // base C.state and ringed with an accent border so it reads as the subject.
+    stateHighlight: "#34475e",
+    highlightLine: "#aab8c9",
+    highlightLineWidth: 1.6,
   };
 
   // Base (non-suppressed) filters for the three place-label tiers, keyed by
@@ -183,6 +194,28 @@
       if (map.getLayer(id)) map.setFilter(id, insetSelected ? HIDE_FILTER : baseFilter);
     }
   }
+
+  // ── Focus mode (focusSelected): highlight the selection, dim the rest ──────
+  // State polygons carry full names, so map the selected abbrs → names for the
+  // fill/border filter. A never-match filter hides the highlight layers when
+  // nothing is focused (homepage, or an empty selection). Recomputes reactively
+  // so SPA navigation between state pages re-targets the highlight.
+  const STATE_NAME_NONE: any = ["==", ["get", "name"], "\x00__none__"];
+  $: highlightFilter = focusSelected && selectedStates.size > 0
+    ? ["all", insetFilter, ["in", ["get", "name"], ["literal", [...selectedStates].map((a) => STATE_NAMES[a] ?? a)]]]
+    : ["all", insetFilter, STATE_NAME_NONE];
+  $: if (map && map.getLayer && map.getLayer("state-highlight-fill")) {
+    map.setFilter("state-highlight-fill", highlightFilter);
+    map.setFilter("state-highlight-line", highlightFilter);
+  }
+
+  // Per-dot opacity multiplier: 1 for in-selection dots, dimmed otherwise. Fed
+  // into the agency layer's circle-opacity (multiplied with BASE_OPACITY / the
+  // timeline fade). Plain 1 when not focusing, so the homepage is unaffected.
+  const OUTSIDE_DIM = 0.16;
+  $: dimExpr = focusSelected && selectedStates.size > 0
+    ? ["case", ["in", ["get", "state"], ["literal", [...selectedStates]]], 1, OUTSIDE_DIM]
+    : 1;
 
   // Fractional month index from Jan 2025 (idx 0). The animation begins Dec 18
   // 2024 (TIMELINE_START_IDX) — the most recent pre-2025 archived snapshot (#169)
@@ -293,10 +326,10 @@
 
   $: if (map && map.getLayer && map.getLayer("agencies")) {
     if (cursorIdx == null) {
-      map.setPaintProperty("agencies", "circle-opacity", BASE_OPACITY);
+      map.setPaintProperty("agencies", "circle-opacity", ["*", BASE_OPACITY, dimExpr]);
       map.setPaintProperty("agencies", "circle-radius", baseRadiusExpression());
     } else {
-      map.setPaintProperty("agencies", "circle-opacity", opacityWithFade(cursorIdx));
+      map.setPaintProperty("agencies", "circle-opacity", ["*", opacityWithFade(cursorIdx), dimExpr]);
       map.setPaintProperty("agencies", "circle-radius", radiusWithFade(cursorIdx));
     }
   }
@@ -378,6 +411,17 @@
         paint: { "fill-color": C.state, "fill-opacity": 1 },
       });
 
+      // Focus highlight: brighter fill for the selected state(s), drawn over the
+      // base fills. Filter starts as highlightFilter (never-match outside focus
+      // mode) and is kept in sync by the reactive block above.
+      map.addLayer({
+        id: "state-highlight-fill",
+        type: "fill",
+        source: "states",
+        filter: highlightFilter,
+        paint: { "fill-color": C.stateHighlight, "fill-opacity": 1 },
+      });
+
       map.addLayer({
         id: "state-lines",
         type: "line",
@@ -390,6 +434,19 @@
           // doesn't read as a cage of borders. Ramps to full visibility once
           // individual states fill the screen.
           "line-opacity": ["interpolate", ["linear"], ["zoom"], 1, 0.45, 3, 0.9],
+        },
+      });
+
+      // Accent border around the focused state(s), above the base state lines.
+      map.addLayer({
+        id: "state-highlight-line",
+        type: "line",
+        source: "states",
+        filter: highlightFilter,
+        paint: {
+          "line-color": C.highlightLine,
+          "line-width": C.highlightLineWidth,
+          "line-opacity": ["interpolate", ["linear"], ["zoom"], 1, 0.6, 3, 1],
         },
       });
 
@@ -659,8 +716,8 @@
         ? baseRadiusExpression()
         : radiusWithFade(cursorIdx);
       const initialOpacity = cursorIdx == null
-        ? BASE_OPACITY
-        : opacityWithFade(cursorIdx);
+        ? ["*", BASE_OPACITY, dimExpr]
+        : ["*", opacityWithFade(cursorIdx), dimExpr];
       map.addLayer({
         id: "agencies",
         type: "circle",
