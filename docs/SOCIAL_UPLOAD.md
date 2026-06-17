@@ -1,9 +1,12 @@
-# Social upload — YouTube (Shorts)
+# Social upload — YouTube + Instagram
 
 Auto-posts the vertical map+trend social video (`map-trend-latest-<lang>.mp4`,
-baked by #167) to YouTube. First platform of the IG / TikTok / YouTube set;
-the harness (dry-run default, per-stage secrets, gated posting) generalizes to
-the others.
+baked by #167) to **YouTube** (Shorts) and **Instagram** (Reels). The harness —
+dry-run default, per-environment account secrets, a prod approval gate, and an
+SES email on every real post — is shared; TikTok slots in next the same way.
+
+Three parts below: the **YouTube** setup, then **Instagram**, then
+**notifications**. The safety model and GitHub-Actions wiring are shared.
 
 ## Safety model
 
@@ -151,5 +154,167 @@ link-forward — headline stats belong in copy a human signed off on.
 Either complete Google's **API audit** (lifts the private-only lock so the
 pipeline can set `--privacy public`), or just flip individual uploads to public
 in YouTube Studio.
+
+---
+
+# Instagram (Reels)
+
+Posts the same vertical cut as an Instagram **Reel** via the Meta Graph API
+Content Publishing flow (v25.0): create a media container from the public
+MapArchive URL → poll until processed → publish → read the permalink.
+
+> ⚠️ **No private mode.** Unlike YouTube (which force-locks unverified uploads
+> to private), Instagram has **no private-post API** — a `--confirm` post is
+> **public the moment it publishes**. So the safety net is: dry-run default + a
+> **burner IG account for staging** + the prod approval gate. A `staging`
+> `--confirm` posts a real public Reel to the burner — delete it after testing.
+
+## One-time setup (manual — mostly clicking)
+
+### 1. Meta app + Facebook Login
+
+1. **developers.facebook.com → Create app.** Type **Business**.
+2. Add the **Facebook Login** product.
+3. **App settings → Basic:** copy the **App ID** and **App secret** (these are
+   the shared `INSTAGRAM_APP_ID` / `INSTAGRAM_APP_SECRET`).
+4. **Facebook Login → Settings → Valid OAuth Redirect URIs:** add
+   `http://localhost:4180` (the minter's loopback; localhost is allowed even in
+   dev mode). Match `--port` if you change it.
+5. **Standard Access is enough** — you do **not** need App Review or Live mode
+   to post to an account you manage. Keep the app in **Development** mode; just
+   make sure the account you'll authorize holds an **admin/developer/tester**
+   role on the app (App roles → Roles).
+
+### 2. The Instagram account + Facebook Page
+
+The target IG account must be **Business or Creator** (personal accounts are
+rejected) and **linked to a Facebook Page** you manage. Use a **burner** IG
+Business account (its own throwaway Page) for staging and the real one for prod.
+
+### 3. Mint a Page token + IG user id per account
+
+Page tokens derived from a long-lived user token **don't expire**, so there's no
+refresh cron to babysit:
+
+```sh
+INSTAGRAM_APP_ID=… INSTAGRAM_APP_SECRET=… \
+  node packages/web/scripts/instagram-auth.mjs
+```
+
+It opens a Facebook consent page. Sign in as the account that manages the Page →
+approve (grant the Pages it asks for). It then prints:
+
+- **which IG account the token posts as** (`@username` + IG user id) — confirm
+  it's the burner/real account you intended.
+- the **`INSTAGRAM_USER_ID`** and the non-expiring **`INSTAGRAM_ACCESS_TOKEN`**
+  (the Page token). Stash them (`.env` locally for now; GitHub secrets later).
+
+(Manage several IG-linked Pages? It lists them; re-run with `--page <id>`.)
+
+## Test locally first
+
+Add to the gitignored root `.env` (alongside the YouTube + sender values):
+
+```sh
+INSTAGRAM_APP_ID=…
+INSTAGRAM_APP_SECRET=…
+INSTAGRAM_ACCESS_TOKEN=…   # the burner Page token, for local testing
+INSTAGRAM_USER_ID=…         # the burner IG user id
+```
+
+**Dry run first** — prints the caption, the resolved video URL, and the IG
+account it would post as; publishes nothing:
+
+```sh
+pnpm social:instagram:staging                 # dry run
+```
+
+When the `account:` line shows the burner, do a real (public!) post to it:
+
+```sh
+pnpm social:instagram:staging -- --confirm                 # posts a PUBLIC Reel
+pnpm social:instagram:staging -- --caption "Custom copy"   # adjust the caption
+```
+
+Check it on the burner account, then delete it. Only wire up GitHub once this
+round-trip works.
+
+> No `sst`/bucket locally? Point at a public cut directly:
+> `node --env-file=.env packages/web/scripts/publish-social-instagram.mjs --video-url https://<MapArchive>/map-trend-latest-en.mp4 --confirm`
+
+## Automate via GitHub Actions
+
+```sh
+# Meta app — shared across both accounts, so repo-level:
+gh secret set INSTAGRAM_APP_ID
+gh secret set INSTAGRAM_APP_SECRET
+
+# Page token + IG user id — per environment:
+gh secret set INSTAGRAM_ACCESS_TOKEN --env staging   # burner Page token
+gh secret set INSTAGRAM_USER_ID      --env staging   # burner IG user id
+gh secret set INSTAGRAM_ACCESS_TOKEN --env prod        # real Page token
+gh secret set INSTAGRAM_USER_ID      --env prod        # real IG user id
+```
+
+The `post-social` job runs the YouTube and Instagram steps independently
+(`if: !cancelled()`), so one platform failing doesn't block the other. Same
+`post_social = dry-run | post` input gates both; prod still waits for the
+required-reviewer approval.
+
+---
+
+# Notifications (email via Amazon SES)
+
+Every **real** post emails a short notice with the live URL; a failed post job
+emails too. Notifying is **best-effort** — a missing config or SES error never
+fails a post that actually succeeded (it's logged and swallowed). Dry runs only
+log the notification.
+
+## SES is managed by SST
+
+`sst.config.ts` declares an `sst.aws.Email("Notify")` identity, created at
+deploy time when **`NOTIFY_EMAIL_SENDER`** is set (skipped otherwise, so a
+deploy never requires it). `social-notify.mjs` resolves the sender from
+`Resource.Notify.sender` under `sst shell`, or from `NOTIFY_EMAIL_FROM`.
+
+```sh
+# A single address → SST emails it a one-time confirmation link (click once):
+NOTIFY_EMAIL_SENDER=alerts@recoveredfactory.net pnpm deploy:staging
+# …or a domain → SST manages the DNS verification records.
+```
+
+Two SES caveats:
+
+- **Sandbox.** A fresh SES account can only send to **verified** recipients
+  until you request production access. For self-notifications, verify both the
+  sender and your recipient address and you're set.
+- **Send permission.** The role the `post-social` job assumes (the OIDC
+  `sst-deployer` role) needs `ses:SendEmail`. Locally, `sst shell` uses your own
+  AWS creds. Without the permission the send fails *non-fatally* (logged).
+
+## Wire it up
+
+```sh
+gh variable set NOTIFY_EMAIL_SENDER --body "alerts@recoveredfactory.net"  # = the SST sender
+gh variable set NOTIFY_EMAIL_TO      --body "you@example.com"              # recipient(s), comma-sep
+```
+
+## Smoke-test locally
+
+```sh
+# 1. Logging-only (no AWS) — verifies format/wiring, sends nothing:
+node packages/web/scripts/social-notify.mjs --platform youtube --status posted \
+  --stage staging --url https://youtu.be/test --detail "lang=en"
+
+# 2. Real send (needs AWS creds; in the SES sandbox both addrs must be verified):
+NOTIFY_EMAIL_FROM=you@verified.dev NOTIFY_EMAIL_TO=you@verified.dev \
+  node packages/web/scripts/social-notify.mjs --platform youtube --status posted \
+  --stage staging --url https://youtu.be/test
+
+# 3. Via the SST-managed identity (after NOTIFY_EMAIL_SENDER is set + deployed):
+NOTIFY_EMAIL_TO=you@verified.dev \
+  sst shell --stage staging node packages/web/scripts/social-notify.mjs \
+  --platform youtube --status posted --stage staging --url https://youtu.be/test
+```
 </content>
 </invoke>

@@ -30,8 +30,15 @@
 #                                  reviewers" rule on `prod` so real posts wait
 #                                  for a manual approve; leave `staging` open.
 #   Repo secret   YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET   (one OAuth app)
+#                 INSTAGRAM_APP_ID, INSTAGRAM_APP_SECRET     (one Meta app)
 #   Env secret    YOUTUBE_REFRESH_TOKEN   per environment — burner channel in
 #                                         `staging`, real channel in `prod`.
+#                 INSTAGRAM_ACCESS_TOKEN, INSTAGRAM_USER_ID  per environment —
+#                                         burner IG account in `staging`, real
+#                                         in `prod` (mint with instagram-auth.mjs).
+#   Repo var      NOTIFY_EMAIL_SENDER  SES-verified sender (also provisions the
+#                                      SST Email identity); NOTIFY_EMAIL_TO  the
+#                                      recipient(s). Unset → notifications log only.
 # See docs/SOCIAL_UPLOAD.md for the full (mostly manual) setup.
 
 name: Data refresh
@@ -92,6 +99,9 @@ jobs:
       WEB_DOMAIN: ${{ vars.WEB_DOMAIN }}
       WEB_STAGING_DOMAIN: ${{ vars.WEB_STAGING_DOMAIN }}
       BAKE_GL: ${{ vars.BAKE_GL || 'swiftshader' }}
+      # Lets `sst deploy` provision the sst.aws.Email("Notify") identity used by
+      # the social pipeline's notifications. Unset → no SES identity created.
+      NOTIFY_EMAIL_SENDER: ${{ vars.NOTIFY_EMAIL_SENDER }}
     steps:
       # Actions are pinned to commit SHAs (not mutable tags) so a hijacked tag
       # can't inject code that exfiltrates GITHUB_TOKEN or abuses the OIDC step.
@@ -217,6 +227,11 @@ jobs:
       contents: read
     env:
       STAGE: ${{ inputs.stage || 'prod' }}
+      # SES notification (social-notify.mjs). Sender matches the SST-managed
+      # identity (Resource.Notify); set both as repo Variables. Unset → the
+      # scripts log the notification but send no email.
+      NOTIFY_EMAIL_FROM: ${{ vars.NOTIFY_EMAIL_SENDER }}
+      NOTIFY_EMAIL_TO: ${{ vars.NOTIFY_EMAIL_TO }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
@@ -233,7 +248,12 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+      # YouTube and Instagram post independently — `!cancelled()` lets the IG
+      # step run even if the YouTube step failed, so one platform's hiccup
+      # doesn't block the other. Each script emails on its own success; the
+      # failure step below catches any non-zero exit.
       - name: Post to YouTube
+        if: ${{ !cancelled() }}
         env:
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
@@ -245,3 +265,27 @@ jobs:
           [ "${{ inputs.post_social }}" = "post" ] && CONFIRM="--confirm"
           echo "post_social=${{ inputs.post_social }} → ${CONFIRM:-(dry run)}"
           pnpm "social:youtube:${STAGE}" -- $CONFIRM --lang=en
+
+      - name: Post to Instagram
+        if: ${{ !cancelled() }}
+        env:
+          INSTAGRAM_APP_ID: ${{ secrets.INSTAGRAM_APP_ID }}
+          INSTAGRAM_APP_SECRET: ${{ secrets.INSTAGRAM_APP_SECRET }}
+          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+          INSTAGRAM_USER_ID: ${{ secrets.INSTAGRAM_USER_ID }}
+          SNAPSHOT_DATE: ${{ needs.refresh.outputs.snapshot_date }}
+          WEB_DOMAIN: ${{ vars.WEB_DOMAIN }}
+        run: |
+          CONFIRM=""
+          [ "${{ inputs.post_social }}" = "post" ] && CONFIRM="--confirm"
+          echo "post_social=${{ inputs.post_social }} → ${CONFIRM:-(dry run)}"
+          pnpm "social:instagram:${STAGE}" -- $CONFIRM --lang=en
+
+      # Any non-zero exit above → one failure email (best-effort; no sst shell
+      # needed since NOTIFY_EMAIL_FROM/TO come from the job env).
+      - name: Notify on failure
+        if: ${{ failure() }}
+        run: |
+          node packages/web/scripts/social-notify.mjs \
+            --status failed --stage "${STAGE}" \
+            --detail "post-social job failed — see the run logs"
