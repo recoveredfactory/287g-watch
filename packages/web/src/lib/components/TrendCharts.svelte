@@ -27,6 +27,8 @@
   // "YYYY-MM" sample labels and per-scope series ("" = national), index-aligned.
   export let trendMonths: string[] = [];
   export let trend: Record<string, TrendSeries> = {};
+  // When true (e.g. state pages), hides the state selector and agency count.
+  export let hideSelector = false;
 
   // Localized thousands separators for every displayed integer.
   const nf = new Intl.NumberFormat();
@@ -165,6 +167,7 @@
       <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">
         How participation has grown
       </h2>
+      {#if !hideSelector}
       <label class="flex items-center gap-2 text-sm text-slate-600">
         <span>Show</span>
         <select
@@ -177,16 +180,17 @@
           {/each}
         </select>
       </label>
+      {/if}
     </div>
     <p class="mt-1 text-sm text-slate-600">
-      Active 287(g) agreements by model in {scopeLabel}, since Dec&nbsp;2024.
+      Active 287(g) agreements by model{hideSelector ? "" : " in " + scopeLabel}, since Dec&nbsp;2024.
     </p>
     <!-- Distinct figures: an agency can hold more than one model -->
     <p class="mt-2 text-sm text-slate-500">
       <span class="font-semibold text-slate-900">{nf.format(totalAgreements)}</span>
-      {totalAgreements === 1 ? "agreement" : "agreements"}
+      {totalAgreements === 1 ? "agreement" : "agreements"}{#if !hideSelector}
       across <span class="font-semibold text-slate-900">{nf.format(totalAgencies)}</span>
-      {totalAgencies === 1 ? "agency" : "agencies"}.
+      {totalAgencies === 1 ? "agency" : "agencies"}{/if}.
     </p>
 
     <!-- Legend (full names; mini codes match the in-chart labels) -->
