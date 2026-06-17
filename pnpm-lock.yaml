@@ -60,9 +60,9 @@ importers:
       pmtiles:
         specifier: ^4.3.2
         version: 4.4.1
-      svelte-virtual-list:
-        specifier: ^3.0.1
-        version: 3.0.1
+      svelte-virtuallists:
+        specifier: ^1.4.2
+        version: 1.4.2(svelte@5.55.9)
       tailwindcss:
         specifier: ^4.1.18
         version: 4.3.0
@@ -430,6 +430,10 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
+
+  '@eslint/js@9.39.4':
+    resolution: {integrity: sha512-nE7DEIchvtiFTwBw4Lfbu59PG+kCofhjsKaCWzxTpt4lfRjRMqG6uMBzKXuEcyXhOHoUp9riAm7/aWYGhXZ9cw==}
+    engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
   '@fontsource/bitter@5.2.10':
     resolution: {integrity: sha512-oqQgWAp+lgoGX7iFbVSbTkKyz0k8EK8+bLdUKDTqGTjW0HqrCue70v4jwbZvyNV/3DZol/b/L/WpdXfuQXKBUg==}
@@ -1980,8 +1984,10 @@ packages:
   svelte-kit-sst@2.43.5:
     resolution: {integrity: sha512-tvWj/YiPCL3scFcHo/RSYZWtXIuX6g6Mib4MXmDw0JrOtZHzqOCG4kWstTbjnWH4i4XyLPPvxrgSkm35muj4uw==}
 
-  svelte-virtual-list@3.0.1:
-    resolution: {integrity: sha512-e7e+jn8VDjmdD8A1oOVBWmUi7jg+uugmiihkK0Cuk35JeeCR8ja40/B6DpCTHJFsQAZg6EVPjetN2ibgr25YCA==}
+  svelte-virtuallists@1.4.2:
+    resolution: {integrity: sha512-ZvBU1BMmt2uY/spjuZn+XOtHVxOpU/Cfiy+dajxrOXe6KysjAY2O0R1cLonEGl+/AMy0or6/dO+KA3/C6R3l2A==}
+    peerDependencies:
+      svelte: ^5.20.5
 
   svelte@5.55.9:
     resolution: {integrity: sha512-fTjjT8cHLDwigcu2j3pv7Jq04LklXevPB8uBgyHNiTXv+RMNvVnrjS4UEYrLMkhuq1vpCodHjiW+z/95SDs/fg==}
@@ -2324,6 +2330,8 @@ snapshots:
 
   '@esbuild/win32-x64@0.28.0':
     optional: true
+
+  '@eslint/js@9.39.4': {}
 
   '@fontsource/bitter@5.2.10': {}
 
@@ -3831,7 +3839,10 @@ snapshots:
 
   svelte-kit-sst@2.43.5: {}
 
-  svelte-virtual-list@3.0.1: {}
+  svelte-virtuallists@1.4.2(svelte@5.55.9):
+    dependencies:
+      '@eslint/js': 9.39.4
+      svelte: 5.55.9
 
   svelte@5.55.9:
     dependencies:

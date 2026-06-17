@@ -15,7 +15,7 @@
   import { m } from "$lib/paraglide/messages.js";
   import Gloss from "$lib/components/Gloss.svelte";
   import { ogImage } from "$lib/ogImage";
-  import VirtualList from "svelte-virtual-list/VirtualList.svelte";
+  import { VirtualList } from "svelte-virtuallists";
 
   export let data: PageData;
 
@@ -657,7 +657,8 @@
           <!-- Virtualized rows. Keyed on the filter signature so the list
                remounts and scrolls back to the top whenever a filter changes. -->
           {#key filterKey}
-          <VirtualList items={filteredAgencies} height="calc(100vh - 400px)" let:item={agency}>
+          <VirtualList items={filteredAgencies} style="height: calc(100vh - 400px); scrollbar-gutter: stable;">
+            {#snippet vl_slot({ item: agency })}
             <div class="agency-row border-b border-slate-100 hover:bg-slate-50">
               <div class="px-3 py-2 sm:px-4 sm:py-3">
                 <a
@@ -701,6 +702,7 @@
                 <a href="https://www.muckrock.com/foi/create/" target="_blank" rel="noreferrer" class="no-underline hover:underline">→</a>
               </div>
             </div>
+            {/snippet}
           </VirtualList>
           {/key}
         </div>
@@ -847,17 +849,12 @@
       display: block;
     }
   }
-  /* VirtualList viewport needs explicit overflow. `scrollbar-gutter: stable`
-     keeps the gutter reserved whether or not the list is currently scrolling,
-     so it always matches the header's reserved gutter (above). */
-  :global(svelte-virtual-list-viewport) {
-    overflow-y: auto !important;
-    scrollbar-gutter: stable;
-  }
-  :global(svelte-virtual-list-contents) {
-    width: 100%;
-  }
-  :global(svelte-virtual-list-row) {
+  /* svelte-virtuallists' inner track. Full width so each grid row spans the
+     viewport and its columns line up with the header. (The viewport — .vtlist —
+     already gets overflow:auto from the lib; we add `scrollbar-gutter: stable`
+     via the component's style prop so its reserved gutter matches the header's
+     above and the columns don't shift.) */
+  :global(.vtlist-inner) {
     width: 100%;
   }
 </style>
