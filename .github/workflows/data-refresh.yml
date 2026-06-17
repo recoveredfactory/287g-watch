@@ -56,9 +56,17 @@ on:
         type: choice
         options: [dry-run, post]
         default: dry-run
-  # Daily, shortly after the upstream snapshots land. Uncomment to enable.
-  # schedule:
-  #   - cron: "30 12 * * *" # 12:30 UTC daily
+  # Twice daily, both AFTER the upstream auto-commit window: appelson/
+  # Tracking_287g lands its daily "Auto-commit from GitHub Actions" around
+  # 17:00–20:00 UTC. 21:00 catches that day's update; 01:00 is a safety net for
+  # a late or re-run upstream push. No inputs on this trigger, so it falls
+  # through to the `|| 'prod'` defaults below (deploys prod). The change-gate
+  # hashes the fresh JSON against the LIVE site, so the second run no-ops once
+  # the first has published — at most one deploy+bake per actual upstream
+  # change, however often we poll.
+  schedule:
+    - cron: "0 21 * * *" # 21:00 UTC — primary, just after upstream lands
+    - cron: "0 1 * * *"  # 01:00 UTC — safety net for a late upstream push
 
 # Don't let two refreshes for the same stage clobber each other mid-deploy.
 concurrency:

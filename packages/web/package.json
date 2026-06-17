@@ -40,6 +40,7 @@
     "d3-scale": "^4.0.2",
     "maplibre-gl": "^5.15.0",
     "pmtiles": "^4.3.2",
+    "svelte-virtuallists": "^1.4.2",
     "tailwindcss": "^4.1.18",
     "topojson-client": "^3.1.0",
     "us-atlas": "^3.0.1"

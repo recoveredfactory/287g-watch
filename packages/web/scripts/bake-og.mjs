@@ -24,6 +24,11 @@
 //   pnpm bake:og --slug=lancaster-county-sheriffs-office-ne   # one agency
 //   pnpm bake:og --limit=20               # cap agency count (for iteration)
 //   pnpm bake:og --url=https://...        # custom snapshot source URL
+//   pnpm bake:og --workers=8              # agency-bake parallelism (default CPUs−2; 1 = serial)
+//
+// The agency bake (the heavy part) auto-shards across child processes — satori +
+// resvg are single-threaded per process, so one process can't use more than one
+// core. --shard=i/N is the internal per-child flag; you won't pass it by hand.
 
 import { chromium } from "playwright";
 import satori from "satori";
@@ -34,6 +39,8 @@ import { readFile, writeFile, mkdir, access } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import os from "node:os";
+import { spawn } from "node:child_process";
 
 const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -66,8 +73,32 @@ const ONLY = argValue("--only"); // home | pages | models | agencies
 const SLUG_FILTER = argValue("--slug");
 const LIMIT = Number(argValue("--limit"));
 
+// Sharding. The agency loop's satori + resvg run synchronously on one JS thread,
+// so a single process pegs exactly one core no matter the async pool size. The
+// top-level run fans the agency bake out across WORKERS child processes; each is
+// re-invoked with --shard=i/N and bakes every Nth agency (both locales). The
+// children reuse the one snapshot the parent took (--skip-snapshot).
+// --workers=1 forces the old single-process path.
+const SHARD = argValue("--shard"); // "i/N" — set only on child processes
+const [SHARD_I, SHARD_N] = SHARD ? SHARD.split("/").map(Number) : [null, null];
+// Default to cores/2, not cores: each shard process already pegs ~2 cores (satori
+// on the JS main thread + libvips on its own), so cores/2 processes saturate the
+// machine. More just oversubscribe — measured flat from 8→16 workers on a 16-core
+// box, with the agency bake ~5× faster than single-process either way.
+const WORKERS = Math.max(
+  1,
+  Number(argValue("--workers")) ||
+    Number(process.env.BAKE_OG_WORKERS) ||
+    Math.max(2, Math.floor(os.cpus().length / 2)),
+);
+
 const SIZE = { width: 1200, height: 630 };
 const CONCURRENCY = Math.max(2, Math.min(8, Number(process.env.BAKE_OG_CONCURRENCY) || 4));
+
+// In a shard child, cap libvips to one thread per process — parallelism comes
+// from the WORKERS processes, so letting each spin up a core's worth of libvips
+// threads would just oversubscribe and thrash.
+if (SHARD_N) sharp.concurrency(1);
 
 // Cards are baked per locale into og/<locale>/… so /es pages get Spanish
 // social cards. The page <head> picks the locale via $lib/ogImage.ts.
@@ -477,9 +508,9 @@ async function bakeAgencies(locale) {
   const raw = JSON.parse(await readFile(AGENCY_INDEX_PATH, "utf8"));
   let agencies = SLUG_FILTER ? raw.filter((a) => a.slug === SLUG_FILTER) : raw;
   if (Number.isFinite(LIMIT) && LIMIT > 0) agencies = agencies.slice(0, LIMIT);
-  console.log(
-    `[agencies] baking ${agencies.length} cards (concurrency=${CONCURRENCY})…`,
-  );
+  if (SHARD_N) agencies = agencies.filter((_, idx) => idx % SHARD_N === SHARD_I);
+  const tag = SHARD_N ? `[shard ${SHARD_I}/${SHARD_N} ${locale}]` : `[agencies ${locale}]`;
+  console.log(`${tag} baking ${agencies.length} cards (concurrency=${CONCURRENCY})…`);
   const tStart = Date.now();
   let done = 0;
   const queue = [...agencies];
@@ -521,7 +552,9 @@ async function bakeAgencies(locale) {
         meta,
       });
       done += 1;
-      if (done % 50 === 0 || done === agencies.length) {
+      // Sharded children would garble each other's \r progress line, so only
+      // the single-process path prints incremental progress.
+      if (!SHARD_N && (done % 50 === 0 || done === agencies.length)) {
         const elapsed = (Date.now() - tStart) / 1000;
         process.stdout.write(
           `  ${done}/${agencies.length} (${elapsed.toFixed(1)}s)\r`,
@@ -533,16 +566,63 @@ async function bakeAgencies(locale) {
     Array.from({ length: Math.min(CONCURRENCY, agencies.length) }, worker),
   );
   const elapsed = (Date.now() - tStart) / 1000;
-  console.log(`\n✓ ${agencies.length} agency cards in ${elapsed.toFixed(1)}s`);
+  console.log(`${SHARD_N ? "" : "\n"}✓ ${tag} ${agencies.length} cards in ${elapsed.toFixed(1)}s`);
 }
 
 // ---------- run ----------
 
+// Child shard: just bake this process's slice of the agencies (both locales),
+// then exit. The snapshot + mapBg were already (re)built above from --skip-snapshot.
+if (SHARD_N != null) {
+  for (const locale of LOCALES) await bakeAgencies(locale);
+  process.exit(0);
+}
+
+// Parent run. The non-agency cards are a handful (home/pages/models × 2 locales)
+// — bake them here directly.
 for (const locale of LOCALES) {
   if (!ONLY || ONLY === "home") await bakeHome(locale);
   if (!ONLY || ONLY === "pages") await bakePages(locale);
   if (!ONLY || ONLY === "models") await bakeModels(locale);
-  if (!ONLY || ONLY === "agencies") await bakeAgencies(locale);
+}
+
+// Agencies — the heavy loop. Fan out across WORKERS child processes so the
+// satori/resvg work (sync, one core per process) actually uses the machine.
+// Single-process fallbacks: --workers=1, or a single-agency --slug run.
+if (!ONLY || ONLY === "agencies") {
+  if (WORKERS <= 1 || SLUG_FILTER) {
+    for (const locale of LOCALES) await bakeAgencies(locale);
+  } else {
+    console.log(`[agencies] sharding across ${WORKERS} processes…`);
+    const tShard = Date.now();
+    const selfPath = fileURLToPath(import.meta.url);
+    await Promise.all(
+      Array.from(
+        { length: WORKERS },
+        (_, i) =>
+          new Promise((resolve, reject) => {
+            const childArgs = [
+              selfPath,
+              "--only=agencies",
+              "--skip-snapshot",
+              `--shard=${i}/${WORKERS}`,
+              `--url=${URL}`,
+            ];
+            if (Number.isFinite(LIMIT) && LIMIT > 0) childArgs.push(`--limit=${LIMIT}`);
+            const child = spawn(process.execPath, childArgs, {
+              stdio: ["ignore", "inherit", "inherit"],
+            });
+            child.on("exit", (code) =>
+              code === 0
+                ? resolve()
+                : reject(new Error(`agency shard ${i} exited with code ${code}`)),
+            );
+            child.on("error", reject);
+          }),
+      ),
+    );
+    console.log(`✓ all agency shards done in ${((Date.now() - tShard) / 1000).toFixed(1)}s`);
+  }
 }
 
 console.log(`\nOutput: ${OG_DIR}`);

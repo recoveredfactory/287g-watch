@@ -15,6 +15,7 @@
   import { m } from "$lib/paraglide/messages.js";
   import Gloss from "$lib/components/Gloss.svelte";
   import { ogImage } from "$lib/ogImage";
+  import { VirtualList } from "svelte-virtuallists";
 
   export let data: PageData;
 
@@ -85,8 +86,6 @@
   let activeModels: Set<string> = new Set();
   let selectedStates: Set<string> = new Set();
   let selectedYear = "";
-  let currentPage = 1;
-  const PAGE_SIZE = 25;
   let filterBarHeight = 0;
   $: thTop = `calc(var(--site-header-height) + var(--staging-banner-height) + ${filterBarHeight}px)`;
 
@@ -118,21 +117,26 @@
     if (!stateName || !meta || !meta.local_le_agencies) return null;
     const boldState = `<b>${stateName}</b>`;
     if (!statesWithAnyAgreement.has(detectedState)) {
+      // No participating agencies → no /state/<abbr> page (it 404s), so leave
+      // the name as plain bold rather than linking into a dead route.
       return m.home_hero_state_callout_none({ state: boldState });
     }
+    // Participating states have a /state/<abbr> page — link the name to it.
+    const stateHref = localizeHref(`/state/${detectedState.toLowerCase()}`);
+    const linkedState = `<a href="${stateHref}" class="font-bold underline underline-offset-2 decoration-[#BE6079] hover:text-slate-900">${stateName}</a>`;
     const agencyPct = Math.round((meta.participating / meta.local_le_agencies) * 100);
     const popPct = meta.state_local_population > 0
       ? Math.round((meta.population_served / meta.state_local_population) * 100)
       : 0;
     if (detectedState === "FL") {
       return m.home_hero_state_callout_fl({
-        state: boldState,
+        state: linkedState,
         agency_pct: agencyPct,
         pop_pct: popPct,
       });
     }
     return m.home_hero_state_callout_standard({
-      state: boldState,
+      state: linkedState,
       agency_pct: agencyPct,
       pop_pct: popPct,
     });
@@ -179,7 +183,6 @@
       if (selectedYear) params.set("year", selectedYear);
       if (activeModels.size > 0)
         params.set("models", [...activeModels].map((m) => MODEL_SLUG[m]).filter(Boolean).join(","));
-      if (currentPage > 1) params.set("page", String(currentPage));
       const qs = params.toString();
       history.replaceState(history.state, "", qs ? `?${qs}` : location.pathname);
     }, 300);
@@ -187,7 +190,7 @@
 
   // Only sync URL for user-initiated changes after mount. Initial-state setup
   // (URL params, geo default) runs inside onMount and intentionally skips sync.
-  $: { searchQuery; selectedStates; selectedYear; activeModels; currentPage;
+  $: { searchQuery; selectedStates; selectedYear; activeModels;
     if (mounted) scheduleUrlSync();
   }
 
@@ -195,7 +198,6 @@
     const params = new URLSearchParams(location.search);
     const q = params.get("q");
     const models = params.get("models");
-    const page = params.get("page");
     if (q) searchQuery = q;
     // Support both ?states=TX,FL (new) and legacy ?state=TX
     const statesParam = params.get("states") ?? params.get("state");
@@ -213,13 +215,6 @@
     const geo = await getCachedGeo();
     if (geo.state && STATE_NAMES[geo.state]) {
       detectedState = geo.state;
-    }
-
-    // Set page last — filter changes above will reset currentPage to 1 reactively,
-    // so this must come after all other assignments to stick.
-    if (page) {
-      const n = parseInt(page, 10);
-      if (!isNaN(n) && n > 1) currentPage = n;
     }
 
     mounted = true;
@@ -248,14 +243,6 @@
     return matchesSearch && matchesModel && matchesState && matchesYear;
   });
 
-  // Reset to page 1 whenever filters change
-  $: if (filteredAgencies) currentPage = 1;
-
-  $: totalPages = Math.max(1, Math.ceil(filteredAgencies.length / PAGE_SIZE));
-  $: pageStart = (currentPage - 1) * PAGE_SIZE;
-  $: pageEnd = Math.min(pageStart + PAGE_SIZE, filteredAgencies.length);
-  $: pageAgencies = filteredAgencies.slice(pageStart, pageEnd);
-
   const toggleState = (state: string) => {
     const next = new Set(selectedStates);
     if (next.has(state)) next.delete(state);
@@ -278,6 +265,17 @@
   };
 
   $: hasActiveFilters = searchQuery.trim() !== "" || activeModels.size > 0 || selectedStates.size > 0 || selectedYear !== "";
+
+  // Signature of the active filter set. The virtual list keeps its scroll
+  // position when `items` changes, so narrowing a filter would otherwise
+  // strand the reader mid-list. Keying the list on this string remounts it —
+  // and a fresh viewport renders from the top — whenever any filter changes.
+  $: filterKey = JSON.stringify([
+    searchQuery.trim().toLowerCase(),
+    [...selectedStates].sort(),
+    selectedYear,
+    [...activeModels].sort(),
+  ]);
 
   function modelDesc(model: string): { short: string; detail: string } {
     switch (model) {
@@ -646,99 +644,68 @@
           </button>
         </div>
       {:else}
-        <div class="mt-4 rounded-lg border border-slate-200">
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="border-b border-slate-200 bg-slate-50 text-left">
-                <th class="sticky z-10 bg-slate-50 px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 sm:px-4 sm:py-3" style="top: {thTop}">Agency</th>
-                <th class="sticky z-10 bg-slate-50 px-2 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 sm:px-3 sm:py-3" style="top: {thTop}">Type</th>
-                <th class="sticky z-10 bg-slate-50 px-2 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 sm:px-3 sm:py-3" style="top: {thTop}">Signed</th>
-                <th class="sticky z-10 hidden bg-slate-50 px-2 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 sm:table-cell sm:px-3 sm:py-3" style="top: {thTop}">Population</th>
-                <th class="sticky z-10 bg-slate-50 px-2 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 sm:px-3 sm:py-3" style="top: {thTop}">MOA</th>
-                <th class="sticky z-10 hidden bg-slate-50 px-2 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 sm:table-cell sm:px-3 sm:py-3" style="top: {thTop}">FOIA</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-              {#each pageAgencies as agency (agency.slug)}
-                <tr class="group hover:bg-slate-50">
-                  <td class="px-3 py-2 sm:px-4 sm:py-3">
-                    <a
-                      href={localizeHref(`/agency/${agency.slug}`)}
-                      class="font-semibold leading-snug text-slate-900 no-underline hover:underline"
-                    >{agency.name}</a>
-                    <p class="text-xs text-slate-600">
-                      {[agency.city, agency.state].filter(Boolean).join(", ")}
-                    </p>
-                  </td>
-                  <td class="px-2 py-2 sm:px-3 sm:py-3">
-                    <div class="flex flex-wrap gap-1">
-                      {#each agency.models as model}
-                        <ModelLink
-                          {model}
-                          underline={false}
-                          class="model-badge model-badge--{MODEL_SLUG[model]}"
-                        ><span class="sm:hidden">{MODEL_MINI[model] ?? model}</span><span class="hidden sm:inline">{MODEL_SHORT[model] ?? model}</span></ModelLink>
-                      {/each}
-                    </div>
-                  </td>
-                  <td class="px-2 py-2 tabular-nums text-slate-600 sm:px-3 sm:py-3">
-                    {agency.signed_date ? agency.signed_date.slice(0, 4) : "—"}
-                  </td>
-                  <td class="hidden px-2 py-2 tabular-nums text-slate-600 sm:table-cell sm:px-3 sm:py-3">
-                    {agency.population ? popFmt.format(agency.population) : "—"}
-                  </td>
-                  <td class="px-2 py-2 text-xs font-semibold sm:px-3 sm:py-3">
-                    {#if agency.moa_url}
-                      <a href={agency.moa_url} target="_blank" rel="noreferrer" class="no-underline hover:underline">↗</a>
-                    {:else}
-                      <span class="text-slate-300">—</span>
-                    {/if}
-                  </td>
-                  <td class="hidden px-2 py-2 text-xs font-semibold sm:table-cell sm:px-3 sm:py-3">
-                    <a href="https://www.muckrock.com/foi/create/" target="_blank" rel="noreferrer" class="no-underline hover:underline">→</a>
-                  </td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        </div>
-
-        <!-- Pagination -->
-        {#if totalPages > 1}
-          <div class="mt-6 flex items-center justify-between gap-4">
-            <button
-              type="button"
-              on:click={() => (currentPage = Math.max(1, currentPage - 1))}
-              disabled={currentPage === 1}
-              class="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-              </svg>
-              <span class="hidden sm:inline">{m.home_pagination_previous()}</span>
-            </button>
-
-            <p class="text-sm text-slate-500">
-              {m.home_pagination_range({
-                start: String(pageStart + 1),
-                end: String(pageEnd),
-                total: intFmt.format(filteredAgencies.length),
-              })}
-            </p>
-
-            <button
-              type="button"
-              on:click={() => (currentPage = Math.min(totalPages, currentPage + 1))}
-              disabled={currentPage === totalPages}
-              class="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <span class="hidden sm:inline">{m.home_pagination_next()}</span>
-              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
+        <div class="agency-list mt-4 rounded-lg border border-slate-200 overflow-hidden text-sm">
+          <!-- Column headers -->
+          <div class="agency-row agency-row--header border-b border-slate-200 bg-slate-50 text-xs font-bold uppercase tracking-wider text-slate-700">
+            <div class="px-3 py-2 sm:px-4 sm:py-3">Agency</div>
+            <div class="px-2 py-2 sm:px-3 sm:py-3">Type</div>
+            <div class="px-2 py-2 sm:px-3 sm:py-3">Signed</div>
+            <div class="agency-col-pop px-2 py-2 sm:px-3 sm:py-3">Population</div>
+            <div class="px-2 py-2 sm:px-3 sm:py-3">MOA</div>
+            <div class="agency-col-foia px-2 py-2 sm:px-3 sm:py-3">FOIA</div>
           </div>
-        {/if}
+          <!-- Virtualized rows. Keyed on the filter signature so the list
+               remounts and scrolls back to the top whenever a filter changes. -->
+          {#key filterKey}
+          <VirtualList items={filteredAgencies} style="height: calc(100vh - 400px); scrollbar-gutter: stable;">
+            {#snippet vl_slot({ item: agency })}
+            <div class="agency-row border-b border-slate-100 hover:bg-slate-50">
+              <div class="px-3 py-2 sm:px-4 sm:py-3">
+                <a
+                  href={localizeHref(`/agency/${agency.slug}`)}
+                  class="font-semibold leading-snug text-slate-900 no-underline hover:underline"
+                >{agency.name}</a>
+                <p class="text-xs text-slate-600">
+                  {#if agency.city}{agency.city}{/if}{#if agency.city && agency.state}, {/if}{#if agency.state}<a
+                    href={localizeHref(`/state/${agency.state.toLowerCase()}`)}
+                    class="no-underline hover:underline"
+                  >{agency.state}</a>{/if}
+                </p>
+              </div>
+              <div class="px-2 py-2 sm:px-3 sm:py-3">
+                <div class="flex flex-wrap gap-1">
+                  {#each agency.models as model}
+                    <span
+                      class="model-badge"
+                      class:model-badge--jail={model.includes("Jail")}
+                      class:model-badge--taskforce={model.includes("Task")}
+                      class:model-badge--wso={model.includes("Warrant")}
+                      title={model}
+                    >{MODEL_MINI[model] ?? model}</span>
+                  {/each}
+                </div>
+              </div>
+              <div class="px-2 py-2 tabular-nums text-slate-600 sm:px-3 sm:py-3">
+                {agency.signed_date ? agency.signed_date.slice(0, 4) : "—"}
+              </div>
+              <div class="agency-col-pop px-2 py-2 tabular-nums text-slate-600 sm:px-3 sm:py-3">
+                {agency.population ? popFmt.format(agency.population) : "—"}
+              </div>
+              <div class="px-2 py-2 text-xs font-semibold sm:px-3 sm:py-3">
+                {#if agency.moa_url}
+                  <a href={agency.moa_url} target="_blank" rel="noreferrer" class="no-underline hover:underline">↗</a>
+                {:else}
+                  <span class="text-slate-300">—</span>
+                {/if}
+              </div>
+              <div class="agency-col-foia px-2 py-2 text-xs font-semibold sm:px-3 sm:py-3">
+                <a href="https://www.muckrock.com/foi/create/" target="_blank" rel="noreferrer" class="no-underline hover:underline">→</a>
+              </div>
+            </div>
+            {/snippet}
+          </VirtualList>
+          {/key}
+        </div>
       {/if}
 
     </div>
@@ -847,5 +814,47 @@
   }
   @media (min-width: 640px) {
     .count-label { font-size: 0.62rem; }
+  }
+
+  /* Agency virtual list grid. Fixed column tracks (not `auto`) so every row —
+     header included — sizes its columns identically and they line up into a
+     real table. `auto` tracks size to each row's own content, which is what
+     broke the tabular alignment. minmax(0, …) lets the name column shrink and
+     wrap instead of forcing the grid wider than its container. */
+  .agency-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 7rem 3.25rem 2.5rem;
+    align-items: center;
+  }
+  /* The virtualized rows live inside a scrolling viewport; on classic
+     (space-consuming) scrollbars that viewport is ~15px narrower than the
+     header, which would shift every column. Reserve the same gutter on the
+     header so the two grids share an identical content width and the columns
+     line up. `scrollbar-gutter` is a no-op with overlay scrollbars, so this
+     doesn't disturb platforms where they already align. */
+  .agency-row--header {
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+  .agency-col-pop,
+  .agency-col-foia {
+    display: none;
+  }
+  @media (min-width: 640px) {
+    .agency-row {
+      grid-template-columns: minmax(0, 1fr) 8.5rem 4rem 5.5rem 3.5rem 3.5rem;
+    }
+    .agency-col-pop,
+    .agency-col-foia {
+      display: block;
+    }
+  }
+  /* svelte-virtuallists' inner track. Full width so each grid row spans the
+     viewport and its columns line up with the header. (The viewport — .vtlist —
+     already gets overflow:auto from the lib; we add `scrollbar-gutter: stable`
+     via the component's style prop so its reserved gutter matches the header's
+     above and the columns don't shift.) */
+  :global(.vtlist-inner) {
+    width: 100%;
   }
 </style>
