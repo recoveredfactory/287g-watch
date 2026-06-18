@@ -72,20 +72,81 @@ type MoaExtract = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-async function ghContents(apiPath: string): Promise<Array<{ name: string; download_url: string | null; type: string }>> {
-  const url = `https://api.github.com/repos/appelson/Tracking_287g/contents/${apiPath}`;
-  const r = await fetch(url, { headers: ghHeaders });
-  if (!r.ok) throw new Error(`GitHub API ${r.status} for ${apiPath}`);
-  return r.json() as Promise<any[]>;
-}
-
-// Convert a GitHub tree URL → API path
+// Convert a GitHub tree URL → repo-relative path
 // "https://github.com/appelson/Tracking_287g/tree/main/agreements/SNAP/STATE/AGENCY"
 // → "agreements/SNAP/STATE/AGENCY"
-function treeUrlToApiPath(treeUrl: string): string {
+function treeUrlToPath(treeUrl: string): string {
   return treeUrl
     .replace("https://github.com/appelson/Tracking_287g/tree/main/", "")
     .replace(/%27/g, "'");
+}
+
+// ── Pre-fetch PDF file lists per snapshot via the GitHub Trees API ─────────────
+// The recursive trees API returns all files in a subtree in ONE call, reducing
+// per-agency directory listings (1428 calls) to ~2 calls per unique snapshot
+// (~39 snapshots → ~78 calls total instead of 1428).
+//
+// Structure: snapshot → agency dir path → [{ name, download_url }]
+const pdfCache = new Map<string, GhFile[]>(); // key: agency dir path (decoded)
+
+async function prefetchSnapshot(snapPath: string): Promise<void> {
+  // Step 1: get the SHA of the snapshot directory from its Contents entry
+  const contentsUrl = `https://api.github.com/repos/appelson/Tracking_287g/contents/${encodeURIComponent(snapPath)}`;
+  const cr = await fetch(contentsUrl, { headers: ghHeaders });
+  if (!cr.ok) {
+    console.warn(`  ⚠ Contents ${cr.status} for ${snapPath}`);
+    return;
+  }
+  // Contents on a directory returns an array of entries; each has a SHA.
+  // We want the SHA of the snapshot directory ITSELF — use the parent path trick:
+  // ask for the parent and find this dir's entry.
+  const parentPath = snapPath.split("/").slice(0, -1).join("/");
+  const snapName = snapPath.split("/").at(-1)!;
+  const pr = await fetch(
+    `https://api.github.com/repos/appelson/Tracking_287g/contents/${parentPath}`,
+    { headers: ghHeaders }
+  );
+  if (!pr.ok) {
+    console.warn(`  ⚠ Parent ${pr.status} for ${parentPath}`);
+    return;
+  }
+  const parentEntries: any[] = await pr.json();
+  const snapEntry = parentEntries.find((e: any) => e.name === snapName);
+  if (!snapEntry?.sha) return;
+
+  // Step 2: recursive tree — returns every file path under this snapshot
+  const treeUrl = `https://api.github.com/repos/appelson/Tracking_287g/git/trees/${snapEntry.sha}?recursive=1`;
+  const tr = await fetch(treeUrl, { headers: ghHeaders });
+  if (!tr.ok) {
+    console.warn(`  ⚠ Tree ${tr.status} for snapshot ${snapName}`);
+    return;
+  }
+  const { tree }: { tree: Array<{ path: string; type: string }> } = await tr.json();
+
+  // Index by agency directory (two levels: STATE/AGENCY_DIR)
+  for (const item of tree) {
+    if (item.type !== "blob" || !item.path.toLowerCase().endsWith(".pdf")) continue;
+    // path is "STATE/AGENCY_DIR/filename.pdf"
+    const parts = item.path.split("/");
+    if (parts.length < 3) continue;
+    const agencyDir = decodeURIComponent(`${snapPath}/${parts.slice(0, 2).join("/")}`);
+    const filename = parts[parts.length - 1];
+    const downloadUrl = `https://raw.githubusercontent.com/appelson/Tracking_287g/main/${snapPath}/${parts.join("/")}`;
+    const existing = pdfCache.get(agencyDir) ?? [];
+    existing.push({ name: filename, download_url: downloadUrl });
+    pdfCache.set(agencyDir, existing);
+  }
+}
+
+async function getPdfsForAgency(treeUrl: string): Promise<GhFile[]> {
+  const agencyPath = treeUrlToPath(treeUrl);
+  if (pdfCache.has(agencyPath)) return pdfCache.get(agencyPath)!;
+  // Cache miss — fall back to direct Contents API (e.g. if snapshot wasn't prefetched)
+  const url = `https://api.github.com/repos/appelson/Tracking_287g/contents/${encodeURIComponent(agencyPath)}`;
+  const r = await fetch(url, { headers: ghHeaders });
+  if (!r.ok) throw new Error(`GitHub API ${r.status} for ${agencyPath}`);
+  const files: any[] = await r.json();
+  return files.filter((f) => f.name.toLowerCase().endsWith(".pdf"));
 }
 
 async function downloadPdf(url: string, dest: string): Promise<void> {
@@ -329,6 +390,25 @@ const toProcess = FORCE
 
 console.log(`${entries.length} total agencies | ${toProcess.length} to process (${Object.keys(existing).length} already done)`);
 
+// Pre-fetch snapshot file trees to collapse 1428 API calls → ~78
+// Only prefetch snapshots that have agencies we're actually processing.
+const snapsToPrefetch = new Set<string>();
+for (const [, treeUrl] of toProcess.slice(0, isFinite(LIMIT) ? LIMIT : undefined)) {
+  const path = treeUrlToPath(treeUrl);
+  // snapshot is at depth 1 of agreements/: "agreements/SNAP_NAME"
+  const parts = path.split("/");
+  if (parts.length >= 2) snapsToPrefetch.add(`${parts[0]}/${parts[1]}`);
+}
+if (snapsToPrefetch.size > 0) {
+  process.stdout.write(`Pre-fetching ${snapsToPrefetch.size} snapshot tree(s)…`);
+  for (const snap of snapsToPrefetch) {
+    await prefetchSnapshot(snap);
+    process.stdout.write(" ✓");
+    await new Promise((r) => setTimeout(r, 300)); // polite between tree calls
+  }
+  process.stdout.write(`\nCached ${pdfCache.size} agency PDF lists\n\n`);
+}
+
 const tmpPdf = resolve(tmpdir(), "moa_extract_tmp.pdf");
 let done = 0, errors = 0;
 
@@ -352,9 +432,8 @@ for (const [agencyKey, treeUrl] of toProcess.slice(0, isFinite(LIMIT) ? LIMIT : 
   };
 
   try {
-    const apiPath = treeUrlToApiPath(treeUrl);
-    const files = await ghContents(apiPath);
-    const pdf = pickPdf(files as GhFile[]);
+    const files = await getPdfsForAgency(treeUrl);
+    const pdf = pickPdf(files);
 
     if (!pdf?.download_url) {
       throw new Error("no PDF found in directory");
@@ -379,13 +458,10 @@ for (const [agencyKey, treeUrl] of toProcess.slice(0, isFinite(LIMIT) ? LIMIT : 
   existing[agencyKey] = extract;
   done++;
 
-  // Write after every 10 to preserve progress
-  if (done % 10 === 0) {
+  // Write after every 25 to preserve progress
+  if (done % 25 === 0) {
     writeFileSync(OUT_PATH, JSON.stringify(existing, null, 2));
   }
-
-  // Avoid hammering GitHub API — polite delay
-  await new Promise((r) => setTimeout(r, 400));
 }
 
 writeFileSync(OUT_PATH, JSON.stringify(existing, null, 2));
