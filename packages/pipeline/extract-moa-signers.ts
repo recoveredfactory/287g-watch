@@ -427,8 +427,18 @@ const existing: Record<string, MoaExtract> = existsSync(OUT_PATH)
   : {};
 
 const entries = Object.entries(moaIndex);
+// --force: reprocess all | default: skip successfully-extracted entries
+// --retry: reprocess only past errors + entries still missing key fields
+const RETRY = args.includes("--retry");
 const toProcess = FORCE
   ? entries
+  : RETRY
+  ? entries.filter(([key]) => {
+      const v = existing[key];
+      if (!v || v.error) return true; // errors always retry
+      // Retry if PDF downloaded but all signer/office fields are empty
+      return !v.ice_field_office && !v.ice_signer_name && !v.lea_poc_name;
+    })
   : entries.filter(([key]) => !existing[key] || existing[key].error);
 
 console.log(`${entries.length} total agencies | ${toProcess.length} to process (${Object.keys(existing).length} already done)`);
