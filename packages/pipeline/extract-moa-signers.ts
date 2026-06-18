@@ -66,6 +66,9 @@ type MoaExtract = {
   lea_poc_name: string | null;
   lea_poc_email: string | null;
   lea_poc_phone: string | null;
+  lea_poc_address: string | null;   // street + city/state/zip from Appendix C
+  addendum_date: string | null;     // date of embedded addendum (if any)
+  addendum_signer: string | null;   // ICE official who signed the addendum
   extracted_at: string;
   error?: string;
 };
@@ -206,7 +209,7 @@ function detectModel(filename: string): string | null {
 //
 // We try all patterns for each field and return the first hit.
 
-const ICE_TITLE_RE = /Title:\s*[-– \t]*(Acting\s*Director|Deputy\s*Director|Field\s*Office\s*Director)/i;
+const ICE_TITLE_RE = /Title:\s*[-– \t]*(Acting\s*Director|Deputy\s*Director|Field\s*Office\s*Director|Assistant\s*Director)/i;
 // Matches "First Last", "First M. Last", "First Middle Last" — at least two words,
 // each starting uppercase. Does NOT require a third word after a middle initial.
 const FULL_NAME_RE = /[A-Z][a-zA-Z'-]+(?: +[A-Z](?:\.[a-zA-Z'-]*|[a-zA-Z'-]+))+/;
@@ -392,11 +395,106 @@ function parseLeaPoc(text: string): { lea_poc_name: string | null; lea_poc_email
     if (phoneM) phone = phoneM[0];
   }
 
+  // Address: lines between name and phone/email that look like a street address.
+  // Typical format: "162 West Fourth Street\nPrattville, Alabama 36067"
+  // Collect lines after the name line, stopping at phone/email/For ICE.
+  const afterLines = after.split("\n").map((l) => l.trim()).filter(Boolean);
+  const nameLineIdx = name ? afterLines.findIndex((l) => l.includes(name!.split(" ")[0])) : -1;
+  let address: string | null = null;
+  if (nameLineIdx >= 0) {
+    const addrLines: string[] = [];
+    for (const l of afterLines.slice(nameLineIdx + 1)) {
+      if (/^\d{3}[-.\s]\d{3}|@|For (the )?ICE:|For (the )?LEA:/i.test(l)) break;
+      // Street: starts with a house number, or looks like "City, State(abbr or full) ZIP"
+      if (
+        /^\d+\s+[A-Za-z]/.test(l) ||            // "162 West Fourth Street"
+        /,\s*[A-Z]{2}\s+\d{5}/.test(l) ||       // "Prattville, AL 36067"
+        /,\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\s+\d{5}/.test(l)  // "Prattville, Alabama 36067"
+      ) {
+        addrLines.push(l);
+      }
+      if (addrLines.length >= 2) break; // street + city/state/zip is enough
+    }
+    if (addrLines.length > 0) address = addrLines.join(", ");
+  }
+
   return {
     lea_poc_name: name,
     lea_poc_email: emailM ? emailM[0] : null,
     lea_poc_phone: phone,
+    lea_poc_address: address,
   };
+}
+
+// Addendum: some PDFs embed a modification agreement after the main text.
+// Extract the addendum's effective date and ICE signer.
+function parseAddendum(text: string): { addendum_date: string | null; addendum_signer: string | null } {
+  const idx = text.search(/ADDENDUM\s+TO\s+(?:MODIFY\s+)?MEMORANDUM/i);
+  if (idx < 0) return { addendum_date: null, addendum_signer: null };
+
+  const chunk = text.slice(idx, idx + 2000);
+
+  // Date: look for a standalone date or "Date:" label in the addendum sig block
+  const sigIdx = chunk.lastIndexOf("For the LEA:");
+  const sigChunk = sigIdx >= 0 ? chunk.slice(sigIdx) : chunk.slice(-600);
+
+  let addendum_date: string | null = null;
+  const dm = sigChunk.match(/Date:\s*[-–~\s]*(\d{1,2}\/\d{1,2}\/\d{2,4})/i)
+    ?? sigChunk.match(/Date:\s*[-–~\s]*([A-Z][a-z]+ \d{1,2},?\s*\d{2,4})/i)
+    ?? sigChunk.match(/^\s*(\d{1,2}\/\d{1,2}\/(?:20\d{2}|\d{2}))\s*$/m);
+  if (dm) addendum_date = dm[1].trim();
+
+  // ICE signer: look for the same patterns as the main sig block
+  let addendum_signer: string | null = null;
+  const titleMatch = sigChunk.search(ICE_TITLE_RE);
+  if (titleMatch >= 0) {
+    const before = sigChunk.slice(Math.max(0, titleMatch - 600), titleMatch);
+    const m1 = before.match(/^ {30,}Name:\s*[-– \t]*([A-Z][a-zA-Z'-]+(?: +[A-Z](?:\.[a-zA-Z'-]*|[a-zA-Z'-]+))+)\s*$/m);
+    if (m1) {
+      addendum_signer = m1[1].trim();
+    } else {
+      for (const line of before.split("\n").reverse()) {
+        const lead = line.match(/^(\s+)/)?.[1]?.length ?? 0;
+        if (lead < 30) continue;
+        const t = line.trim();
+        if (FULL_NAME_RE.test(t) && t[0] === t[0].toUpperCase() && t.split(/\s+/).length >= 2) {
+          addendum_signer = t;
+          break;
+        }
+      }
+    }
+  }
+
+  // Fallback: typed name near ICE org affiliation ("C. M. Cronen" above
+  // "Assistant Director, Enforcement…U.S. Immigration and Customs Enforcement").
+  // Use the LAST occurrence — the first is in the addendum preamble, the last
+  // is in the signature block where the actual signer name appears.
+  if (!addendum_signer) {
+    const iceOrgMatches = [...chunk.matchAll(/U\.S\.\s*Immigration\s+and\s+Customs\s+Enforcement/gi)];
+    const iceOrgIdx = iceOrgMatches.length > 0 ? iceOrgMatches[iceOrgMatches.length - 1].index! : -1;
+    if (iceOrgIdx >= 0) {
+      const nearby = chunk.slice(Math.max(0, iceOrgIdx - 400), iceOrgIdx);
+      // Typed name: short line (≤40 chars), Title Case, not "For the LEA/ICE/DHS"
+      const nameLines = nearby.split("\n").reverse();
+      for (const l of nameLines) {
+        const t = l.trim();
+        if (!t || t.length > 50 || /^For\s|^Date|^By\s|^All\s|^The\s/i.test(t)) continue;
+        // Allow "C. M. Cronen" style (initial + period is OK)
+        if (/^[A-Z]\.?\s+[A-Z]/.test(t) && t.split(/\s+/).length >= 2) {
+          addendum_signer = t;
+          break;
+        }
+      }
+    }
+  }
+
+  // Digital signature metadata: "Digitally signed by FIRSTNAME LASTNAME"
+  if (!addendum_signer) {
+    const digM = chunk.match(/Digitally\s+signed\s+by\s+([A-Z][A-Z\s.'-]{3,40})/i);
+    if (digM) addendum_signer = digM[1].trim().replace(/\s+/g, " ");
+  }
+
+  return { addendum_date, addendum_signer };
 }
 
 function parseMoa(text: string): Omit<MoaExtract, "agency_key" | "pdf_url" | "model" | "extracted_at"> {
@@ -408,6 +506,7 @@ function parseMoa(text: string): Omit<MoaExtract, "agency_key" | "pdf_url" | "mo
     lea_signer_title: parseLeaTitle(text),
     date_signed: parseDateSigned(text),
     ...parseLeaPoc(text),
+    ...parseAddendum(text),
   };
 }
 
@@ -481,6 +580,9 @@ for (const [agencyKey, treeUrl] of toProcess.slice(0, isFinite(LIMIT) ? LIMIT : 
     lea_poc_name: null,
     lea_poc_email: null,
     lea_poc_phone: null,
+    lea_poc_address: null,
+    addendum_date: null,
+    addendum_signer: null,
     extracted_at: new Date().toISOString(),
   };
 
