@@ -191,6 +191,15 @@ interface Agency {
   contact_website: string | null
   contact_phone: string | null
   contact_address: string | null
+  // Extracted from the signed MOA PDF (extract-moa-signers.ts)
+  moa_date_signed: string | null
+  ice_field_office: string | null
+  ice_signer_name: string | null
+  ice_signer_title: string | null
+  lea_signer_name: string | null
+  moa_poc_name: string | null
+  moa_poc_email: string | null
+  moa_poc_phone: string | null
   history: HistoryEvent[]
   lee: LeeData | null
   agreement: AgreementMetadata | null
@@ -1034,6 +1043,14 @@ for (const row of grouped) {
     contact_website: null,
     contact_phone: null,
     contact_address: null,
+    moa_date_signed: null,
+    ice_field_office: null,
+    ice_signer_name: null,
+    ice_signer_title: null,
+    lea_signer_name: null,
+    moa_poc_name: null,
+    moa_poc_email: null,
+    moa_poc_phone: null,
     history: buildHistory(aliasGroupOf(hKey)),
     lee: null,
     agreement: null,
@@ -1083,6 +1100,14 @@ for (const key of terminationKeys) {
     contact_website: null,
     contact_phone: null,
     contact_address: null,
+    moa_date_signed: null,
+    ice_field_office: null,
+    ice_signer_name: null,
+    ice_signer_title: null,
+    lea_signer_name: null,
+    moa_poc_name: null,
+    moa_poc_email: null,
+    moa_poc_phone: null,
     history: buildHistory(aliasGroupOf(key)),
     lee: null,
     agreement: null,
@@ -1606,6 +1631,43 @@ if (existsSync(MOA_INDEX_PATH)) {
   console.log(`\nMOA index: attached ${moaAttached}/${agencies.length} agencies`)
 } else {
   console.log('\nMOA index not found — run `pnpm build:moa-index` to generate it')
+}
+
+// ── 7b. MOA signer / field-office enrichment ─────────────────────────────────
+
+const MOA_EXTRACTS_PATH = resolve(__dirname, 'data/moa_extracts.json')
+if (existsSync(MOA_EXTRACTS_PATH)) {
+  type MoaExtract = {
+    ice_field_office?: string | null
+    ice_signer_name?: string | null
+    ice_signer_title?: string | null
+    lea_signer_name?: string | null
+    date_signed?: string | null
+    lea_poc_name?: string | null
+    lea_poc_email?: string | null
+    lea_poc_phone?: string | null
+    error?: string
+  }
+  const extracts = JSON.parse(readFileSync(MOA_EXTRACTS_PATH, 'utf8')) as Record<string, MoaExtract>
+
+  let moaEnriched = 0
+  for (const a of [...agencies, ...terminatedAgencies]) {
+    const key = `${a.state}|${moaNorm(a.name)}`
+    const ex = extracts[key]
+    if (!ex || ex.error) continue
+    if (ex.ice_field_office) a.ice_field_office = ex.ice_field_office
+    if (ex.ice_signer_name) a.ice_signer_name = ex.ice_signer_name
+    if (ex.ice_signer_title) a.ice_signer_title = ex.ice_signer_title
+    if (ex.lea_signer_name) a.lea_signer_name = ex.lea_signer_name
+    if (ex.date_signed) a.moa_date_signed = ex.date_signed
+    if (ex.lea_poc_name) a.moa_poc_name = ex.lea_poc_name
+    if (ex.lea_poc_email) a.moa_poc_email = ex.lea_poc_email
+    if (ex.lea_poc_phone) a.moa_poc_phone = ex.lea_poc_phone
+    moaEnriched++
+  }
+  console.log(`\nMOA extracts: enriched ${moaEnriched} agencies with signer / field-office data`)
+} else {
+  console.log('\nMOA extracts not found — run `pnpm extract:moa-signers` to generate it')
 }
 
 // ── 8. Wikidata website enrichment ────────────────────────────────────────────

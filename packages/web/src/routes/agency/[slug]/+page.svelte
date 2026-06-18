@@ -268,6 +268,29 @@
         <dd class="mt-1 text-xl font-bold text-slate-900">{dateFmt(agency.first_seen_date)}</dd>
       </div>
     {/if}
+    {#if agency.ice_field_office}
+      <div>
+        <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">ICE Field Office</dt>
+        <dd class="mt-1 text-xl font-bold text-slate-900">{agency.ice_field_office}</dd>
+      </div>
+    {/if}
+    {#if agency.ice_signer_name}
+      <div>
+        <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">Signed by (ICE)</dt>
+        <dd class="mt-1 text-xl font-bold text-slate-900">{agency.ice_signer_name}</dd>
+        {#if agency.ice_signer_title}
+          <dd class="mt-0.5 text-xs text-slate-400">{agency.ice_signer_title}</dd>
+        {/if}
+        <dd class="mt-0.5 text-xs italic text-slate-400">From signed MOA</dd>
+      </div>
+    {/if}
+    {#if agency.lea_signer_name}
+      <div>
+        <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">Signed by (LEA)</dt>
+        <dd class="mt-1 text-xl font-bold text-slate-900">{agency.lea_signer_name}</dd>
+        <dd class="mt-0.5 text-xs italic text-slate-400">From signed MOA</dd>
+      </div>
+    {/if}
     {#if agency.lee?.population != null}
       <div>
         <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_population()}</dt>
@@ -381,6 +404,28 @@
             <dd class="min-w-0 break-all"><a href={agency.contact_website} target="_blank" rel="noreferrer">{agency.contact_website}</a></dd>
           </div>
         {/if}
+      </dl>
+    {:else if agency.moa_poc_name || agency.moa_poc_email || agency.moa_poc_phone}
+      <dl class="mt-4 space-y-3">
+        {#if agency.moa_poc_name}
+          <div class="flex gap-4">
+            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-500">POC</dt>
+            <dd class="text-slate-700">{agency.moa_poc_name}</dd>
+          </div>
+        {/if}
+        {#if agency.moa_poc_phone}
+          <div class="flex gap-4">
+            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Phone</dt>
+            <dd><a href="tel:{agency.moa_poc_phone}">{agency.moa_poc_phone}</a></dd>
+          </div>
+        {/if}
+        {#if agency.moa_poc_email}
+          <div class="flex gap-4">
+            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Email</dt>
+            <dd><a href="mailto:{agency.moa_poc_email}">{agency.moa_poc_email}</a></dd>
+          </div>
+        {/if}
+        <p class="text-xs italic text-slate-400">Source: signed MOA public affairs contact</p>
       </dl>
     {:else}
       <p class="mt-3 text-sm italic text-slate-600">{m.agency_contact_none()}</p>

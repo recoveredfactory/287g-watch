@@ -54,6 +54,14 @@ export type Agency = {
   contact_phone?: string | null;
   contact_email?: string | null;
   contact_website?: string | null;
+  moa_date_signed?: string | null;
+  ice_field_office?: string | null;
+  ice_signer_name?: string | null;
+  ice_signer_title?: string | null;
+  lea_signer_name?: string | null;
+  moa_poc_name?: string | null;
+  moa_poc_email?: string | null;
+  moa_poc_phone?: string | null;
   history?: HistoryEvent[];
   lee?: LeeData | null;
   agreement?: AgreementMetadata | null;
