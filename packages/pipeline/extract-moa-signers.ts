@@ -190,28 +190,48 @@ function detectModel(filename: string): string | null {
 
 // ── Parsers ───────────────────────────────────────────────────────────────────
 //
-// Two template families are in the wild:
+// Three template families are in the wild:
 //
-//   NEW (June 2025+): "For ICE:" in Sec VII, typed "Name: {name}" in right
+//   JEM NEW (June 2025+): "For ICE:" in Sec VII, typed "Name: {name}" in right
 //     column, numeric dates, ICE title "Deputy Director".
 //
-//   OLD (pre-June 2025): "ForDHS:" / "For DHS:" in Sec VII, ICE name appears
+//   JEM OLD (pre-June 2025): "ForDHS:" / "For DHS:" in Sec VII, ICE name appears
 //     as a right-indented standalone line above a blank "Name:" field, spelled-
 //     out or numeric dates, ICE title "Acting Director" or "Field Office Director".
 //
-// We try both patterns and return the first hit.
+//   TFM (Task Force Model, 2025): Sec VII is "NOMINATION OF PERSONNEL" — no FOD
+//     POC line at all. Field office only mentioned in the OPLA paragraph:
+//     "OPLA field location at Miami Field Office". Sig block has no typed ICE name.
+//     Appendix C contact appears on the SAME LINE as "For the LEA:" (or "For LEA:").
+//
+// We try all patterns for each field and return the first hit.
 
 const ICE_TITLE_RE = /Title:\s*[-– \t]*(Acting\s*Director|Deputy\s*Director|Field\s*Office\s*Director)/i;
 // Matches "First Last", "First M. Last", "First Middle Last" — at least two words,
 // each starting uppercase. Does NOT require a third word after a middle initial.
 const FULL_NAME_RE = /[A-Z][a-zA-Z'-]+(?: +[A-Z](?:\.[a-zA-Z'-]*|[a-zA-Z'-]+))+/;
 
-// Section VII POC line — field office city.
-// New: "For ICE: New Orleans Field Office Director"
-// Old: "ForDHS: New Orleans Field Office Director"
+// Field office city. Multiple sources:
+//
+// 1. Section VII POC (JEM template): "For ICE: New Orleans Field Office Director"
+//    or "For DHS: New Orleans, Field Office Director" (comma variant)
+// 2. OPLA paragraph (TFM template): "OPLA field location at Miami Field Office"
+// 3. Termination notice clause (all templates): "written notice to the … Field Office"
+//    — too generic, skip
 function parseFieldOffice(text: string): string | null {
-  const m = text.match(/For\s*(?:ICE|DHS):\s*([A-Za-z][A-Za-z ]+?)\s*Field\s*Office\s*Director/i);
-  return m ? m[1].trim() : null;
+  // Pattern 1: Sec VII FOD line — allow optional comma/punctuation before "Field"
+  const m1 = text.match(/For\s*(?:ICE|DHS):\s*([A-Za-z][A-Za-z ]+?)[,\s]*Field\s*Office\s*Director/i);
+  if (m1) return m1[1].trim();
+
+  // Pattern 2: OPLA location paragraph (TFM)
+  const m2 = text.match(/OPLA[^.]*?field\s+location\s+at\s+([A-Za-z][A-Za-z ]+?)\s*Field\s*Office/i);
+  if (m2) return m2[1].trim();
+
+  // Pattern 3: "local ICE {City} Field Office" — sometimes in body text
+  const m3 = text.match(/local\s+ICE\s+([A-Za-z][A-Za-z ]+?)\s+Field\s+Office\b(?!\s+Director)/i);
+  if (m3 && m3[1].toLowerCase() !== "the") return m3[1].trim();
+
+  return null;
 }
 
 // ICE signer name. Two layouts (see template note above).
@@ -307,39 +327,62 @@ function parseDateSigned(text: string): string | null {
   return null;
 }
 
-// Appendix C: LEA POC block.
-// New template: name, then address, then phone, then email (separate lines).
-// Old template: "Chief Deputy Jeremy Amerson 334-567-5546 ext.3008" (all on one line).
+// Appendix C: LEA POC block. Three layouts:
+//   JEM new:  name on next line after "For the LEA:" (separate line)
+//   JEM old:  "Chief Deputy Tom Allen 334-361-2500" (name+phone on one line)
+//   TFM:      "For the LEA:        Sean Scheller" (name on SAME line as label)
+//             "For LEA:            Sheriff Boyd" (no "the")
 function parseLeaPoc(text: string): { lea_poc_name: string | null; lea_poc_email: string | null; lea_poc_phone: string | null } {
   const idx = text.search(/APPENDIX\s*C/);
   if (idx < 0) return { lea_poc_name: null, lea_poc_email: null, lea_poc_phone: null };
   const chunk = text.slice(idx, idx + 1200);
 
-  const leaIdx = chunk.search(/For the LEA:/i);
+  // Match "For [the] LEA:" with optional "the" (TFM drops "the")
+  const leaIdx = chunk.search(/For (?:the )?LEA:/i);
   if (leaIdx < 0) return { lea_poc_name: null, lea_poc_email: null, lea_poc_phone: null };
 
-  const iceIdx = chunk.indexOf("For ICE:", leaIdx);
-  const after = chunk.slice(leaIdx + "For the LEA:".length, iceIdx > 0 ? iceIdx : undefined);
+  // Check if there's a name on the SAME line (TFM pattern):
+  //   "For the LEA:        Sean Scheller"
+  //   "For LEA:            Sheriff Marty Boyd"  ← strip title prefix
+  const leaLine = chunk.slice(leaIdx).split("\n")[0];
+  const sameLineMatch = leaLine.match(/For (?:the )?LEA:\s+(.+?)\s*$/i);
+  let inlineContact: string | null = null;
+  if (sameLineMatch) {
+    let candidate = sameLineMatch[1].trim();
+    // Skip pure role lines like "Sheriff - Walton County SO" or "Public Affairs Officer"
+    if (/ - /.test(candidate) || /County|Office|Dept|Police\b|Public Affairs/.test(candidate)) {
+      candidate = "";
+    }
+    // Strip title prefixes that precede the actual name: "Sheriff Marty Boyd" → "Marty Boyd"
+    candidate = candidate.replace(/^(?:Sheriff|Chief Deputy|Chief|Deputy|Major|Captain|Lt\.?|Lieutenant|Col\.?|Commander)\s+/i, "");
+    if (FULL_NAME_RE.test(candidate) && candidate.split(/\s+/).length >= 2) {
+      inlineContact = candidate;
+    }
+  }
 
-  // Name: first Title-Case line that isn't purely numeric/address.
-  // Handle "Chief Deputy Tom Allen" (separate line) and
-  // "Chief Deputy Jeremy Amerson 334-567-5546" (phone appended).
-  const nameLines = after
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l && /^[A-Z][a-z]/.test(l) && !/^\d/.test(l) && l.length > 4);
+  // Slice after the label to the "For ICE:" boundary
+  const leaLabelLen = chunk.slice(leaIdx).match(/^For (?:the )?LEA:/i)![0].length;
+  const iceIdx = chunk.indexOf("For ICE:", leaIdx + leaLabelLen);
+  const after = chunk.slice(leaIdx + leaLabelLen, iceIdx > 0 ? iceIdx : undefined);
 
-  let name: string | null = null;
+  let name: string | null = inlineContact;
   let phone: string | null = null;
 
-  if (nameLines[0]) {
-    // Strip trailing phone "(334) 335-4850" or "334-567-5546 ext.3008"
-    const phoneInLine = nameLines[0].match(/\s+\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}.*/);
-    if (phoneInLine) {
-      phone = phoneInLine[0].trim();
-      name = nameLines[0].slice(0, phoneInLine.index).trim();
-    } else {
-      name = nameLines[0];
+  if (!name) {
+    // Name from next lines: first Title-Case line that isn't numeric/address.
+    const nameLines = after
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l && /^[A-Z][a-z]/.test(l) && !/^\d/.test(l) && l.length > 4);
+
+    if (nameLines[0]) {
+      const phoneInLine = nameLines[0].match(/\s+\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}.*/);
+      if (phoneInLine) {
+        phone = phoneInLine[0].trim();
+        name = nameLines[0].slice(0, phoneInLine.index!).trim();
+      } else {
+        name = nameLines[0];
+      }
     }
   }
 
