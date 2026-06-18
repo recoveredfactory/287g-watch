@@ -16,7 +16,7 @@
  */
 
 import AdmZip from 'adm-zip'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import slugifyLib from 'slugify'
@@ -458,13 +458,30 @@ async function snapshotBuffer(dir: GHEntry): Promise<Buffer | null> {
 console.log('Loading latest sheets snapshot...')
 console.log('  Listing snapshot directories via GitHub API...')
 
-const sheetsResp = await ghFetch(GITHUB_SHEETS_API)
-if (!sheetsResp.ok) throw new Error(`GitHub API: ${sheetsResp.status}`)
+// Fall back to the local disk cache if the API listing is unavailable
+// (rate-limited or no token). The cache holds every snapshot we've ever
+// fetched, so we can reconstruct the directory list from it.
+let snapshotDirs: GHEntry[]
 
-const allEntries = (await sheetsResp.json()) as GHEntry[]
-const snapshotDirs = allEntries
-  .filter((e) => e.type === 'dir')
-  .sort((a, b) => b.name.localeCompare(a.name))
+const sheetsResp = await ghFetch(GITHUB_SHEETS_API)
+if (sheetsResp.ok) {
+  const allEntries = (await sheetsResp.json()) as GHEntry[]
+  snapshotDirs = allEntries
+    .filter((e) => e.type === 'dir')
+    .sort((a, b) => b.name.localeCompare(a.name))
+  console.log(`  ${snapshotDirs.length} snapshot dirs from API`)
+} else {
+  console.warn(`  ⚠ GitHub API ${sheetsResp.status} — falling back to local cache`)
+  const cacheFiles = existsSync(CACHE_DIR)
+    ? readdirSync(CACHE_DIR)
+        .filter((f) => f.startsWith('sheets_'))
+        .map((f) => f.replace(/\.(xlsx|csv)$/, ''))
+    : []
+  const uniqueNames = [...new Set(cacheFiles)].sort((a, b) => b.localeCompare(a))
+  snapshotDirs = uniqueNames.map((name) => ({ name, type: 'dir' }))
+  console.log(`  ${snapshotDirs.length} snapshot dirs from cache`)
+  if (snapshotDirs.length === 0) throw new Error('No cached snapshots found. Set GH_TOKEN and retry.')
+}
 
 let latestBuf: Buffer | null = null
 let snapshotName = ''
@@ -1605,18 +1622,19 @@ for (const s of stateCoverage) {
 
 // ── 7. Join MOA index ─────────────────────────────────────────────────────────
 
+// Shared key normalizer — used by both MOA index (step 7) and MOA extracts (step 7b).
+function moaNorm(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/'/g, '')
+    .replace(/[^a-z0-9 ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 const MOA_INDEX_PATH = resolve(__dirname, 'data/moa_index.json')
 if (existsSync(MOA_INDEX_PATH)) {
   const moaIndex = JSON.parse(readFileSync(MOA_INDEX_PATH, 'utf8')) as Record<string, string>
-
-  function moaNorm(s: string): string {
-    return s
-      .toLowerCase()
-      .replace(/'/g, '')
-      .replace(/[^a-z0-9 ]+/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-  }
 
   let moaAttached = 0
   for (const a of agencies) {
