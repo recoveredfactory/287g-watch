@@ -200,6 +200,9 @@ interface Agency {
   moa_poc_name: string | null
   moa_poc_email: string | null
   moa_poc_phone: string | null
+  moa_poc_address: string | null
+  moa_addendum_date: string | null
+  moa_addendum_signer: string | null
   history: HistoryEvent[]
   lee: LeeData | null
   agreement: AgreementMetadata | null
@@ -1068,6 +1071,9 @@ for (const row of grouped) {
     moa_poc_name: null,
     moa_poc_email: null,
     moa_poc_phone: null,
+    moa_poc_address: null,
+    moa_addendum_date: null,
+    moa_addendum_signer: null,
     history: buildHistory(aliasGroupOf(hKey)),
     lee: null,
     agreement: null,
@@ -1125,6 +1131,9 @@ for (const key of terminationKeys) {
     moa_poc_name: null,
     moa_poc_email: null,
     moa_poc_phone: null,
+    moa_poc_address: null,
+    moa_addendum_date: null,
+    moa_addendum_signer: null,
     history: buildHistory(aliasGroupOf(key)),
     lee: null,
     agreement: null,
@@ -1681,6 +1690,9 @@ if (existsSync(MOA_EXTRACTS_PATH)) {
     if (ex.lea_poc_name) a.moa_poc_name = ex.lea_poc_name
     if (ex.lea_poc_email) a.moa_poc_email = ex.lea_poc_email
     if (ex.lea_poc_phone) a.moa_poc_phone = ex.lea_poc_phone
+    if (ex.lea_poc_address) a.moa_poc_address = ex.lea_poc_address
+    if (ex.addendum_date) a.moa_addendum_date = ex.addendum_date
+    if (ex.addendum_signer) a.moa_addendum_signer = ex.addendum_signer
     moaEnriched++
   }
   console.log(`\nMOA extracts: enriched ${moaEnriched} agencies with signer / field-office data`)
