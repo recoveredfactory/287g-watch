@@ -413,12 +413,6 @@
             <dd class="text-slate-700">{agency.moa_poc_name}</dd>
           </div>
         {/if}
-        {#if agency.moa_poc_address}
-          <div class="flex gap-4">
-            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Address</dt>
-            <dd class="text-slate-700">{agency.moa_poc_address}</dd>
-          </div>
-        {/if}
         {#if agency.moa_poc_phone}
           <div class="flex gap-4">
             <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Phone</dt>
