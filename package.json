@@ -17,7 +17,11 @@
     "publish:map-assets:staging": "sst shell --stage staging node packages/web/scripts/publish-map-assets.mjs",
     "publish:map-assets:prod": "sst shell --stage prod node packages/web/scripts/publish-map-assets.mjs",
     "publish:og:staging": "sst shell --stage staging node packages/web/scripts/publish-og.mjs",
-    "publish:og:prod": "sst shell --stage prod node packages/web/scripts/publish-og.mjs"
+    "publish:og:prod": "sst shell --stage prod node packages/web/scripts/publish-og.mjs",
+    "social:youtube:staging": "STAGE=staging sst shell --stage staging node packages/web/scripts/publish-social-youtube.mjs",
+    "social:youtube:prod": "STAGE=prod sst shell --stage prod node packages/web/scripts/publish-social-youtube.mjs",
+    "social:instagram:staging": "STAGE=staging sst shell --stage staging node packages/web/scripts/publish-social-instagram.mjs",
+    "social:instagram:prod": "STAGE=prod sst shell --stage prod node packages/web/scripts/publish-social-instagram.mjs"
   },
   "devDependencies": {
     "sst": "^3.17.25"

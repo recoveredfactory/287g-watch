@@ -34,6 +34,8 @@
     "vite": "^5.0.3"
   },
   "dependencies": {
+    "@aws-sdk/client-sesv2": "^3.700.0",
+    "@googleapis/youtube": "^20.0.0",
     "d3-geo": "^3.1.1",
     "d3-scale": "^4.0.2",
     "maplibre-gl": "^5.15.0",
