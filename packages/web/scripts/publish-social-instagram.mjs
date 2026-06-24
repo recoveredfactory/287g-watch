@@ -5,8 +5,9 @@
 // resolves the video URL + caption and prints the exact post it *would* make
 // (and which IG account), then stops without publishing.
 //
-//   pnpm social:instagram:staging                 # dry run: plan only
-//   pnpm social:instagram:staging -- --confirm     # real post to the staging account
+//   pnpm social:instagram:staging                      # dry run: plan only, no API calls
+//   pnpm social:instagram:staging -- --container-only  # build + process the video, no publish
+//   pnpm social:instagram:staging -- --confirm         # real PUBLIC post to the staging account
 //
 // ⚠️ NO PRIVATE MODE: unlike YouTube (which force-locks unverified uploads to
 // private), Instagram has no private-post API — a --confirm post is PUBLIC the
@@ -29,6 +30,9 @@
 //
 // Flags:
 //   --confirm              actually publish (default: dry run)
+//   --container-only       create + process the Reels container, then STOP before
+//                          publishing — validates the app, token, and video with
+//                          nothing made public (an unused container expires in ~24h)
 //   --lang <en|es>         which language cut to post (default: en)
 //   --caption <s>          override the generated caption
 //   --date <YYYY-MM-DD>    snapshot date for the caption (default: $SNAPSHOT_DATE
@@ -59,6 +63,7 @@ const die = (msg) => {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const confirm = has("--confirm");
+const containerOnly = has("--container-only");
 const lang = valueOf("--lang") || "en";
 const apiVersion = valueOf("--api-version") || "v25.0";
 const stage = process.env.STAGE || process.env.SST_STAGE || "(unknown)";
@@ -164,18 +169,26 @@ async function previewAccount() {
 const accountLine = await previewAccount();
 
 // --- Print the plan (shown for both dry run and real post) -----------------
-console.log(`\nInstagram Reel — ${confirm ? "LIVE (--confirm)" : "DRY RUN (no --confirm)"}`);
+const mode = containerOnly
+  ? "CONTAINER-ONLY (build + process, no publish)"
+  : confirm
+    ? "LIVE (--confirm)"
+    : "DRY RUN (no --confirm)";
+console.log(`\nInstagram Reel — ${mode}`);
 console.log(`  stage:    ${stage}`);
 console.log(`  account:  ${accountLine}`);
 console.log(`  language: ${lang}`);
 console.log(`  video:    ${video || "(UNRESOLVED — run via sst shell, or pass --video-url)"}`);
 console.log("  caption:  |");
 for (const line of caption.split("\n")) console.log(`    ${line}`);
-if (confirm) console.log("\n  ⚠️ Instagram has no private mode — this posts a PUBLIC Reel.");
+if (confirm && !containerOnly)
+  console.log("\n  ⚠️ Instagram has no private mode — this posts a PUBLIC Reel.");
+if (containerOnly)
+  console.log("\n  Container-only: builds + processes the video, then stops before publishing (nothing public).");
 
-if (!confirm) {
-  console.log("\nDry run — nothing posted. Re-run with --confirm to publish to the");
-  console.log("account behind INSTAGRAM_ACCESS_TOKEN. Adjust copy with --caption.\n");
+if (!confirm && !containerOnly) {
+  console.log("\nDry run — nothing posted. Re-run with --container-only to build +");
+  console.log("validate the container without publishing, or --confirm to post.\n");
   process.exit(0);
 }
 
@@ -211,6 +224,16 @@ try {
       die(`Container ${status}: ${s.status || "(no detail)"}`);
   }
   if (status !== "FINISHED") die("Timed out waiting for the container to finish processing.");
+
+  // Container-only: a FINISHED container proves the app, token, and video all
+  // work end-to-end — that's the whole staging check. Stop before publishing;
+  // nothing reaches the profile and the unused container expires in ~24h.
+  if (containerOnly) {
+    console.log(`\n✓ Container built and processed (id ${creationId}).`);
+    console.log("  Nothing published — this never appears on the profile.");
+    console.log("  Re-run with --confirm to actually post.\n");
+    process.exit(0);
+  }
 
   // 3. Publish.
   console.log("▶ Publishing");
