@@ -17,6 +17,8 @@
   import { MODEL_COLORS, MODEL_ORDER, MODEL_MINI, MODEL_SLUG } from "$lib/colors";
   import { STATE_NAMES } from "$lib/states";
   import ModelLink from "$lib/components/ModelLink.svelte";
+  import { getLocale } from "$lib/paraglide/runtime";
+  import { m } from "$lib/paraglide/messages.js";
 
   type Agency = {
     models?: string[];
@@ -30,8 +32,9 @@
   // When true (e.g. state pages), hides the state selector and agency count.
   export let hideSelector = false;
 
-  // Localized thousands separators for every displayed integer.
-  const nf = new Intl.NumberFormat();
+  // Locale-aware formatting (thousands separators + month labels) for the active site language.
+  const localeTag = getLocale() === "es" ? "es-MX" : "en-US";
+  const nf = new Intl.NumberFormat(localeTag);
 
   // ── State scope ─────────────────────────────────────────────────────────────
   let selectedState = ""; // "" = National
@@ -43,15 +46,18 @@
     (STATE_NAMES[a] ?? a).localeCompare(STATE_NAMES[b] ?? b),
   );
   $: scoped = selectedState ? agencies.filter((a) => a.state === selectedState) : agencies;
-  $: scopeLabel = selectedState ? (STATE_NAMES[selectedState] ?? selectedState) : "the U.S.";
+  $: scopeLabel = selectedState ? (STATE_NAMES[selectedState] ?? selectedState) : m.trend_scope_us();
 
   // ── Time axis ───────────────────────────────────────────────────────────────
   // Months are integer indices relative to a Jan 2025 epoch (Dec 2024 = -1),
   // derived from the server's "YYYY-MM" sample labels.
   const EPOCH_YEAR = 2025;
-  const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const monthLabelShort = (idx: number) =>
-    `${MONTH_NAMES[((idx % 12) + 12) % 12]} ’${String(EPOCH_YEAR + Math.floor(idx / 12)).slice(2)}`;
+  const monthFmt = new Intl.DateTimeFormat(localeTag, { month: "short", timeZone: "UTC" });
+  const monthLabelShort = (idx: number) => {
+    const year = EPOCH_YEAR + Math.floor(idx / 12);
+    const month = ((idx % 12) + 12) % 12;
+    return `${monthFmt.format(new Date(Date.UTC(year, month, 1)))} ’${String(year).slice(2)}`;
+  };
 
   $: months = trendMonths.map(
     (ym) => (Number(ym.slice(0, 4)) - EPOCH_YEAR) * 12 + (Number(ym.slice(5, 7)) - 1),
@@ -71,6 +77,16 @@
   // size). Agreements ≥ agencies because agencies can hold more than one model.
   $: totalAgreements = series.reduce((n, s) => n + s.final, 0);
   $: totalAgencies = scoped.length;
+  // Bold figures composed into the translated summary line (rendered via {@html}).
+  $: agreementsPhrase = (totalAgreements === 1 ? m.trend_count_agreements_one : m.trend_count_agreements_other)({
+    count: `<span class="font-semibold text-slate-900">${nf.format(totalAgreements)}</span>`,
+  });
+  $: agenciesPhrase = (totalAgencies === 1 ? m.trend_count_agencies_one : m.trend_count_agencies_other)({
+    count: `<span class="font-semibold text-slate-900">${nf.format(totalAgencies)}</span>`,
+  });
+  $: summaryHtml = hideSelector
+    ? m.trend_summary_plain({ agreements: agreementsPhrase })
+    : m.trend_summary_scoped({ agreements: agreementsPhrase, agencies: agenciesPhrase });
 
   // ── Geometry / scales (manual; keeps us off a charting dep) ─────────────────
   // Generous right margin: the direct end labels are the cramped spot, and we
@@ -165,16 +181,16 @@
     <!-- Headline stays plain text; the scope control is an ordinary select on the header row -->
     <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
       <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">
-        How participation has grown
+        {m.trend_heading()}
       </h2>
       {#if !hideSelector}
       <label class="flex items-center gap-2 text-sm text-slate-600">
-        <span>Show</span>
+        <span>{m.trend_scope_label()}</span>
         <select
           bind:value={selectedState}
           class="cursor-pointer rounded border border-slate-300 bg-white px-2 py-1 text-sm text-slate-800 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-300"
         >
-          <option value="">United States ({nf.format(agencies.length)})</option>
+          <option value="">{m.trend_scope_national({ count: nf.format(agencies.length) })}</option>
           {#each stateOptions as st}
             <option value={st}>{STATE_NAMES[st] ?? st} ({nf.format(stateCounts[st])})</option>
           {/each}
@@ -183,15 +199,10 @@
       {/if}
     </div>
     <p class="mt-1 text-sm text-slate-600">
-      Active 287(g) agreements by model{hideSelector ? "" : " in " + scopeLabel}, since Dec&nbsp;2024.
+      {hideSelector ? m.trend_subtitle_plain() : m.trend_subtitle_scoped({ scope: scopeLabel })}
     </p>
     <!-- Distinct figures: an agency can hold more than one model -->
-    <p class="mt-2 text-sm text-slate-500">
-      <span class="font-semibold text-slate-900">{nf.format(totalAgreements)}</span>
-      {totalAgreements === 1 ? "agreement" : "agreements"}{#if !hideSelector}
-      across <span class="font-semibold text-slate-900">{nf.format(totalAgencies)}</span>
-      {totalAgencies === 1 ? "agency" : "agencies"}{/if}.
-    </p>
+    <p class="mt-2 text-sm text-slate-500">{@html summaryHtml}</p>
 
     <!-- Legend (full names; mini codes match the in-chart labels) -->
     <div class="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-sm">
@@ -207,7 +218,7 @@
 
     {#if months.length > 1}
     <div class="mt-4" bind:clientWidth={measuredW}>
-      <svg viewBox="0 0 {W} {H}" class="block w-full" role="img" aria-label="Active 287(g) agreements by model since December 2024">
+      <svg viewBox="0 0 {W} {H}" class="block w-full" role="img" aria-label={m.trend_aria_label()}>
         <!-- simple numeric y-axis: a few round ticks + faint gridlines -->
         {#each yTicks as t}
           <line x1={PAD.l} y1={yAt(t)} x2={W - PAD.r} y2={yAt(t)} stroke="#eef2f6" />
@@ -234,7 +245,7 @@
     {/if}
 
     <p class="mt-3 text-xs italic text-slate-400">
-      Experimental (#162). Each line counts active agency–model agreements, so an agency with two models counts once per model. Changes are dated by when they appear in ICE's published list; the Dec 2024 level carries everything signed before then, and the archive has no snapshots between mid-Dec 2024 and early Mar 2025, so the lines run flat there.
+      {m.trend_experimental_note()}
     </p>
   </div>
 </section>

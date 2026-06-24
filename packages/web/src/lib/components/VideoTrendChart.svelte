@@ -11,6 +11,8 @@
   // TrendCharts, so the playhead lines up with the map cursor.
   import { MODEL_ORDER, MODEL_COLORS, MODEL_SLUG } from "$lib/colors";
   import { interpAt } from "$lib/trendSample";
+  import { getLocale } from "$lib/paraglide/runtime";
+  import { m } from "$lib/paraglide/messages.js";
 
   type TrendSeries = { jail: number[]; taskforce: number[]; wso: number[] };
   export let trendMonths: string[] = [];
@@ -20,11 +22,15 @@
   // Drawing height in px (viewBox units render 1:1 against the container width).
   export let height = 560;
 
-  const nf = new Intl.NumberFormat();
+  const localeTag = getLocale() === "es" ? "es-MX" : "en-US";
+  const nf = new Intl.NumberFormat(localeTag);
   const EPOCH_YEAR = 2025;
-  const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const monthLabelShort = (idx: number) =>
-    `${MONTH_NAMES[((idx % 12) + 12) % 12]} ’${String(EPOCH_YEAR + Math.floor(idx / 12)).slice(2)}`;
+  const monthFmt = new Intl.DateTimeFormat(localeTag, { month: "short", timeZone: "UTC" });
+  const monthLabelShort = (idx: number) => {
+    const year = EPOCH_YEAR + Math.floor(idx / 12);
+    const month = ((idx % 12) + 12) % 12;
+    return `${monthFmt.format(new Date(Date.UTC(year, month, 1)))} ’${String(year).slice(2)}`;
+  };
 
   $: months = trendMonths.map(
     (ym) => (Number(ym.slice(0, 4)) - EPOCH_YEAR) * 12 + (Number(ym.slice(5, 7)) - 1),
@@ -122,7 +128,7 @@
 
 <div class="vtc" bind:clientWidth={measuredW}>
   {#if months.length > 1}
-    <svg viewBox="0 0 {W} {H}" class="block w-full" role="img" aria-label="Active 287(g) agreements by model since December 2024">
+    <svg viewBox="0 0 {W} {H}" class="block w-full" role="img" aria-label={m.trend_aria_label()}>
       {#each gridYs as gy}
         <line x1={PAD.l} y1={gy} x2={W - PAD.r} y2={gy} stroke="rgba(255,255,255,0.16)" />
       {/each}
@@ -144,7 +150,7 @@
       {#each endLabels as l}
         <text x={labelX} y={l.y - 6} fill={MODEL_COLORS[l.model]} style="font-size: 24px; font-weight: 600;">{l.model}</text>
         <text x={labelX} y={l.y + 34} fill="#ffffff" style="font-weight: 800;">
-          <tspan style="font-size: 46px;" fill={MODEL_COLORS[l.model]}>{nf.format(l.value)}</tspan><tspan dx="10" style="font-size: 24px; font-weight: 600;" fill="#cbd5e1">agreements</tspan>
+          <tspan style="font-size: 46px;" fill={MODEL_COLORS[l.model]}>{nf.format(l.value)}</tspan><tspan dx="10" style="font-size: 24px; font-weight: 600;" fill="#cbd5e1">{m.video_agreements()}</tspan>
         </text>
       {/each}
     </svg>
