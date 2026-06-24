@@ -102,11 +102,22 @@ export default $config({
     // copy per ICE release. See packages/web/scripts/publish-map-assets.mjs.
     const mapArchive = new sst.aws.Bucket("MapArchive", { access: "public" });
 
+    // SES identity for the social-posting pipeline's notifications (#190),
+    // managed in IaC instead of hand-verified in the console. Set
+    // NOTIFY_EMAIL_SENDER to a single address (e.g. alerts@recoveredfactory.net
+    // → SST sends a one-time confirmation email) or a domain (→ SST manages the
+    // DNS verification records). Skipped when unset, so a deploy never requires
+    // it; social-notify.mjs reads `Resource.Notify.sender`. The address/domain
+    // must clear the SES sandbox (verified, or production access) to send.
+    const notifyEmail = env.NOTIFY_EMAIL_SENDER
+      ? new sst.aws.Email("Notify", { sender: env.NOTIFY_EMAIL_SENDER })
+      : undefined;
+
     new sst.aws.SvelteKit("Web", {
       path: "packages/web",
       domain: webDomain,
       warm: isProdStage ? 1 : 0,
-      link: [mapArchive],
+      link: [mapArchive, ...(notifyEmail ? [notifyEmail] : [])],
       environment: {
         PUBLIC_STAGE: $app.stage,
         PUBLIC_MAP_ASSETS_URL: $interpolate`https://${mapArchive.domain}`,
