@@ -62,9 +62,6 @@ export type Agency = {
   moa_poc_name?: string | null;
   moa_poc_email?: string | null;
   moa_poc_phone?: string | null;
-  moa_poc_address?: string | null;
-  moa_addendum_date?: string | null;
-  moa_addendum_signer?: string | null;
   history?: HistoryEvent[];
   lee?: LeeData | null;
   agreement?: AgreementMetadata | null;

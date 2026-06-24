@@ -497,13 +497,9 @@ function parseAddendum(text: string): { addendum_date: string | null; addendum_s
   return { addendum_date, addendum_signer };
 }
 
-// Labels and fragments that look like names but aren't
-const SIGNER_BLOCKLIST = /^(?:For ICE:|Department of Homeland|U\.S\. Immigration|Name:|Title:)/i;
-
 function parseMoa(text: string): Omit<MoaExtract, "agency_key" | "pdf_url" | "model" | "extracted_at"> {
-  const ice = parseIceName(text);
   return {
-    ice_signer_name: ice && !SIGNER_BLOCKLIST.test(ice) ? ice : null,
+    ice_signer_name: parseIceName(text),
     ice_signer_title: parseIceTitle(text),
     ice_field_office: parseFieldOffice(text),
     lea_signer_name: parseLeaName(text),
