@@ -30,6 +30,8 @@ TypeScript throughout. SvelteKit for the frontend. Node.js for the pipeline. Do 
 
 **Do not touch slug generation without flagging it loudly.** Slugs (`/agency/[slug]`) may be linked externally. A change to slug logic is a breaking change and requires a migration plan or a deliberate decision to accept broken links.
 
+**Every user-facing string goes through the translation layer.** This is a bilingual EN/ES site (Paraglide / `@inlang/paraglide-js`). Any text a reader can see must be a Paraglide message — `m.key()` from `$lib/paraglide/messages.js`, with the key added to both `messages/en.json` and `messages/es.json`. No hardcoded English literals in components, and that includes the easy-to-miss ones: `aria-label`s, SVG chart axis/legend/tooltip copy, dropdown options, units ("agreements"/"agencies"), and empty states. Format numbers and dates against the active locale — derive `getLocale() === "es" ? "es-MX" : "en-US"` and pass it to `Intl.NumberFormat`/`Intl.DateTimeFormat`; never a bare `Intl` default or a hardcoded month-name array (see `MapTimelineScrubber.svelte`). Source material — agency names, MOA text, official records — stays in English by design (see the `source_material_notice` key).
+
 ---
 
 ## Workflow expectations
