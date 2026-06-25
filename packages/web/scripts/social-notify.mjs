@@ -63,10 +63,14 @@ async function resolveSender() {
   return null;
 }
 
-export async function notify(opts) {
+// Low-level send: takes a ready subject/body, resolves the sender, and emails
+// via SES. Best-effort — logs everything and never throws, so callers can fire
+// it without a try/catch and a successful post is never reported as failed.
+// Importable by any script that wants to compose its own message (e.g. the
+// "ready to publish" notifier); notify() below is the structured wrapper.
+export async function sendEmail({ subject, body }) {
   const from = await resolveSender();
   const to = process.env.NOTIFY_EMAIL_TO;
-  const { subject, body } = render(opts);
 
   // Always echo to the job log, so there's a record even when email is off.
   console.log(`\n[notify] ${subject}`);
@@ -97,6 +101,10 @@ export async function notify(opts) {
     console.log(`[notify] email send failed (non-fatal): ${e?.message || e}`);
     return { sent: false, reason: "send-error" };
   }
+}
+
+export async function notify(opts) {
+  return sendEmail(render(opts));
 }
 
 // CLI entry — only when run directly (not when imported).

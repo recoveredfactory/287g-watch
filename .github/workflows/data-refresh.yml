@@ -24,21 +24,19 @@
 # With BAKE_GL=gpu the bake runs headed under xvfb and FAILS LOUD if it can't
 # reach the GPU (so you never silently pay GPU minutes for a software bake).
 #
-# Social posting (the gated `post-social` job) uses GitHub Environments so a
-# staging run physically can't read the prod account's token:
-#   Environments  staging, prod   (Settings → Environments). Put a "Required
-#                                  reviewers" rule on `prod` so real posts wait
-#                                  for a manual approve; leave `staging` open.
+# Social posting (the `post-social` job). YouTube is auto-uploaded PRIVATELY to
+# the prod channel (an unverified Google API project force-locks uploads to
+# private anyway, so nothing goes public unattended); Instagram is MANUAL for
+# now — instead of posting, the job emails you the public video URL + caption to
+# post by hand, alongside the YouTube Studio "publish" page for the upload.
+#   Environments  staging, prod   (Settings → Environments) — scope the YouTube
+#                                  token so a staging run can't read prod's.
 #   Repo secret   YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET   (one OAuth app)
-#                 INSTAGRAM_APP_ID, INSTAGRAM_APP_SECRET     (one Meta app)
 #   Env secret    YOUTUBE_REFRESH_TOKEN   per environment — burner channel in
-#                                         `staging`, real channel in `prod`.
-#                 INSTAGRAM_ACCESS_TOKEN, INSTAGRAM_USER_ID  per environment —
-#                                         burner IG account in `staging`, real
-#                                         in `prod` (mint with instagram-auth.mjs).
-#   Repo var      NOTIFY_EMAIL_SENDER  SES-verified sender (also provisions the
-#                                      SST Email identity); NOTIFY_EMAIL_TO  the
-#                                      recipient(s). Unset → notifications log only.
+#                                         `staging`, real channel in `prod`
+#                                         (mint with youtube-auth.mjs).
+#   Repo var      NOTIFY_EMAIL_FROM  SES-verified sender; NOTIFY_EMAIL_TO  the
+#                                    recipient(s). Unset → notifications log only.
 # See docs/SOCIAL_UPLOAD.md for the full (mostly manual) setup.
 
 name: Data refresh
@@ -59,10 +57,10 @@ on:
         type: boolean
         default: false
       post_social:
-        description: "Social post — dry-run prints the caption; post uploads (prod waits for approval)"
+        description: "Social — post: upload YouTube (private) + email you to publish & post IG. dry-run: print the plan only."
         type: choice
-        options: [dry-run, post]
-        default: dry-run
+        options: [post, dry-run]
+        default: post
   # Twice daily, both AFTER the upstream auto-commit window: appelson/
   # Tracking_287g lands its daily "Auto-commit from GitHub Actions" around
   # 17:00–20:00 UTC. 21:00 catches that day's update; 01:00 is a safety net for
@@ -99,9 +97,6 @@ jobs:
       WEB_DOMAIN: ${{ vars.WEB_DOMAIN }}
       WEB_STAGING_DOMAIN: ${{ vars.WEB_STAGING_DOMAIN }}
       BAKE_GL: ${{ vars.BAKE_GL || 'swiftshader' }}
-      # Lets `sst deploy` provision the sst.aws.Email("Notify") identity used by
-      # the social pipeline's notifications. Unset → no SES identity created.
-      NOTIFY_EMAIL_SENDER: ${{ vars.NOTIFY_EMAIL_SENDER }}
     steps:
       # Actions are pinned to commit SHAs (not mutable tags) so a hijacked tag
       # can't inject code that exfiltrates GITHUB_TOKEN or abuses the OIDC step.
@@ -205,32 +200,34 @@ jobs:
             echo "No change in the upstream snapshot — nothing deployed." >> "$GITHUB_STEP_SUMMARY"
           fi
 
-  # Post the vertical map+trend Short to YouTube. A SEPARATE job so the prod
-  # approval gate (the `prod` environment's required-reviewer rule) covers only
-  # posting — never the deploy. Runs whenever the data changed: `dry-run` prints
-  # the caption and uploads nothing; `post` adds --confirm and uploads to the
-  # channel behind that environment's YOUTUBE_REFRESH_TOKEN.
-  #
-  # Note: a `dry-run` against stage=prod still hits the prod approval gate (the
-  # environment is what scopes the secret). To preview a caption without an
-  # approval, dry-run against staging.
+  # Finish the social release. A SEPARATE job from the deploy so the per-stage
+  # YouTube token scoping (and any prod gate) covers only posting. Runs whenever
+  # the data changed:
+  #   • YouTube — auto-uploaded PRIVATELY to the channel behind this stage's
+  #     YOUTUBE_REFRESH_TOKEN (unverified API project → private regardless, so
+  #     nothing goes public unattended).
+  #   • Instagram — MANUAL for now: no auto-post. The notify step emails the
+  #     public video URL + suggested caption to post by hand, plus the YouTube
+  #     Studio "publish" page for the upload above.
+  # `post` (the default, and what the cron uses) does the upload + email;
+  # `dry-run` prints the YouTube plan and sends no email.
   post-social:
     needs: refresh
     if: needs.refresh.outputs.changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # The environment both scopes the per-stage YOUTUBE_REFRESH_TOKEN (staging
-    # can't read prod's token) AND triggers the prod required-reviewer gate.
+    # The environment scopes the per-stage YOUTUBE_REFRESH_TOKEN (a staging run
+    # can't read prod's token) and is where any prod approval gate would live.
     environment: ${{ inputs.stage || 'prod' }}
     permissions:
       id-token: write # OIDC: `sst shell` resolves the MapArchive bucket
       contents: read
     env:
       STAGE: ${{ inputs.stage || 'prod' }}
-      # SES notification (social-notify.mjs). Sender matches the SST-managed
-      # identity (Resource.Notify); set both as repo Variables. Unset → the
-      # scripts log the notification but send no email.
-      NOTIFY_EMAIL_FROM: ${{ vars.NOTIFY_EMAIL_SENDER }}
+      # SES notification (manually-verified domain identity — see
+      # docs/SOCIAL_UPLOAD.md). Set both as repo Variables; unset → the scripts
+      # log the notification but send no email.
+      NOTIFY_EMAIL_FROM: ${{ vars.NOTIFY_EMAIL_FROM }}
       NOTIFY_EMAIL_TO: ${{ vars.NOTIFY_EMAIL_TO }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -248,11 +245,13 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
-      # YouTube and Instagram post independently — `!cancelled()` lets the IG
-      # step run even if the YouTube step failed, so one platform's hiccup
-      # doesn't block the other. Each script emails on its own success; the
-      # failure step below catches any non-zero exit.
-      - name: Post to YouTube
+
+      # Upload the vertical cut PRIVATELY to the prod channel. The script writes
+      # the new video id to this step's outputs (youtube_id) so the notify step
+      # can link the Studio publish page. --no-notify: the combined email below
+      # is the single notification. `dry-run` prints the plan and uploads nothing.
+      - name: Upload to YouTube (private)
+        id: yt
         if: ${{ !cancelled() }}
         env:
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
@@ -261,31 +260,21 @@ jobs:
           SNAPSHOT_DATE: ${{ needs.refresh.outputs.snapshot_date }}
           WEB_DOMAIN: ${{ vars.WEB_DOMAIN }}
         run: |
-          CONFIRM=""
-          [ "${{ inputs.post_social }}" = "post" ] && CONFIRM="--confirm"
-          echo "post_social=${{ inputs.post_social }} → ${CONFIRM:-(dry run)}"
-          pnpm "social:youtube:${STAGE}" -- $CONFIRM --lang=en
+          CONFIRM="--confirm"
+          [ "${{ inputs.post_social }}" = "dry-run" ] && CONFIRM=""
+          echo "post_social=${{ inputs.post_social || 'post (default)' }} → ${CONFIRM:-(dry run)}"
+          pnpm "social:youtube:${STAGE}" -- $CONFIRM --no-notify --lang=en
 
-      - name: Post to Instagram
-        if: ${{ !cancelled() }}
+      # One email with both manual steps: grab the public video + caption and
+      # post the IG Reel by hand, and the YouTube Studio page to publish the
+      # upload above. Runs even if the upload failed (no youtube_id → the email
+      # still carries the IG link and points YouTube at the run logs); skipped
+      # only on an explicit dry-run dispatch.
+      - name: Notify — publish YouTube + post Instagram
+        if: ${{ !cancelled() && inputs.post_social != 'dry-run' }}
         env:
-          INSTAGRAM_APP_ID: ${{ secrets.INSTAGRAM_APP_ID }}
-          INSTAGRAM_APP_SECRET: ${{ secrets.INSTAGRAM_APP_SECRET }}
-          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
-          INSTAGRAM_USER_ID: ${{ secrets.INSTAGRAM_USER_ID }}
           SNAPSHOT_DATE: ${{ needs.refresh.outputs.snapshot_date }}
           WEB_DOMAIN: ${{ vars.WEB_DOMAIN }}
         run: |
-          CONFIRM=""
-          [ "${{ inputs.post_social }}" = "post" ] && CONFIRM="--confirm"
-          echo "post_social=${{ inputs.post_social }} → ${CONFIRM:-(dry run)}"
-          pnpm "social:instagram:${STAGE}" -- $CONFIRM --lang=en
-
-      # Any non-zero exit above → one failure email (best-effort; no sst shell
-      # needed since NOTIFY_EMAIL_FROM/TO come from the job env).
-      - name: Notify on failure
-        if: ${{ failure() }}
-        run: |
-          node packages/web/scripts/social-notify.mjs \
-            --status failed --stage "${STAGE}" \
-            --detail "post-social job failed — see the run logs"
+          pnpm "social:notify-ready:${STAGE}" -- \
+            --lang=en --youtube-id "${{ steps.yt.outputs.youtube_id }}"

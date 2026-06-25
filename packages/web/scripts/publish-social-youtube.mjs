@@ -26,6 +26,7 @@
 //
 // Flags:
 //   --confirm              actually upload (default: dry run)
+//   --no-notify            skip the per-post email (a later step sends a combined one)
 //   --lang <en|es>         which language cut to post (default: en)
 //   --privacy <p>          private | unlisted | public (default: private)
 //   --title <s>            override the generated title
@@ -34,15 +35,11 @@
 //                          env, else read from the local agency_index.json)
 //   --file <path>          upload a local file instead of fetching from S3
 //   --video-url <url>      fetch this URL instead of resolving the bucket
-import { execFileSync } from "node:child_process";
-import { createReadStream, readFileSync, existsSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { appendFileSync, createReadStream, existsSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { fileURLToPath } from "node:url";
 import { notify } from "./social-notify.mjs";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const INDEX_PATH = resolve(__dirname, "../static/data/dist/agency_index.json");
+import { assetBaseUrl, snapshotDate } from "./social-assets.mjs";
 
 const args = process.argv.slice(2);
 const has = (flag) => args.includes(flag);
@@ -58,6 +55,7 @@ const die = (msg) => {
 };
 
 const confirm = has("--confirm");
+const noNotify = has("--no-notify");
 const lang = valueOf("--lang") || "en";
 const privacy = valueOf("--privacy") || "private";
 const stage = process.env.STAGE || process.env.SST_STAGE || "(unknown)";
@@ -65,36 +63,6 @@ const stage = process.env.STAGE || process.env.SST_STAGE || "(unknown)";
 if (!["en", "es"].includes(lang)) die(`--lang must be en or es (got "${lang}").`);
 if (!["private", "unlisted", "public"].includes(privacy))
   die(`--privacy must be private | unlisted | public (got "${privacy}").`);
-
-// ICE release date for the caption: explicit flag, else env (CI passes it as a
-// job output), else read the local pipeline output, else a placeholder.
-function snapshotDate() {
-  const explicit = valueOf("--date") || process.env.SNAPSHOT_DATE;
-  if (explicit) return explicit.slice(0, 10);
-  if (existsSync(INDEX_PATH)) {
-    try {
-      const idx = JSON.parse(readFileSync(INDEX_PATH, "utf8"));
-      const d = idx.find((a) => a.snapshot_date)?.snapshot_date;
-      if (d) return d.slice(0, 10);
-    } catch {
-      /* fall through to placeholder */
-    }
-  }
-  return null;
-}
-
-// Public base URL of the MapArchive bucket — resolved like publish-map-assets.mjs.
-async function assetBaseUrl() {
-  if (process.env.MAP_ASSETS_URL) return process.env.MAP_ASSETS_URL.replace(/\/+$/, "");
-  try {
-    const { Resource } = await import("sst");
-    if (Resource?.MapArchive?.name) return `https://${Resource.MapArchive.name}.s3.amazonaws.com`;
-  } catch {
-    /* not under sst shell — fall through */
-  }
-  if (process.env.MAP_ARCHIVE_BUCKET) return `https://${process.env.MAP_ARCHIVE_BUCKET}.s3.amazonaws.com`;
-  return null;
-}
 
 // Where the video bytes come from: a local file, an explicit URL, or the
 // resolved bucket's `-latest` cut for this language.
@@ -125,7 +93,7 @@ function defaultCaption(date) {
   return { title, description };
 }
 
-const date = snapshotDate();
+const date = snapshotDate(valueOf("--date"));
 const base = defaultCaption(date);
 const title = valueOf("--title") || process.env.CAPTION_TITLE || base.title;
 const description = valueOf("--description") || process.env.CAPTION_DESCRIPTION || base.description;
@@ -217,11 +185,23 @@ console.log(`\n✓ Uploaded: ${videoUrl}  (privacy: ${data.status?.privacyStatus
 if (data.status?.privacyStatus !== privacy)
   console.log(`  Note: requested "${privacy}" but YouTube set "${data.status?.privacyStatus}" (unverified project → private until audited).`);
 
+// Surface the id to the CI step (no-op outside Actions) so notify-social-ready.mjs
+// can link the YouTube Studio "publish" page for the just-uploaded private video.
+if (process.env.GITHUB_OUTPUT) {
+  try {
+    appendFileSync(process.env.GITHUB_OUTPUT, `youtube_id=${data.id}\nyoutube_url=${videoUrl}\n`);
+  } catch (e) {
+    console.log(`  (couldn't write GITHUB_OUTPUT: ${e?.message || e})`);
+  }
+}
+
 // Best-effort email notification (never fails the post — see social-notify.mjs).
-await notify({
-  platform: "youtube",
-  status: "posted",
-  stage,
-  url: videoUrl,
-  detail: `lang=${lang}, privacy=${data.status?.privacyStatus}, channel=${channelLine}`,
-});
+// Skipped with --no-notify when a downstream step sends a combined notification.
+if (!noNotify)
+  await notify({
+    platform: "youtube",
+    status: "posted",
+    stage,
+    url: videoUrl,
+    detail: `lang=${lang}, privacy=${data.status?.privacyStatus}, channel=${channelLine}`,
+  });

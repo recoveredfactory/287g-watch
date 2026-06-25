@@ -21,7 +21,9 @@
     "social:youtube:staging": "STAGE=staging sst shell --stage staging node packages/web/scripts/publish-social-youtube.mjs",
     "social:youtube:prod": "STAGE=prod sst shell --stage prod node packages/web/scripts/publish-social-youtube.mjs",
     "social:instagram:staging": "STAGE=staging sst shell --stage staging node packages/web/scripts/publish-social-instagram.mjs",
-    "social:instagram:prod": "STAGE=prod sst shell --stage prod node packages/web/scripts/publish-social-instagram.mjs"
+    "social:instagram:prod": "STAGE=prod sst shell --stage prod node packages/web/scripts/publish-social-instagram.mjs",
+    "social:notify-ready:staging": "STAGE=staging sst shell --stage staging node packages/web/scripts/notify-social-ready.mjs",
+    "social:notify-ready:prod": "STAGE=prod sst shell --stage prod node packages/web/scripts/notify-social-ready.mjs"
   },
   "devDependencies": {
     "sst": "^3.17.25"
