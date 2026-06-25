@@ -36,13 +36,8 @@
 //   --video-url <url>      use this URL instead of resolving the bucket
 //   --api-version <v>      Graph API version (default v25.0)
 import { createHmac } from "node:crypto";
-import { readFileSync, existsSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { notify } from "./social-notify.mjs";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const INDEX_PATH = resolve(__dirname, "../static/data/dist/agency_index.json");
+import { resolveVideoUrl, snapshotDate, igCaption } from "./social-assets.mjs";
 
 const args = process.argv.slice(2);
 const has = (flag) => args.includes(flag);
@@ -66,60 +61,12 @@ const GRAPH = `https://graph.facebook.com/${apiVersion}`;
 
 if (!["en", "es"].includes(lang)) die(`--lang must be en or es (got "${lang}").`);
 
-// ICE release date for the caption: explicit flag, else env (CI job output),
-// else read the local pipeline output, else omit.
-function snapshotDate() {
-  const explicit = valueOf("--date") || process.env.SNAPSHOT_DATE;
-  if (explicit) return explicit.slice(0, 10);
-  if (existsSync(INDEX_PATH)) {
-    try {
-      const idx = JSON.parse(readFileSync(INDEX_PATH, "utf8"));
-      const d = idx.find((a) => a.snapshot_date)?.snapshot_date;
-      if (d) return d.slice(0, 10);
-    } catch {
-      /* fall through */
-    }
-  }
-  return null;
-}
-
-// Public base URL of the MapArchive bucket — resolved like publish-map-assets.mjs.
-async function assetBaseUrl() {
-  if (process.env.MAP_ASSETS_URL) return process.env.MAP_ASSETS_URL.replace(/\/+$/, "");
-  try {
-    const { Resource } = await import("sst");
-    if (Resource?.MapArchive?.name) return `https://${Resource.MapArchive.name}.s3.amazonaws.com`;
-  } catch {
-    /* not under sst shell — fall through */
-  }
-  if (process.env.MAP_ARCHIVE_BUCKET) return `https://${process.env.MAP_ARCHIVE_BUCKET}.s3.amazonaws.com`;
-  return null;
-}
-
-async function videoUrl() {
-  const url = valueOf("--video-url");
-  if (url) return url;
-  const base = await assetBaseUrl();
-  return base ? `${base}/map-trend-latest-${lang}.mp4` : null;
-}
-
-// Default caption — one field on IG (no separate title). Minimal, link-forward;
-// the reviewer adjusts before posting. Hashtags inline (IG: ≤30, ≤2200 chars).
+// Caption site + defaults come from the shared social-assets module (so the
+// poster and the "ready to publish" notifier render the same caption).
 const SITE = process.env.WEB_DOMAIN || "287g.recoveredfactory.net";
-function defaultCaption(date) {
-  const asOf = date ? ` (data as of ${date})` : "";
-  return [
-    `287(g) agreements between local law enforcement and ICE, across the U.S.${asOf}`,
-    "",
-    `Explore the full tracker: https://${SITE}`,
-    "",
-    "#287g #ICE #immigration #data",
-  ].join("\n");
-}
-
-const date = snapshotDate();
-const caption = valueOf("--caption") || process.env.CAPTION_DESCRIPTION || defaultCaption(date);
-const video = await videoUrl();
+const date = snapshotDate(valueOf("--date"));
+const caption = valueOf("--caption") || process.env.CAPTION_DESCRIPTION || igCaption(date, SITE);
+const video = await resolveVideoUrl(lang, valueOf("--video-url"));
 
 const token = process.env.INSTAGRAM_ACCESS_TOKEN;
 const igUserId = process.env.INSTAGRAM_USER_ID;

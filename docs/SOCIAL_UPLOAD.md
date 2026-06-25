@@ -1,30 +1,36 @@
 # Social upload — YouTube + Instagram
 
-Auto-posts the vertical map+trend social video (`map-trend-latest-<lang>.mp4`,
-baked by #167) to **YouTube** (Shorts) and **Instagram** (Reels). The harness —
-dry-run default, per-environment account secrets, a prod approval gate, and an
-SES email on every real post — is shared; TikTok slots in next the same way.
+Handles the vertical map+trend social video (`map-trend-latest-<lang>.mp4`,
+baked by #167) on each data refresh:
+
+- **YouTube** (Shorts) — **auto-uploaded PRIVATELY** to the prod channel.
+- **Instagram** (Reels) — **manual for now.** The pipeline does *not* auto-post
+  IG; instead it **emails you** the public video URL + a suggested caption to
+  post by hand, alongside the YouTube Studio "publish" page for the upload.
+
+So a data change lands one "your move" email: grab the video → post the IG Reel,
+and click publish on the already-uploaded (private) YouTube Short. Nothing goes
+public unattended.
 
 Three parts below: the **YouTube** setup, then **Instagram**, then
 **notifications**. The safety model and GitHub-Actions wiring are shared.
 
 ## Safety model
 
-Four independent layers, any one of which stops a real post:
+Why auto-running on every cron is safe — nothing reaches the public without you:
 
-1. **Change gate** — the `data-refresh` workflow only posts when the dataset
-   actually moved (no-op refreshes post nothing).
-2. **`post_social` toggle** — defaults to `dry-run`, which prints the exact
-   caption (and the channel) it *would* post and uploads nothing. You must pick
-   `post` on purpose.
-3. **Environment-scoped secret** — `YOUTUBE_REFRESH_TOKEN` is a *per-environment*
+1. **Change gate** — the `data-refresh` workflow only acts when the dataset
+   actually moved (no-op refreshes do nothing).
+2. **YouTube is private** — an **unverified** Google API project force-locks
+   every upload to **private**, even prod, until you pass Google's API audit. The
+   auto-upload lands private; you flip it public from the Studio link in the email.
+3. **Instagram isn't posted at all** — it's a manual step you do by hand from the
+   email, so there's no automated public IG post to guard.
+4. **Environment-scoped secret** — `YOUTUBE_REFRESH_TOKEN` is a *per-environment*
    secret. A `staging` run physically cannot read the `prod` channel's token.
-4. **prod approval gate** — a Required-reviewers rule on the `prod` environment
-   means a real post waits for a manual approve (with an email ping).
 
-On top of all that: an **unverified** Google API project force-locks every
-upload to **private** — even prod — until you pass Google's API audit. So
-"automatic" can't accidentally post something public.
+`post_social` defaults to `post` (upload + email); pick `dry-run` on a manual
+dispatch to print the YouTube plan and send no email.
 
 ## One-time setup (manual — mostly clicking)
 
@@ -119,10 +125,10 @@ the test upload. Only wire up GitHub once this local round-trip works.
 > No `sst`/bucket locally? Skip `sst shell` and point at a public cut directly:
 > `node --env-file=.env packages/web/scripts/publish-social-youtube.mjs --video-url https://<MapArchive>/map-trend-latest-en.mp4`
 
-## Automate via GitHub Actions (later)
+## Automate via GitHub Actions
 
 Once local posting works, move the creds into GitHub so the `data-refresh`
-workflow can post on a data change.
+workflow uploads on each data change.
 
 ```sh
 # OAuth app — shared across both channels, so repo-level:
@@ -131,19 +137,22 @@ gh secret set YOUTUBE_CLIENT_SECRET
 
 # Refresh token — per environment (Settings → Environments → staging / prod):
 gh secret set YOUTUBE_REFRESH_TOKEN --env staging   # burner channel token
-gh secret set YOUTUBE_REFRESH_TOKEN --env prod       # real channel token
+gh secret set YOUTUBE_REFRESH_TOKEN --env prod       # REAL channel token
 ```
 
-Then, in **Settings → Environments → prod**, add a **Required reviewers**
-protection rule (yourself). Leave `staging` open so it iterates without prompts.
+> **Switching prod to the real channel:** re-run `youtube-auth.mjs`, pick the
+> real Brand Account on the "Choose a channel" screen, confirm the printed
+> `channel:` line is the real one, and set that token as the **prod** env secret
+> (above) — and in root `.env` if you also run `social:youtube:prod` locally.
 
-**From the workflow** (Actions → Data refresh → Run):
+**What the workflow does** (Actions → Data refresh, and the twice-daily cron):
 
-- `post_social = dry-run` (default): on any data change, the `post-social` job
-  prints the caption + channel and uploads nothing. Dry-run against **staging**
-  to preview without tripping the prod approval gate.
-- `post_social = post`: adds `--confirm`. On **prod** it waits for your approval,
-  then uploads to the real channel (private, per the audit rule above).
+- On a data change it runs the `post-social` job, which **uploads the Short
+  privately** to the channel behind that environment's `YOUTUBE_REFRESH_TOKEN`
+  (prod for the cron), then emails you (next section) the Studio publish page.
+- `post_social = post` (the default, and what the cron uses) does the upload.
+  `post_social = dry-run` prints the plan and uploads nothing — and sends no
+  email. Dry-run against **staging** to preview against the burner channel.
 
 Adjust copy with `--title` / `--description` (or `CAPTION_TITLE` /
 `CAPTION_DESCRIPTION` env). Default caption is intentionally minimal and
@@ -158,6 +167,13 @@ in YouTube Studio.
 ---
 
 # Instagram (Reels)
+
+> **Manual for now.** The `data-refresh` workflow does **not** auto-post IG — it
+> emails you the public video URL + caption to post by hand (see Notifications).
+> The setup + scripts below still apply for **local/manual** posting and for
+> re-enabling automation later: mint the token, then `social:instagram:*` posts
+> on demand. (To re-enable auto-posting, add an Instagram step back to the
+> `post-social` job — it was removed when IG went manual.)
 
 Posts the same vertical cut as an Instagram **Reel** via the Meta Graph API
 Content Publishing flow (v25.0): create a media container from the public
@@ -242,7 +258,12 @@ round-trip works.
 > No `sst`/bucket locally? Point at a public cut directly:
 > `node --env-file=.env packages/web/scripts/publish-social-instagram.mjs --video-url https://<MapArchive>/map-trend-latest-en.mp4 --confirm`
 
-## Automate via GitHub Actions
+## Automate via GitHub Actions (not wired right now)
+
+IG is **manual** today — the workflow emails you to post by hand instead of
+auto-posting. To re-enable automation later: mint the token, set the secrets,
+and add an Instagram step back to the `post-social` job (mirroring the YouTube
+upload step, `if: !cancelled()`).
 
 ```sh
 # Meta app — shared across both accounts, so repo-level:
@@ -256,32 +277,29 @@ gh secret set INSTAGRAM_ACCESS_TOKEN --env prod        # real Page token
 gh secret set INSTAGRAM_USER_ID      --env prod        # real IG user id
 ```
 
-The `post-social` job runs the YouTube and Instagram steps independently
-(`if: !cancelled()`), so one platform failing doesn't block the other. Same
-`post_social = dry-run | post` input gates both; prod still waits for the
-required-reviewer approval.
-
 ---
 
 # Notifications (email via Amazon SES)
 
-Every **real** post emails a short notice with the live URL; a failed post job
-emails too. Notifying is **best-effort** — a missing config or SES error never
-fails a post that actually succeeded (it's logged and swallowed). Dry runs only
-log the notification.
+On each data change the `post-social` job sends one **"your move"** email
+(`notify-social-ready.mjs`): the public video URL + suggested caption to post to
+Instagram by hand, and the YouTube Studio **publish** page for the private
+upload. It always sends — even if the YouTube upload failed (you still get the
+IG link; the YouTube section then points at the run logs). Sending is
+**best-effort** — a missing config or SES error is logged and swallowed, never
+throwing. A dry-run dispatch sends nothing.
 
-## SES is managed by SST
+(`social-notify.mjs` also exposes a structured per-post notice, used by the
+`social:youtube/instagram:*` scripts on a real local post.)
 
-`sst.config.ts` declares an `sst.aws.Email("Notify")` identity, created at
-deploy time when **`NOTIFY_EMAIL_SENDER`** is set (skipped otherwise, so a
-deploy never requires it). `social-notify.mjs` resolves the sender from
-`Resource.Notify.sender` under `sst shell`, or from `NOTIFY_EMAIL_FROM`.
+## SES is a manually-verified domain identity
 
-```sh
-# A single address → SST emails it a one-time confirmation link (click once):
-NOTIFY_EMAIL_SENDER=alerts@recoveredfactory.net pnpm deploy:staging
-# …or a domain → SST manages the DNS verification records.
-```
+SES is **not** managed by SST here — the `sst.aws.Email` component's verify
+waiter races DKIM propagation and self-destructs. Instead the domain
+(`recoveredfactory.net`) is verified by hand (`aws sesv2 create-email-identity`
++ DKIM CNAMEs in Route53). `social-notify.mjs` resolves the sender from
+**`NOTIFY_EMAIL_FROM`** (do **not** set `NOTIFY_EMAIL_SENDER` — its presence is
+what re-triggers the broken SST Email resource).
 
 Two SES caveats:
 
@@ -289,32 +307,30 @@ Two SES caveats:
   until you request production access. For self-notifications, verify both the
   sender and your recipient address and you're set.
 - **Send permission.** The role the `post-social` job assumes (the OIDC
-  `sst-deployer` role) needs `ses:SendEmail`. Locally, `sst shell` uses your own
-  AWS creds. Without the permission the send fails *non-fatally* (logged).
+  `sst-deployer` role) needs `ses:SendEmail` (it has `ses:*`). Locally, `sst
+  shell` uses your own AWS creds. Without the permission the send fails
+  *non-fatally* (logged).
 
 ## Wire it up
 
 ```sh
-gh variable set NOTIFY_EMAIL_SENDER --body "alerts@recoveredfactory.net"  # = the SST sender
-gh variable set NOTIFY_EMAIL_TO      --body "you@example.com"              # recipient(s), comma-sep
+gh variable set NOTIFY_EMAIL_FROM --body "alerts@recoveredfactory.net"  # verified sender
+gh variable set NOTIFY_EMAIL_TO   --body "you@example.com"              # recipient(s), comma-sep
 ```
 
 ## Smoke-test locally
 
 ```sh
-# 1. Logging-only (no AWS) — verifies format/wiring, sends nothing:
-node packages/web/scripts/social-notify.mjs --platform youtube --status posted \
-  --stage staging --url https://youtu.be/test --detail "lang=en"
+# 1. Render the "your move" email (logging-only without NOTIFY_EMAIL_FROM/TO):
+MAP_ASSETS_URL=https://<MapArchive> WEB_DOMAIN=287g.recoveredfactory.net STAGE=prod \
+  node packages/web/scripts/notify-social-ready.mjs --lang=en --youtube-id <id> --date 2026-06-24
 
 # 2. Real send (needs AWS creds; in the SES sandbox both addrs must be verified):
-NOTIFY_EMAIL_FROM=you@verified.dev NOTIFY_EMAIL_TO=you@verified.dev \
-  node packages/web/scripts/social-notify.mjs --platform youtube --status posted \
-  --stage staging --url https://youtu.be/test
+NOTIFY_EMAIL_FROM=alerts@recoveredfactory.net NOTIFY_EMAIL_TO=you@verified.dev \
+  MAP_ASSETS_URL=https://<MapArchive> STAGE=prod \
+  node packages/web/scripts/notify-social-ready.mjs --lang=en --youtube-id <id>
 
-# 3. Via the SST-managed identity (after NOTIFY_EMAIL_SENDER is set + deployed):
+# 3. Resolve the bucket via SST instead of MAP_ASSETS_URL:
 NOTIFY_EMAIL_TO=you@verified.dev \
-  sst shell --stage staging node packages/web/scripts/social-notify.mjs \
-  --platform youtube --status posted --stage staging --url https://youtu.be/test
+  sst shell --stage prod node packages/web/scripts/notify-social-ready.mjs --lang=en --youtube-id <id>
 ```
-</content>
-</invoke>
