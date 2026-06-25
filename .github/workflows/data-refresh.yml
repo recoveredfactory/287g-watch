@@ -91,6 +91,9 @@ jobs:
     outputs:
       changed: ${{ steps.gate.outputs.changed }}
       snapshot_date: ${{ steps.snapshot.outputs.date }}
+      # Immutable per-release video keys for the social email (see the archive step).
+      map_trend_archive_en: ${{ steps.archive.outputs.map_trend_archive_en }}
+      map_trend_archive_es: ${{ steps.archive.outputs.map_trend_archive_es }}
     env:
       STAGE: ${{ inputs.stage || 'prod' }}
       FORCE: ${{ inputs.force || 'false' }}
@@ -189,6 +192,29 @@ jobs:
             pnpm "deploy:${STAGE}:assets"
           fi
 
+      # Recompute the immutable per-release archive object keys so the social
+      # email can link them instead of the moving -latest (safer for the delayed
+      # manual IG post — -latest is overwritten by the next refresh). Same baked
+      # file + snapshot date + sha256[:8] that publish-map-assets.mjs used, so the
+      # key is byte-identical to the object it just uploaded.
+      - name: Archive video keys (for the social email)
+        id: archive
+        if: steps.gate.outputs.changed == 'true'
+        env:
+          DATE: ${{ steps.snapshot.outputs.date }}
+        run: |
+          for lang in en es; do
+            f="packages/web/.assets/video/map-trend-$lang.mp4"
+            if [ -f "$f" ]; then
+              h=$(sha256sum "$f" | cut -c1-8)
+              key="map-trend-$DATE-$h-$lang.mp4"
+              echo "map_trend_archive_$lang=$key" >> "$GITHUB_OUTPUT"
+              echo "  $lang → $key"
+            else
+              echo "  $lang → (no baked file; email falls back to -latest)"
+            fi
+          done
+
       - name: Summary
         if: always()
         env:
@@ -277,4 +303,6 @@ jobs:
           WEB_DOMAIN: ${{ vars.WEB_DOMAIN }}
         run: |
           pnpm "social:notify-ready:${STAGE}" -- \
-            --lang=en --youtube-id "${{ steps.yt.outputs.youtube_id }}"
+            --lang=en --youtube-id "${{ steps.yt.outputs.youtube_id }}" \
+            --archive-en "${{ needs.refresh.outputs.map_trend_archive_en }}" \
+            --archive-es "${{ needs.refresh.outputs.map_trend_archive_es }}"
