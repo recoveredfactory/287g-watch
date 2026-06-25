@@ -307,9 +307,12 @@ Two SES caveats:
   until you request production access. For self-notifications, verify both the
   sender and your recipient address and you're set.
 - **Send permission.** The role the `post-social` job assumes (the OIDC
-  `sst-deployer` role) needs `ses:SendEmail` (it has `ses:*`). Locally, `sst
-  shell` uses your own AWS creds. Without the permission the send fails
-  *non-fatally* (logged).
+  `sst-deployer` role) needs `ses:SendEmail`. Its base `sst-deployer-policy` is
+  RF-asset-scoped and does **not** include SES, so a small scoped inline policy
+  grants it (`ses-send-notify`: `ses:SendEmail` + `ses:SendRawEmail` on
+  `arn:aws:ses:us-east-1:647111127395:identity/*`). Without it the send fails
+  *non-fatally* — the post still succeeds, the email is just logged, not sent.
+  Locally, `sst shell` uses your own AWS creds.
 
 ## Wire it up
 
