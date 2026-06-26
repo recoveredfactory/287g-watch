@@ -310,7 +310,7 @@ Two SES caveats:
   `sst-deployer` role) needs `ses:SendEmail`. Its base `sst-deployer-policy` is
   RF-asset-scoped and does **not** include SES, so a small scoped inline policy
   grants it (`ses-send-notify`: `ses:SendEmail` + `ses:SendRawEmail` on
-  `arn:aws:ses:us-east-1:647111127395:identity/*`). Without it the send fails
+  `arn:aws:ses:us-east-1:ACCOUNT_ID:identity/*`). Without it the send fails
   *non-fatally* — the post still succeeds, the email is just logged, not sent.
   Locally, `sst shell` uses your own AWS creds.
 

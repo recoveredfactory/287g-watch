@@ -15,3 +15,7 @@ packages/pipeline/data/scraped_contacts.json
 packages/pipeline/data/csllea_*.tsv
 *.pyc
 .DS_Store
+
+# Local working notes / drafts — not for the public repo
+instagram-setup-notes.md
+video-tool-newsletter-draft.md

@@ -92,7 +92,7 @@
     <p class="mt-3">{m.contact_body()}</p>
     <ul class="mt-3">
       <li>Tory Lysik — <a href="mailto:lysiktory@gmail.com">lysiktory@gmail.com</a> · <a href="https://tlysik.com" target="_blank" rel="noreferrer">tlysik.com</a></li>
-      <li>David Eads — <a href="mailto:davideads@gmail.com">davideads@gmail.com</a> · <a href="https://davideads.com" target="_blank" rel="noreferrer">davideads.com</a></li>
+      <li>David Eads — <a href="mailto:davideads@grupovisual.org">davideads@grupovisual.org</a> · <a href="https://davideads.com" target="_blank" rel="noreferrer">davideads.com</a></li>
       <li>Recovered Factory — <a href="https://recoveredfactory.net/en" target="_blank" rel="noreferrer">recoveredfactory.net</a></li>
     </ul>
   </div>
