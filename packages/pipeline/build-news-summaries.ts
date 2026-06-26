@@ -13,10 +13,10 @@
  *   2. Renders the markdown prose to controlled HTML so the SvelteKit side can
  *      drop it in via {@html} with no client-side markdown dependency.
  *
- * Only the *summaries* are public (statewide_summary + focal_agencies_md), so
- * only the links inside those two prose fields get resolved. The screened
- * article table, publications, roster grounding and cost ledger are stored raw
- * for internal use and are not rendered yet.
+ * Only the *summaries* are public (statewide_tldr + statewide_summary, each in
+ * EN and ES), so only the links inside those prose fields get resolved. The
+ * screened article table, publications, roster grounding and cost ledger are
+ * stored raw for internal use and are not rendered yet.
  *
  * Output: packages/web/static/data/dist/news/<abbr>.json (+ news/index.json)
  *
@@ -248,33 +248,48 @@ async function buildState(abbr: string, name: string) {
     return null
   }
 
-  const summaryMd = (artifact(result, 'statewide_summary')?.data as string) ?? ''
-  const focalMd = (artifact(result, 'focal_agencies_md')?.data as string) ?? ''
+  // Public prose: a short TL;DR plus the full statewide narrative, each in EN
+  // and ES (the program emits both languages in one run). focal_agencies_md was
+  // retired upstream when the TL;DR was split into its own artifact.
+  const prose = {
+    en: {
+      tldr: (artifact(result, 'statewide_tldr')?.data as string) ?? '',
+      summary: (artifact(result, 'statewide_summary')?.data as string) ?? '',
+    },
+    es: {
+      tldr: (artifact(result, 'statewide_tldr_es')?.data as string) ?? '',
+      summary: (artifact(result, 'statewide_summary_es')?.data as string) ?? '',
+    },
+  }
+  const allMd = [prose.en.tldr, prose.en.summary, prose.es.tldr, prose.es.summary]
 
-  // Resolve every gnews link that appears in the two public prose fields.
-  const toResolve = [...new Set([...gnewsLinksIn(summaryMd), ...gnewsLinksIn(focalMd)])].filter(
-    (u) => !gnewsCache[u],
-  )
+  // Resolve every gnews link across all four prose fields. The source links are
+  // language-independent, so resolve the union once and apply the map to each.
+  const toResolve = [...new Set(allMd.flatMap(gnewsLinksIn))].filter((u) => !gnewsCache[u])
   for (const url of toResolve) {
     await resolveGnews(url)
     await sleep(RESOLVE_DELAY_MS)
   }
   const links: Record<string, string> = {}
-  for (const url of [...gnewsLinksIn(summaryMd), ...gnewsLinksIn(focalMd)]) links[url] = gnewsCache[url] ?? url
+  for (const url of allMd.flatMap(gnewsLinksIn)) links[url] = gnewsCache[url] ?? url
 
   const out = {
     abbr,
     state: name,
-    lang: 'en' as const, // program is EN-only for now; add 'es' when it emits it
     after: AFTER,
     generated_at: new Date().toISOString(),
-    summary_html: mdToHtml(summaryMd, links),
-    focal_html: mdToHtml(focalMd, links),
-    // Internal — stored raw, not rendered yet.
+    en: {
+      tldr_html: mdToHtml(prose.en.tldr, links),
+      summary_html: mdToHtml(prose.en.summary, links),
+    },
+    es: {
+      tldr_html: mdToHtml(prose.es.tldr, links),
+      summary_html: mdToHtml(prose.es.summary, links),
+    },
+    // Internal — stored raw, not rendered.
     internal: {
       relevant_articles: artifact(result, 'relevant_articles')?.data ?? [],
       publications: artifact(result, 'publications')?.data ?? [],
-      focal_agencies: artifact(result, 'focal_agencies')?.data ?? [],
       roster_grounding: artifact(result, 'roster_grounding')?.data ?? [],
       cost_ledger: artifact(result, 'cost_ledger')?.data ?? [],
     },
