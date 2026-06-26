@@ -115,18 +115,67 @@
     @apply leading-relaxed;
   }
 
-  /* Headings inside generated news prose ({@html}); scoped so editorial pages
-     with their own heading classes are untouched. */
-  .news-summary h2 {
-    @apply mt-8 font-serif text-lg font-bold text-slate-900 sm:text-xl;
+  /* ── State-page news summary ──────────────────────────────────────────────
+     Its own (smaller, narrower) editorial scale, kept separate from
+     .prose-editorial so the news measure can stay tight while the map/chart
+     above it use the full content width. Shared inline element styling: */
+  .news-prose strong {
+    @apply font-semibold text-slate-900;
+  }
+  .news-prose a {
+    @apply text-slate-900 decoration-1 underline decoration-slate-400 underline-offset-2;
+  }
+  .news-prose a:hover {
+    @apply decoration-slate-700;
+  }
+  .news-prose ul,
+  .news-prose ol {
+    @apply mt-3 space-y-1.5 pl-5;
+    list-style: disc outside;
+  }
+  .news-prose ol {
+    list-style-type: decimal;
+  }
+  .news-prose p {
+    @apply mb-3;
+  }
+  .news-prose p:last-child {
+    @apply mb-0;
   }
 
-  .news-summary h3 {
-    @apply mt-6 font-serif text-base font-bold text-slate-900 sm:text-lg;
+  /* TL;DR: a gray, italic standfirst — the lead-in above the darker body. */
+  .news-tldr {
+    @apply text-[15px] italic leading-relaxed text-slate-600;
   }
 
-  .news-summary h4 {
-    @apply mt-4 font-semibold text-slate-900;
+  /* Expanded body: same size as the TL;DR but darker and roman — the main read. */
+  .news-body {
+    @apply text-[15px] leading-relaxed text-slate-800;
+  }
+  .news-body h2 {
+    @apply mt-6 font-serif text-base font-bold text-slate-900;
+  }
+  .news-body h3 {
+    @apply mt-5 font-serif text-[15px] font-bold text-slate-800;
+  }
+  .news-body h4 {
+    @apply mt-4 text-sm font-semibold text-slate-800;
+  }
+
+  /* Expand/collapse trigger — a centered pill flanked by hairline rules
+     (── (Read more) ──), aligned to the news reading column. */
+  .news-toggle-row {
+    @apply flex max-w-prose items-center gap-3;
+  }
+  .news-rule {
+    @apply h-px flex-1 bg-slate-200;
+  }
+  .news-toggle {
+    @apply inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5
+      text-sm font-medium text-slate-700 transition-colors hover:bg-slate-200;
+  }
+  .news-chev {
+    @apply text-[0.7rem] leading-none transition-transform duration-200;
   }
 
   .model-badge {

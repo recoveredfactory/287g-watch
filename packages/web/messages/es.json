@@ -26,10 +26,10 @@
   "source_material_notice": "Los datos y documentos de origen (nombres de agencias, acuerdos MOA, registros oficiales) permanecen en inglés tal como se publicaron originalmente.",
 
   "news_heading": "{state} en las noticias",
-  "news_updated": "Actualizado el {date}",
+  "news_updated": "Actualizado el {date} · Generado con PromptQL",
   "news_read_more": "Leer más",
   "news_show_less": "Mostrar menos",
-  "news_source_note": "Este resumen se compila automáticamente a partir de la cobertura de prensa publicada y los acuerdos firmados por las agencias, con enlaces a las fuentes originales. Verifique con esas fuentes antes de volver a publicar.",
+  "news_source_note": "Este resumen se compila mediante un modelo de lenguaje grande a partir de la cobertura de prensa publicada y los acuerdos firmados por las agencias, con enlaces a las fuentes originales. Verifique con esas fuentes antes de volver a publicar.",
 
   "state_meta_title": "Agencias 287(g) de {state}",
   "state_meta_description": "{count} agencias en {state} que participan en el programa de control migratorio 287(g).",

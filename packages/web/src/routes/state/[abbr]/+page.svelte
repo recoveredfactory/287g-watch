@@ -2,7 +2,7 @@
   import type { PageData } from "./$types";
   import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_DARK_COLORS, MODEL_SHORT, MODEL_MINI, MODEL_SLUG, MODEL_ORDER } from "$lib/colors";
   import { browser } from "$app/environment";
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import { localizeHref, getLocale } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
   import NationalMap from "$lib/components/NationalMap.svelte";
@@ -21,7 +21,17 @@
   $: newsUpdatedDate = data.news ? dateFmt.format(new Date(data.news.generated_at)) : "";
 
   // News summary collapses to its TL;DR lead paragraph; the rest expands on tap.
+  // The expand trigger stays anchored under the TL;DR (the body renders below
+  // it), and a second "show less" sits at the foot of the long body so a reader
+  // isn't stranded mid-page. Collapsing from the foot scrolls the section back
+  // into view.
   let newsExpanded = false;
+  let newsSection: HTMLElement;
+  async function collapseNews() {
+    newsExpanded = false;
+    await tick();
+    newsSection?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   // ── Filters ─────────────────────────────────────────────────────────────────
   let activeModels: Set<string> = new Set();
@@ -192,31 +202,56 @@
 
   <!-- ── News summary ─────────────────────────────────────────────────────── -->
   {#if data.news}
-    <section class="mt-10">
+    <section class="mt-10" bind:this={newsSection}>
       <h2 class="font-serif text-lg font-bold text-slate-900 sm:text-xl">
         {m.news_heading({ state: stateName })}
       </h2>
       <p class="mt-1 text-xs italic text-slate-400">
         {m.news_updated({ date: newsUpdatedDate })}
       </p>
-      <div class="prose-editorial news-summary mt-5">
+
+      <!-- TL;DR lead — a narrow reading measure (max-w-prose), set apart from the
+           full-width map/chart above it. -->
+      <div class="news-prose news-tldr mt-5 max-w-prose">
         {@html data.news.tldr_html}
-        {#if newsExpanded && data.news.body_html}
-          {@html data.news.body_html}
-        {/if}
       </div>
+
       {#if data.news.body_html}
-        <button
-          type="button"
-          on:click={() => (newsExpanded = !newsExpanded)}
-          aria-expanded={newsExpanded}
-          class="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-blue-700 hover:text-blue-900"
-        >
-          {newsExpanded ? m.news_show_less() : m.news_read_more()}
-          <span aria-hidden="true">{newsExpanded ? "⌃" : "⌄"}</span>
-        </button>
+        <!-- Trigger is anchored under the TL;DR; the body expands below it, so it
+             never bounces to the bottom of the page on expand. Centered pill,
+             flanked by hairline rules. -->
+        <div class="news-toggle-row mt-4">
+          <span class="news-rule" aria-hidden="true"></span>
+          <button
+            type="button"
+            class="news-toggle"
+            on:click={() => (newsExpanded = !newsExpanded)}
+            aria-expanded={newsExpanded}
+            aria-controls="news-body"
+          >
+            {newsExpanded ? m.news_show_less() : m.news_read_more()}
+            <span class="news-chev" class:rotate-180={newsExpanded} aria-hidden="true">▾</span>
+          </button>
+          <span class="news-rule" aria-hidden="true"></span>
+        </div>
+
+        {#if newsExpanded}
+          <div id="news-body" class="news-prose news-body mt-5 max-w-prose">
+            {@html data.news.body_html}
+          </div>
+          <!-- Second collapse at the foot of the long body. -->
+          <div class="news-toggle-row mt-5">
+            <span class="news-rule" aria-hidden="true"></span>
+            <button type="button" class="news-toggle" on:click={collapseNews}>
+              {m.news_show_less()}
+              <span class="news-chev rotate-180" aria-hidden="true">▾</span>
+            </button>
+            <span class="news-rule" aria-hidden="true"></span>
+          </div>
+        {/if}
       {/if}
-      <p class="mt-6 border-t border-slate-100 pt-4 text-xs leading-relaxed text-slate-500">
+
+      <p class="mt-6 max-w-prose border-t border-slate-100 pt-4 text-xs leading-relaxed text-slate-500">
         {m.news_source_note()}
       </p>
     </section>
