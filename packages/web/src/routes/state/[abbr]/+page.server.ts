@@ -27,7 +27,17 @@ export type StatePageData = {
   news: StateNews | null;
 };
 
-export type StateNews = { summary_html: string; generated_at: string; lang: string };
+// The summary is split into a lead paragraph (the TL;DR the pipeline always
+// emits first) and the remaining body, so the page can collapse the body
+// behind a "read more" toggle. If no paragraph boundary is found the whole
+// summary becomes the lead and the body is empty.
+export type StateNews = { tldr_html: string; body_html: string; generated_at: string; lang: string };
+
+const splitSummary = (html: string): { tldr_html: string; body_html: string } => {
+  const i = html.indexOf("</p>");
+  if (i < 0) return { tldr_html: html, body_html: "" };
+  return { tldr_html: html.slice(0, i + 4), body_html: html.slice(i + 4).trim() };
+};
 
 export const load = async ({ fetch, params }): Promise<StatePageData> => {
   const abbr = params.abbr.toUpperCase();
@@ -148,8 +158,8 @@ export const load = async ({ fetch, params }): Promise<StatePageData> => {
   };
 
   const newsRaw = newsRes.ok ? await newsRes.json() : null;
-  const news: StateNews | null = newsRaw
-    ? { summary_html: newsRaw.summary_html, generated_at: newsRaw.generated_at, lang: newsRaw.lang }
+  const news: StateNews | null = newsRaw?.summary_html
+    ? { ...splitSummary(newsRaw.summary_html), generated_at: newsRaw.generated_at, lang: newsRaw.lang }
     : null;
 
   return {

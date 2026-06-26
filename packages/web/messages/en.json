@@ -27,6 +27,8 @@
 
   "news_heading": "{state} in the news",
   "news_updated": "Updated {date}",
+  "news_read_more": "Read more",
+  "news_show_less": "Show less",
   "news_source_note": "This summary is compiled automatically from published news coverage and the agencies' signed agreements, with links to the original sources. Verify against those sources before republishing.",
 
   "state_meta_title": "{state} 287(g) Agencies",
