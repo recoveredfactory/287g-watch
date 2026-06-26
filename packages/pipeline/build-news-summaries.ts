@@ -23,6 +23,7 @@
  * Env: PQL_NEWS_URL, PQL_NEWS_TOKEN (read from process.env or repo-root .env).
  * Run: pnpm news            # every state with agencies
  *      pnpm news OH PA      # just these states
+ *      pnpm news ID --force # bypass both caches; re-gather from scratch
  */
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
@@ -41,6 +42,11 @@ const UA =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
 const AFTER = process.env.AFTER || '2025-01-01'
 const RESOLVE_DELAY_MS = 200
+// `--force` (or FORCE=1) bypasses BOTH caches — the local raw-response file and
+// the program's own server-side cache (passed through as force:true in the
+// params row) — so the run re-gathers from scratch instead of replaying a
+// cached payload.
+const FORCE = process.argv.includes('--force') || process.env.FORCE === '1'
 
 const STATE_NAMES: Record<string, string> = {
   AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California',
@@ -84,7 +90,7 @@ type ProgramResult = {
 
 async function runProgram(stateName: string, abbr: string, after: string): Promise<ProgramResult> {
   const cachePath = resolve(RAW_DIR, `${abbr}.json`)
-  if (existsSync(cachePath)) {
+  if (!FORCE && existsSync(cachePath)) {
     return JSON.parse(readFileSync(cachePath, 'utf8')) as ProgramResult
   }
   const manifest = JSON.stringify({
@@ -92,7 +98,9 @@ async function runProgram(stateName: string, abbr: string, after: string): Promi
     entrypoint: 'default.run.json',
     timezone: 'America/Bogota',
   })
-  const params = JSON.stringify([{ state: stateName, state_abbr: abbr, after }])
+  const params = JSON.stringify([
+    { state: stateName, state_abbr: abbr, after, ...(FORCE ? { force: true } : {}) },
+  ])
   const form = new FormData()
   form.append('manifest', manifest)
   form.append('params', params)
@@ -303,7 +311,10 @@ async function buildState(abbr: string, name: string) {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 function statesToBuild(): Array<{ abbr: string; name: string }> {
-  const cliStates = process.argv.slice(2).map((s) => s.toUpperCase())
+  const cliStates = process.argv
+    .slice(2)
+    .filter((s) => !s.startsWith('--'))
+    .map((s) => s.toUpperCase())
   let abbrs: string[]
   if (cliStates.length) {
     abbrs = cliStates
