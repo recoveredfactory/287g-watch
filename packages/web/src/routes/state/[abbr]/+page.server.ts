@@ -4,6 +4,7 @@ import type { Agency, StateMeta } from "../../+page.server";
 import type { HomeAgency } from "$lib/homeData.types";
 import { buildTimeline, type TimelinePoint } from "$lib/timeline";
 import { MODEL_SLUG } from "$lib/colors";
+import { getLocale } from "$lib/paraglide/runtime";
 
 export type TrendSeries = { jail: number[]; taskforce: number[]; wso: number[] };
 
@@ -27,16 +28,28 @@ export type StatePageData = {
   news: StateNews | null;
 };
 
-// The summary is split into a lead paragraph (the TL;DR the pipeline always
-// emits first) and the remaining body, so the page can collapse the body
-// behind a "read more" toggle. If no paragraph boundary is found the whole
-// summary becomes the lead and the body is empty.
-export type StateNews = { tldr_html: string; body_html: string; generated_at: string; lang: string };
+// The news program emits a short TL;DR plus the full statewide narrative, in
+// both EN and ES. The page shows the TL;DR and expands the body behind a "read
+// more" toggle. We resolve the active locale here so only that language's HTML
+// ships to the client.
+export type StateNews = { tldr_html: string; body_html: string; generated_at: string };
 
-const splitSummary = (html: string): { tldr_html: string; body_html: string } => {
-  const i = html.indexOf("</p>");
-  if (i < 0) return { tldr_html: html, body_html: "" };
-  return { tldr_html: html.slice(0, i + 4), body_html: html.slice(i + 4).trim() };
+type NewsLangBlock = { tldr_html?: string; summary_html?: string };
+type NewsFile = {
+  generated_at?: string;
+  en?: NewsLangBlock;
+  es?: NewsLangBlock;
+};
+
+const pickNews = (raw: NewsFile | null): StateNews | null => {
+  if (!raw) return null;
+  const block = raw[getLocale() as "en" | "es"] ?? raw.en;
+  if (!block?.tldr_html && !block?.summary_html) return null;
+  return {
+    tldr_html: block.tldr_html ?? "",
+    body_html: block.summary_html ?? "",
+    generated_at: raw.generated_at ?? "",
+  };
 };
 
 export const load = async ({ fetch, params }): Promise<StatePageData> => {
@@ -158,9 +171,7 @@ export const load = async ({ fetch, params }): Promise<StatePageData> => {
   };
 
   const newsRaw = newsRes.ok ? await newsRes.json() : null;
-  const news: StateNews | null = newsRaw?.summary_html
-    ? { ...splitSummary(newsRaw.summary_html), generated_at: newsRaw.generated_at, lang: newsRaw.lang }
-    : null;
+  const news = pickNews(newsRaw);
 
   return {
     abbr, stateName, agencies, mapAgencies, stateMeta, snapshotDate, modelCounts, agencyTypeCounts,
