@@ -108,14 +108,32 @@
     };
   });
 
-  // ── ?preview: scale-to-fit stage + play/scrub controls (never in the bake) ──
+  // ── ?preview: phone-framed stage + side play/scrub controls (never in the
+  // bake) ─────────────────────────────────────────────────────────────────────
+  // The 1080×1920 canvas is scaled to fit and dropped inside a handset bezel,
+  // with the controls in a panel beside it. Reserve room for the bezel and the
+  // controls column so the phone never overlaps them.
   $: previewMode = $page.url.searchParams.has("preview");
   let innerWidth = 0;
   let innerHeight = 0;
-  // Fit the 1080×1920 canvas into the viewport for preview.
+  const BEZEL = 14; // handset bezel thickness around the screen (px)
+  const PANEL_W = 300; // side controls column width (px)
+  const STAGE_PAD = 32; // breathing room at the stage edges + gap (px)
+  // Fit the 1080×1920 canvas into the space left after the bezel + controls.
   $: previewScale = previewMode && innerWidth && innerHeight
-    ? Math.min(innerWidth / 1080, innerHeight / 1920)
+    ? Math.max(
+        0.1,
+        Math.min(
+          (innerWidth - PANEL_W - STAGE_PAD * 3 - BEZEL * 2) / 1080,
+          (innerHeight - STAGE_PAD * 2 - BEZEL * 2) / 1920,
+        ),
+      )
     : 1;
+  // Pixel size of the scaled screen, so the bezel can wrap it tightly (a
+  // transform: scale() leaves the layout box at 1080×1920, so we size the
+  // wrapper ourselves and scale from the top-left corner).
+  $: screenW = 1080 * previewScale;
+  $: screenH = 1920 * previewScale;
 
   let t = 0; // storyboard time, seconds
   let playing = false;
@@ -154,11 +172,20 @@
 <svelte:window bind:innerWidth bind:innerHeight />
 
 <div class="vid-stage" class:vid-stage--preview={previewMode}>
-  <div
-    class="vid-canvas"
-    data-video-canvas
-    style:transform={previewMode ? `scale(${previewScale})` : "none"}
-  >
+  <!-- Phone frame: a thin handset bezel that wraps the scaled screen. Outside
+       preview both wrappers collapse to display:contents so the bake sees the
+       bare 1080×1920 canvas exactly as before. -->
+  <div class="vid-phone" style:padding={previewMode ? `${BEZEL}px` : null}>
+    <div
+      class="vid-screen"
+      style:width={previewMode ? `${screenW}px` : null}
+      style:height={previewMode ? `${screenH}px` : null}
+    >
+      <div
+        class="vid-canvas"
+        data-video-canvas
+        style:transform={previewMode ? `scale(${previewScale})` : "none"}
+      >
     <!-- Title bar: centered brand wordmark -->
     <div class="vid-titlebar">
       <span class="vid-brand">287(g) Watch</span>
@@ -219,31 +246,37 @@
 
     <!-- Crossfade veil for the fade transitions -->
     <div class="vid-veil" style:opacity={veilOpacity}></div>
-
-    <!-- Preview controls (only with ?preview; excluded from the bake) -->
-    {#if previewMode}
-      <div class="vid-controls">
-        <button type="button" class="vid-btn" on:click={() => (playing ? pause() : play())}>
-          {playing ? "❚❚ Pause" : "▶ Play"}
-        </button>
-        <input
-          type="range"
-          min="0"
-          max={TOTAL_SECONDS}
-          step="0.02"
-          bind:value={t}
-          on:input={onScrub}
-          aria-label="Storyboard time"
-        />
-        <span class="vid-scene">{sceneLabel(t)} · {t.toFixed(1)}s / {TOTAL_SECONDS.toFixed(1)}s</span>
       </div>
-    {/if}
+    </div>
   </div>
+
+  <!-- Preview controls (only with ?preview; excluded from the bake). A panel
+       beside the phone rather than a bar over the frame. -->
+  {#if previewMode}
+    <div class="vid-controls">
+      <button type="button" class="vid-btn" on:click={() => (playing ? pause() : play())}>
+        {playing ? "❚❚ Pause" : "▶ Play"}
+      </button>
+      <input
+        type="range"
+        min="0"
+        max={TOTAL_SECONDS}
+        step="0.02"
+        bind:value={t}
+        on:input={onScrub}
+        aria-label="Storyboard time"
+      />
+      <div class="vid-readout">
+        <span class="vid-scene">{sceneLabel(t)}</span>
+        <span class="vid-time">{t.toFixed(1)}s / {TOTAL_SECONDS.toFixed(1)}s</span>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
-  /* Stage: invisible in the bake (display:contents), a scale-to-fit viewport in
-     preview so the whole 1080×1920 frame is visible without scrolling. */
+  /* Stage: invisible in the bake (display:contents), a centered desktop layout
+     in preview — phone on the left, controls panel on the right. */
   .vid-stage {
     display: contents;
   }
@@ -251,10 +284,40 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    gap: 32px;
     width: 100vw;
     height: 100vh;
     overflow: hidden;
-    background: #000;
+    background: radial-gradient(ellipse 90% 90% at 50% 30%, #1a2330, #0a0d12 70%);
+  }
+
+  /* Phone frame + screen: pass-through (no layout) outside preview so the bake
+     captures the bare canvas. In preview, .vid-phone is the handset bezel and
+     .vid-screen is the rounded, clipped viewport sized to the scaled canvas. */
+  .vid-phone,
+  .vid-screen {
+    display: contents;
+  }
+  .vid-stage--preview .vid-phone {
+    display: block;
+    flex: 0 0 auto;
+    border-radius: 44px;
+    background: linear-gradient(160deg, #2a2f37, #14171c);
+    box-shadow:
+      0 0 0 2px rgba(255, 255, 255, 0.06) inset,
+      0 24px 60px rgba(0, 0, 0, 0.6);
+  }
+  .vid-stage--preview .vid-screen {
+    display: block;
+    position: relative;
+    overflow: hidden;
+    border-radius: 32px;
+    background: #0c1117;
+  }
+  /* In preview the screen sizes itself, so scale the canvas from the top-left
+     corner to fill it exactly (no centering offset). */
+  .vid-stage--preview .vid-canvas {
+    transform-origin: top left;
   }
 
   .vid-canvas {
@@ -473,28 +536,28 @@
     z-index: 40;
   }
 
-  /* Preview-only controls */
+  /* Preview-only controls — a panel beside the phone */
   .vid-controls {
-    position: absolute;
-    left: 50%;
-    bottom: 24px;
-    transform: translateX(-50%);
-    z-index: 60;
+    flex: 0 0 auto;
+    align-self: center;
     display: flex;
-    align-items: center;
-    gap: 16px;
-    width: 88%;
-    padding: 14px 20px;
-    border-radius: 14px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 18px;
+    width: 300px;
+    padding: 22px;
+    border-radius: 18px;
     background: rgba(12, 17, 23, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
   }
   .vid-controls input[type="range"] {
-    flex: 1 1 auto;
+    width: 100%;
+    accent-color: #be6079;
+    cursor: pointer;
   }
   .vid-btn {
-    flex: 0 0 auto;
-    padding: 10px 18px;
+    padding: 12px 18px;
     border-radius: 10px;
     border: 0;
     background: #be6079;
@@ -503,11 +566,20 @@
     font-weight: 700;
     cursor: pointer;
   }
-  .vid-scene {
-    flex: 0 0 auto;
+  .vid-readout {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
     font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: 20px;
     color: #e2e8f0;
-    white-space: nowrap;
+  }
+  .vid-scene {
+    font-size: 18px;
+    font-weight: 600;
+  }
+  .vid-time {
+    font-size: 16px;
+    color: #94a3b8;
+    font-variant-numeric: tabular-nums;
   }
 </style>
