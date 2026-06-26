@@ -30,7 +30,7 @@ sst.config.ts SST v3 deployment config (AWS)
 
 `pnpm pipeline` runs `packages/pipeline/ingest.ts`, which pulls from [appelson/Tracking_287g](https://github.com/appelson/Tracking_287g), merges contact data, and writes `packages/web/static/data/dist/agency_index.json`.
 
-Requires a `GH_TOKEN` in `.env` (read-only GitHub token) to fetch the upstream tracking sheet.
+A `GITHUB_TOKEN` in `.env` (read-only GitHub token) is optional but recommended — it raises the GitHub API rate limit from 60 to 5,000 requests/hour. The pipeline runs unauthenticated without one, just more slowly.
 
 ## Contact data enrichment
 

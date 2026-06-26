@@ -6,7 +6,7 @@ stage and re-bakes/publishes the map videos + OG cards. It can't run until the
 role trusts GitHub and the repo's Actions secrets/variables are set. One-time
 setup:
 
-Account: `647111127395` · Repo: `recoveredfactory/287g-explorer`
+Account: `ACCOUNT_ID` · Repo: `recoveredfactory/287g-explorer`
 
 ## 1. Create the GitHub OIDC provider (once per account)
 
@@ -25,11 +25,11 @@ auto-fills it if you add the provider there instead.
 
 ## 2. Let GitHub assume the existing `sst-deployer` role (preferred)
 
-Reuse the role we already deploy with — `arn:aws:iam::647111127395:role/sst-deployer`
+Reuse the role we already deploy with — `arn:aws:iam::ACCOUNT_ID:role/sst-deployer`
 (attached policy `sst-deployer-policy`, the RF-asset-scoped permission set). No
 new role, no new permissions; we just add a second trust statement so the GitHub
 OIDC provider can assume it, scoped to this repo's `main` branch. Its current
-trust only allows `user/eads` + `user/cidmonster` — keep that, add OIDC
+trust only allows `user/deploy-user` + `user/ci-deploy-user` — keep that, add OIDC
 (`trust.json`):
 
 ```json
@@ -40,8 +40,8 @@ trust only allows `user/eads` + `user/cidmonster` — keep that, add OIDC
       "Effect": "Allow",
       "Principal": {
         "AWS": [
-          "arn:aws:iam::647111127395:user/eads",
-          "arn:aws:iam::647111127395:user/cidmonster"
+          "arn:aws:iam::ACCOUNT_ID:user/deploy-user",
+          "arn:aws:iam::ACCOUNT_ID:user/ci-deploy-user"
         ]
       },
       "Action": "sts:AssumeRole"
@@ -49,7 +49,7 @@ trust only allows `user/eads` + `user/cidmonster` — keep that, add OIDC
     {
       "Effect": "Allow",
       "Principal": {
-        "Federated": "arn:aws:iam::647111127395:oidc-provider/token.actions.githubusercontent.com"
+        "Federated": "arn:aws:iam::ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com"
       },
       "Action": "sts:AssumeRoleWithWebIdentity",
       "Condition": {
@@ -95,7 +95,7 @@ aws iam attach-role-policy --role-name 287g-github-deploy \
 ## 3. Set the repo's Actions secrets + variables
 
 ```bash
-gh secret   set AWS_ROLE_ARN        --body "arn:aws:iam::647111127395:role/sst-deployer"
+gh secret   set AWS_ROLE_ARN        --body "arn:aws:iam::ACCOUNT_ID:role/sst-deployer"
 gh variable set WEB_STAGING_DOMAIN  --body "staging.287g.recoveredfactory.net"
 gh variable set WEB_DOMAIN          --body "287g.recoveredfactory.net"
 gh variable set AWS_REGION          --body "us-east-1"   # optional; this is the default
