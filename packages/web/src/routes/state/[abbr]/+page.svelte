@@ -20,6 +20,9 @@
 
   $: newsUpdatedDate = data.news ? dateFmt.format(new Date(data.news.generated_at)) : "";
 
+  // News summary collapses to its TL;DR lead paragraph; the rest expands on tap.
+  let newsExpanded = false;
+
   // ── Filters ─────────────────────────────────────────────────────────────────
   let activeModels: Set<string> = new Set();
   let activeTypes: Set<string> = new Set();
@@ -123,73 +126,49 @@
   <meta name="description" content={m.state_meta_description({ count: agencies.length, state: stateName })} />
 </svelte:head>
 
-<main id="main-content">
+<main id="main-content" class="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
 
   <!-- ── Header ──────────────────────────────────────────────────────────────── -->
-  <section class="border-b border-slate-200 bg-white px-4 py-8 sm:px-6 sm:py-10">
-    <div class="mx-auto max-w-6xl">
-      <p class="text-xs font-semibold uppercase tracking-widest text-slate-400">
-        {m.state_eyebrow()}
-      </p>
-      <h1 class="mt-1 text-2xl font-black text-slate-900 sm:text-3xl">
-        {stateName}
-      </h1>
-      <div class="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-600">
-        <span>
-          <span class="font-semibold text-slate-900">{intFmt.format(agencies.length)}</span>
-          {agencies.length === 1 ? m.state_agency_one() : m.state_agency_other()}
-        </span>
-        {#each MODEL_ORDER as model}
-          {#if modelCounts[model]}
-            <span class="flex items-center gap-1.5">
-              <span class="inline-block h-2 w-2 rounded-full" style="background: {MODEL_COLORS[model]};"></span>
-              <span class="font-semibold text-slate-900">{modelCounts[model]}</span>
-              {MODEL_SHORT[model]}
-            </span>
-          {/if}
-        {/each}
-        {#if stateMeta?.population_served}
-          <span>
-            <span class="font-semibold text-slate-900">{popFmt.format(stateMeta.population_served)}</span>
-            {m.state_covered()}
+  <header>
+    <p class="text-xs font-semibold uppercase tracking-widest text-slate-400">
+      {m.state_eyebrow()}
+    </p>
+    <h1 class="mt-1 text-2xl font-black text-slate-900 sm:text-3xl">
+      {stateName}
+    </h1>
+    <div class="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-600">
+      <span>
+        <span class="font-semibold text-slate-900">{intFmt.format(agencies.length)}</span>
+        {agencies.length === 1 ? m.state_agency_one() : m.state_agency_other()}
+      </span>
+      {#each MODEL_ORDER as model}
+        {#if modelCounts[model]}
+          <span class="flex items-center gap-1.5">
+            <span class="inline-block h-2 w-2 rounded-full" style="background: {MODEL_COLORS[model]};"></span>
+            <span class="font-semibold text-slate-900">{modelCounts[model]}</span>
+            {MODEL_SHORT[model]}
           </span>
         {/if}
-      </div>
-      {#if snapshotDate}
-        <p class="mt-2 text-xs italic text-slate-400">
-          {m.state_as_of({ date: dateFmt.format(new Date(snapshotDate)) })}
-        </p>
+      {/each}
+      {#if stateMeta?.population_served}
+        <span>
+          <span class="font-semibold text-slate-900">{popFmt.format(stateMeta.population_served)}</span>
+          {m.state_covered()}
+        </span>
       {/if}
     </div>
-  </section>
-
-  <!-- ── News summary ─────────────────────────────────────────────────────── -->
-  {#if data.news}
-    <section class="border-b border-slate-200 bg-white px-4 py-8 sm:px-6 sm:py-10">
-      <div class="mx-auto max-w-3xl">
-        <h2 class="font-serif text-lg font-bold text-slate-900 sm:text-xl">
-          {m.news_heading({ state: stateName })}
-        </h2>
-        <p class="mt-1 text-xs italic text-slate-400">
-          {m.news_updated({ date: newsUpdatedDate })}
-        </p>
-        <div class="prose-editorial news-summary mt-5">
-          {@html data.news.summary_html}
-        </div>
-        <p class="mt-6 border-t border-slate-100 pt-4 text-xs leading-relaxed text-slate-500">
-          {m.news_source_note()}
-        </p>
-      </div>
-    </section>
-  {/if}
+    {#if snapshotDate}
+      <p class="mt-2 text-xs italic text-slate-400">
+        {m.state_as_of({ date: dateFmt.format(new Date(snapshotDate)) })}
+      </p>
+    {/if}
+  </header>
 
   <!-- ── Map ──────────────────────────────────────────────────────────────── -->
-  <section class="border-b border-slate-200 bg-stone-50 pt-6 sm:pt-8">
-    <div class="mx-auto max-w-6xl px-4 sm:px-6">
-      <h2 class="font-serif text-lg font-bold text-slate-900 sm:text-xl">{m.state_map_heading()}</h2>
-    </div>
+  <section class="mt-8">
+    <h2 class="font-serif text-lg font-bold text-slate-900 sm:text-xl">{m.state_map_heading()}</h2>
     <div
-      class="relative mt-3 h-[300px] overflow-hidden border-y border-slate-200 shadow-sm sm:h-[420px]"
+      class="relative mt-3 h-[260px] overflow-hidden rounded-lg border border-slate-200 shadow-sm sm:h-[320px]"
       aria-label={m.state_map_aria({ state: stateName })}
     >
       <NationalMap
@@ -197,6 +176,8 @@
         terminatedAgencies={[]}
         {selectedStates}
         focusSelected
+        focusPadding={24}
+        focusMaxZoom={7}
         cursorIdx={null}
       />
     </div>
@@ -204,12 +185,46 @@
 
   <!-- ── Trend chart ──────────────────────────────────────────────────────── -->
   {#if showTrend}
-    <TrendCharts {trendMonths} {trend} hideSelector />
+    <section class="mt-10">
+      <TrendCharts {trendMonths} {trend} hideSelector embedded />
+    </section>
+  {/if}
+
+  <!-- ── News summary ─────────────────────────────────────────────────────── -->
+  {#if data.news}
+    <section class="mt-10">
+      <h2 class="font-serif text-lg font-bold text-slate-900 sm:text-xl">
+        {m.news_heading({ state: stateName })}
+      </h2>
+      <p class="mt-1 text-xs italic text-slate-400">
+        {m.news_updated({ date: newsUpdatedDate })}
+      </p>
+      <div class="prose-editorial news-summary mt-5">
+        {@html data.news.tldr_html}
+        {#if newsExpanded && data.news.body_html}
+          {@html data.news.body_html}
+        {/if}
+      </div>
+      {#if data.news.body_html}
+        <button
+          type="button"
+          on:click={() => (newsExpanded = !newsExpanded)}
+          aria-expanded={newsExpanded}
+          class="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-blue-700 hover:text-blue-900"
+        >
+          {newsExpanded ? m.news_show_less() : m.news_read_more()}
+          <span aria-hidden="true">{newsExpanded ? "⌃" : "⌄"}</span>
+        </button>
+      {/if}
+      <p class="mt-6 border-t border-slate-100 pt-4 text-xs leading-relaxed text-slate-500">
+        {m.news_source_note()}
+      </p>
+    </section>
   {/if}
 
   <!-- ── Agency list ──────────────────────────────────────────────────────── -->
-  <section class="px-4 py-8 sm:px-6 sm:py-10">
-    <div class="mx-auto max-w-6xl">
+  <section class="mt-10">
+    <div>
       <h2 class="font-serif text-lg font-bold text-slate-900 sm:text-xl">
         {m.state_agencies_heading({ state: stateName })}
       </h2>

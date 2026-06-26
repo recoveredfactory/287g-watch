@@ -4,6 +4,7 @@ import type { Agency, StateMeta } from "../../+page.server";
 import type { HomeAgency } from "$lib/homeData.types";
 import { buildTimeline, type TimelinePoint } from "$lib/timeline";
 import { MODEL_SLUG } from "$lib/colors";
+import { getLocale } from "$lib/paraglide/runtime";
 
 export type TrendSeries = { jail: number[]; taskforce: number[]; wso: number[] };
 
@@ -27,7 +28,29 @@ export type StatePageData = {
   news: StateNews | null;
 };
 
-export type StateNews = { summary_html: string; generated_at: string; lang: string };
+// The news program emits a short TL;DR plus the full statewide narrative, in
+// both EN and ES. The page shows the TL;DR and expands the body behind a "read
+// more" toggle. We resolve the active locale here so only that language's HTML
+// ships to the client.
+export type StateNews = { tldr_html: string; body_html: string; generated_at: string };
+
+type NewsLangBlock = { tldr_html?: string; summary_html?: string };
+type NewsFile = {
+  generated_at?: string;
+  en?: NewsLangBlock;
+  es?: NewsLangBlock;
+};
+
+const pickNews = (raw: NewsFile | null): StateNews | null => {
+  if (!raw) return null;
+  const block = raw[getLocale() as "en" | "es"] ?? raw.en;
+  if (!block?.tldr_html && !block?.summary_html) return null;
+  return {
+    tldr_html: block.tldr_html ?? "",
+    body_html: block.summary_html ?? "",
+    generated_at: raw.generated_at ?? "",
+  };
+};
 
 export const load = async ({ fetch, params }): Promise<StatePageData> => {
   const abbr = params.abbr.toUpperCase();
@@ -148,9 +171,7 @@ export const load = async ({ fetch, params }): Promise<StatePageData> => {
   };
 
   const newsRaw = newsRes.ok ? await newsRes.json() : null;
-  const news: StateNews | null = newsRaw
-    ? { summary_html: newsRaw.summary_html, generated_at: newsRaw.generated_at, lang: newsRaw.lang }
-    : null;
+  const news = pickNews(newsRaw);
 
   return {
     abbr, stateName, agencies, mapAgencies, stateMeta, snapshotDate, modelCounts, agencyTypeCounts,
