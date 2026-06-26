@@ -13,14 +13,12 @@
 
   $: ({ abbr, stateName, agencies, stateMeta, snapshotDate, modelCounts, agencyTypeCounts, trendMonths, trend } = data);
 
-  $: newsUpdatedDate = data.news
-    ? new Intl.DateTimeFormat(getLocale() === "es" ? "es-MX" : "en-US", {
-        year: "numeric", month: "long", day: "numeric", timeZone: "UTC",
-      }).format(new Date(data.news.generated_at))
-    : "";
+  const localeTag = getLocale() === "es" ? "es-MX" : "en-US";
+  const intFmt = new Intl.NumberFormat(localeTag);
+  const popFmt = new Intl.NumberFormat(localeTag, { notation: "compact", maximumFractionDigits: 1 });
+  const dateFmt = new Intl.DateTimeFormat(localeTag, { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
 
-  const intFmt = new Intl.NumberFormat();
-  const popFmt = new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 });
+  $: newsUpdatedDate = data.news ? dateFmt.format(new Date(data.news.generated_at)) : "";
 
   // ── Filters ─────────────────────────────────────────────────────────────────
   let activeModels: Set<string> = new Set();
@@ -121,8 +119,8 @@
 </script>
 
 <svelte:head>
-  <title>{stateName} 287(g) Agencies</title>
-  <meta name="description" content="{agencies.length} agencies in {stateName} participating in the 287(g) immigration enforcement program." />
+  <title>{m.state_meta_title({ state: stateName })}</title>
+  <meta name="description" content={m.state_meta_description({ count: agencies.length, state: stateName })} />
 </svelte:head>
 
 <main id="main-content">
@@ -131,7 +129,7 @@
   <section class="border-b border-slate-200 bg-white px-4 py-8 sm:px-6 sm:py-10">
     <div class="mx-auto max-w-6xl">
       <p class="text-xs font-semibold uppercase tracking-widest text-slate-400">
-        287(g) Program
+        {m.state_eyebrow()}
       </p>
       <h1 class="mt-1 text-2xl font-black text-slate-900 sm:text-3xl">
         {stateName}
@@ -139,7 +137,7 @@
       <div class="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-600">
         <span>
           <span class="font-semibold text-slate-900">{intFmt.format(agencies.length)}</span>
-          {agencies.length === 1 ? "agency" : "agencies"}
+          {agencies.length === 1 ? m.state_agency_one() : m.state_agency_other()}
         </span>
         {#each MODEL_ORDER as model}
           {#if modelCounts[model]}
@@ -153,13 +151,13 @@
         {#if stateMeta?.population_served}
           <span>
             <span class="font-semibold text-slate-900">{popFmt.format(stateMeta.population_served)}</span>
-            covered
+            {m.state_covered()}
           </span>
         {/if}
       </div>
       {#if snapshotDate}
         <p class="mt-2 text-xs italic text-slate-400">
-          As of {new Intl.DateTimeFormat("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" }).format(new Date(snapshotDate))}
+          {m.state_as_of({ date: dateFmt.format(new Date(snapshotDate)) })}
         </p>
       {/if}
     </div>
@@ -188,11 +186,11 @@
   <!-- ── Map ──────────────────────────────────────────────────────────────── -->
   <section class="border-b border-slate-200 bg-stone-50 pt-6 sm:pt-8">
     <div class="mx-auto max-w-6xl px-4 sm:px-6">
-      <h2 class="font-serif text-lg font-bold text-slate-900 sm:text-xl">Agency Locations</h2>
+      <h2 class="font-serif text-lg font-bold text-slate-900 sm:text-xl">{m.state_map_heading()}</h2>
     </div>
     <div
       class="relative mt-3 h-[300px] overflow-hidden border-y border-slate-200 shadow-sm sm:h-[420px]"
-      aria-label="Map showing 287(g) agency locations in {stateName}"
+      aria-label={m.state_map_aria({ state: stateName })}
     >
       <NationalMap
         agencies={data.mapAgencies}
@@ -213,7 +211,7 @@
   <section class="px-4 py-8 sm:px-6 sm:py-10">
     <div class="mx-auto max-w-6xl">
       <h2 class="font-serif text-lg font-bold text-slate-900 sm:text-xl">
-        {stateName} Agencies
+        {m.state_agencies_heading({ state: stateName })}
       </h2>
 
       <!-- Model filter pills (split-button: toggle left, ⓘ info right) -->
@@ -245,8 +243,8 @@
                 style={active
                   ? `border-color: ${MODEL_TEXT_COLORS[model] ?? "#fff"}44; color: ${MODEL_TEXT_COLORS[model] ?? "#fff"};`
                   : `border-color: ${MODEL_COLORS[model]}44; color: ${MODEL_DARK_COLORS[model] ?? "#334155"};`}
-                aria-label="Learn about {model}"
-                title="Learn about {model}"
+                aria-label={m.state_learn_about_model({ model })}
+                title={m.state_learn_about_model({ model })}
               >ⓘ</a>
             </div>
           {/if}
@@ -285,41 +283,41 @@
           <input
             type="search"
             bind:value={searchQuery}
-            placeholder="Search agencies…"
+            placeholder={m.state_search_placeholder()}
             class="w-full rounded-md border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
         <label class="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
           <input type="checkbox" bind:checked={moaOnly} class="rounded" />
-          MOA only
+          {m.state_moa_only()}
         </label>
         {#if hasFilters}
           <button
             type="button"
             on:click={clearFilters}
             class="text-sm text-slate-500 underline underline-offset-2 hover:text-slate-900"
-          >Clear filters</button>
+          >{m.home_search_clear_filters()}</button>
         {/if}
       </div>
 
       <!-- Result count -->
       <p class="mt-3 text-sm text-slate-500">
         {#if hasFilters}
-          {intFmt.format(filteredAgencies.length)} of {intFmt.format(agencies.length)} agencies
+          {m.state_result_count({ filtered: intFmt.format(filteredAgencies.length), total: intFmt.format(agencies.length) })}
         {:else}
-          {intFmt.format(agencies.length)} {agencies.length === 1 ? "agency" : "agencies"}
+          {intFmt.format(agencies.length)} {agencies.length === 1 ? m.state_agency_one() : m.state_agency_other()}
         {/if}
       </p>
 
       <!-- Table -->
       {#if sortedAgencies.length === 0}
         <div class="mt-4 rounded-lg border border-slate-200 bg-white px-6 py-10 text-center">
-          <p class="text-sm font-medium text-slate-700">No agencies match your filters.</p>
+          <p class="text-sm font-medium text-slate-700">{m.state_no_match()}</p>
           <button
             type="button"
             on:click={clearFilters}
             class="mt-2 text-sm text-slate-500 underline underline-offset-2 hover:text-slate-900"
-          >Clear filters</button>
+          >{m.home_search_clear_filters()}</button>
         </div>
       {:else}
         <div class="mt-4 overflow-x-auto rounded-lg border border-slate-200">
@@ -328,22 +326,22 @@
               <tr class="border-b border-slate-200 bg-slate-50 text-left">
                 <th class="px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 sm:px-4 sm:py-3" aria-sort={sortCol === "name" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
                   <button type="button" on:click={() => setSort("name")} class="flex items-center gap-1 hover:text-slate-900">
-                    Agency {sortIcon("name")}
+                    {m.state_th_agency()} {sortIcon("name")}
                   </button>
                 </th>
                 <th class="px-2 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 sm:px-3 sm:py-3" aria-sort={sortCol === "type" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
                   <button type="button" on:click={() => setSort("type")} class="flex items-center gap-1 hover:text-slate-900">
-                    Type {sortIcon("type")}
+                    {m.state_th_type()} {sortIcon("type")}
                   </button>
                 </th>
-                <th class="px-2 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 sm:px-3 sm:py-3">Models</th>
+                <th class="px-2 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 sm:px-3 sm:py-3">{m.state_th_models()}</th>
                 <th class="px-2 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 sm:px-3 sm:py-3" aria-sort={sortCol === "signed" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
                   <button type="button" on:click={() => setSort("signed")} class="flex items-center gap-1 hover:text-slate-900">
-                    Signed {sortIcon("signed")}
+                    {m.state_th_signed()} {sortIcon("signed")}
                   </button>
                 </th>
-                <th class="hidden px-2 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 sm:table-cell sm:px-3 sm:py-3">Population</th>
-                <th class="px-2 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 sm:px-3 sm:py-3">MOA</th>
+                <th class="hidden px-2 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 sm:table-cell sm:px-3 sm:py-3">{m.state_th_population()}</th>
+                <th class="px-2 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 sm:px-3 sm:py-3">{m.state_th_moa()}</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
