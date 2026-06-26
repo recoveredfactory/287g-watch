@@ -18,9 +18,13 @@
 //   --youtube-id <id>     the just-uploaded video id (omit if the upload failed)
 //   --youtube-url <url>   override the watch URL (default: https://youtu.be/<id>)
 //   --date <YYYY-MM-DD>   snapshot date for the caption (default: $SNAPSHOT_DATE / data)
-//   --video-url <url>     override the IG video URL (default: the bucket -latest cut)
+//   --archive-en <key>    immutable per-release object key for the en cut (e.g.
+//                         map-trend-2026-06-24-ab12cd34-en.mp4). CI passes this so
+//                         the IG link is pinned to this release, not the moving
+//                         -latest. --archive-es likewise. Omitted → -latest.
+//   --video-url <url>     override the primary IG video URL entirely
 import { sendEmail } from "./social-notify.mjs";
-import { resolveVideoUrl, snapshotDate, igCaption } from "./social-assets.mjs";
+import { resolveArchiveUrl, snapshotDate, igCaption } from "./social-assets.mjs";
 
 const args = process.argv.slice(2);
 const valueOf = (flag) => {
@@ -40,9 +44,13 @@ const ytId = (valueOf("--youtube-id") || "").trim();
 const ytWatch = valueOf("--youtube-url") || (ytId ? `https://youtu.be/${ytId}` : "");
 const ytStudio = ytId ? `https://studio.youtube.com/video/${ytId}/edit` : "";
 
-const igVideo = await resolveVideoUrl(lang, valueOf("--video-url"));
-// Offer the other-language cut too (the bake publishes both).
-const igVideoOther = lang === "en" ? await resolveVideoUrl("es", null) : await resolveVideoUrl("en", null);
+// Link the immutable per-release archive URL (not the moving -latest) so a
+// delayed manual IG post still grabs the exact video this release was about;
+// falls back to -latest when the archive key wasn't passed. Other language too.
+const otherLang = lang === "en" ? "es" : "en";
+const archiveKey = (l) => valueOf(`--archive-${l}`);
+const igVideo = await resolveArchiveUrl(lang, archiveKey(lang), valueOf("--video-url"));
+const igVideoOther = await resolveArchiveUrl(otherLang, archiveKey(otherLang), null);
 const caption = igCaption(date, SITE);
 
 const asOf = date ? ` (data as of ${date})` : "";

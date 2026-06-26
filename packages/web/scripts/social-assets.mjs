@@ -31,6 +31,18 @@ export async function resolveVideoUrl(lang, override) {
   return base ? `${base}/map-trend-latest-${lang}.mp4` : null;
 }
 
+// Public video URL for the notification email. Prefers the IMMUTABLE per-release
+// archive object (`map-trend-<date>-<hash>-<lang>.mp4`) when its key is known, so
+// a delayed manual IG post links the exact cut this release published — `-latest`
+// is overwritten by the next refresh and would drift. Falls back to `-latest`
+// when no archive key is available. `override` wins over both.
+export async function resolveArchiveUrl(lang, archiveKey, override) {
+  if (override) return override;
+  const base = await assetBaseUrl();
+  if (!base) return null;
+  return `${base}/${archiveKey || `map-trend-latest-${lang}.mp4`}`;
+}
+
 // ICE release date for the caption: explicit (flag), else $SNAPSHOT_DATE, else
 // the latest snapshot_date in the local pipeline output, else null.
 export function snapshotDate(explicit) {
