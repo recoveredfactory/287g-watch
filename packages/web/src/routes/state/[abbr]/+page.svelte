@@ -3,7 +3,8 @@
   import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_DARK_COLORS, MODEL_SHORT, MODEL_MINI, MODEL_SLUG, MODEL_ORDER } from "$lib/colors";
   import { browser } from "$app/environment";
   import { onMount } from "svelte";
-  import { localizeHref } from "$lib/paraglide/runtime";
+  import { localizeHref, getLocale } from "$lib/paraglide/runtime";
+  import { m } from "$lib/paraglide/messages.js";
   import NationalMap from "$lib/components/NationalMap.svelte";
   import TrendCharts from "$lib/components/TrendCharts.svelte";
   import ModelLink from "$lib/components/ModelLink.svelte";
@@ -11,6 +12,12 @@
   export let data: PageData;
 
   $: ({ abbr, stateName, agencies, stateMeta, snapshotDate, modelCounts, agencyTypeCounts, trendMonths, trend } = data);
+
+  $: newsUpdatedDate = data.news
+    ? new Intl.DateTimeFormat(getLocale() === "es" ? "es-MX" : "en-US", {
+        year: "numeric", month: "long", day: "numeric", timeZone: "UTC",
+      }).format(new Date(data.news.generated_at))
+    : "";
 
   const intFmt = new Intl.NumberFormat();
   const popFmt = new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 });
@@ -157,6 +164,26 @@
       {/if}
     </div>
   </section>
+
+  <!-- ── News summary ─────────────────────────────────────────────────────── -->
+  {#if data.news}
+    <section class="border-b border-slate-200 bg-white px-4 py-8 sm:px-6 sm:py-10">
+      <div class="mx-auto max-w-3xl">
+        <h2 class="font-serif text-lg font-bold text-slate-900 sm:text-xl">
+          {m.news_heading({ state: stateName })}
+        </h2>
+        <p class="mt-1 text-xs italic text-slate-400">
+          {m.news_updated({ date: newsUpdatedDate })}
+        </p>
+        <div class="prose-editorial news-summary mt-5">
+          {@html data.news.summary_html}
+        </div>
+        <p class="mt-6 border-t border-slate-100 pt-4 text-xs leading-relaxed text-slate-500">
+          {m.news_source_note()}
+        </p>
+      </div>
+    </section>
+  {/if}
 
   <!-- ── Map ──────────────────────────────────────────────────────────────── -->
   <section class="border-b border-slate-200 bg-stone-50 pt-6 sm:pt-8">

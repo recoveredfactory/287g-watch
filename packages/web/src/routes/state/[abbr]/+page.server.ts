@@ -24,17 +24,21 @@ export type StatePageData = {
   nationalTimeline: TimelinePoint[];
   trendMonths: string[];
   trend: Record<string, TrendSeries>;
+  news: StateNews | null;
 };
+
+export type StateNews = { summary_html: string; generated_at: string; lang: string };
 
 export const load = async ({ fetch, params }): Promise<StatePageData> => {
   const abbr = params.abbr.toUpperCase();
   const stateName = STATE_NAMES[abbr];
   if (!stateName) throw error(404, `Unknown state: ${abbr}`);
 
-  const [agenciesRes, metaRes, terminatedRes] = await Promise.all([
+  const [agenciesRes, metaRes, terminatedRes, newsRes] = await Promise.all([
     fetch("/data/dist/agency_index.json"),
     fetch("/data/dist/state_meta.json"),
     fetch("/data/dist/terminated_agencies.json"),
+    fetch(`/data/dist/news/${abbr}.json`),
   ]);
   if (!agenciesRes.ok) throw error(503, "Data unavailable");
 
@@ -143,11 +147,17 @@ export const load = async ({ fetch, params }): Promise<StatePageData> => {
     return out;
   };
 
+  const newsRaw = newsRes.ok ? await newsRes.json() : null;
+  const news: StateNews | null = newsRaw
+    ? { summary_html: newsRaw.summary_html, generated_at: newsRaw.generated_at, lang: newsRaw.lang }
+    : null;
+
   return {
     abbr, stateName, agencies, mapAgencies, stateMeta, snapshotDate, modelCounts, agencyTypeCounts,
     timeline: buildTimeline([...agencies, ...terminatedRaw.filter((a) => a.state === abbr)]),
     nationalTimeline: buildTimeline([...allAgencies, ...terminatedRaw]),
     trendMonths,
     trend: { "": sampleMonthly(stateForTrend) },
+    news,
   };
 };

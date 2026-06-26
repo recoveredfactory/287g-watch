@@ -25,6 +25,10 @@
   "lang_es": "ES",
   "source_material_notice": "Source data and documents (agency names, MOAs, official records) remain in English as originally published.",
 
+  "news_heading": "{state} in the news",
+  "news_updated": "Updated {date}",
+  "news_source_note": "This summary is compiled automatically from published news coverage and the agencies' signed agreements, with links to the original sources. Verify against those sources before republishing.",
+
   "home_meta_title": "287(g) Watch — ICE's Local Enforcement Partnerships",
   "home_meta_description_with_count": "{count} local law enforcement agencies have signed 287(g) agreements with ICE, authorizing officers to enforce federal immigration law. We tracked all of them.",
   "home_meta_description_no_data": "Tracking local law enforcement agencies with 287(g) agreements authorizing officers to enforce federal immigration law.",

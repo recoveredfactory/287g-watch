@@ -115,6 +115,20 @@
     @apply leading-relaxed;
   }
 
+  /* Headings inside generated news prose ({@html}); scoped so editorial pages
+     with their own heading classes are untouched. */
+  .news-summary h2 {
+    @apply mt-8 font-serif text-lg font-bold text-slate-900 sm:text-xl;
+  }
+
+  .news-summary h3 {
+    @apply mt-6 font-serif text-base font-bold text-slate-900 sm:text-lg;
+  }
+
+  .news-summary h4 {
+    @apply mt-4 font-semibold text-slate-900;
+  }
+
   .model-badge {
     @apply inline-block rounded px-2 py-0.5 text-xs font-semibold uppercase tracking-wide;
   }

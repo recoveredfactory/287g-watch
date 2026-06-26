@@ -25,6 +25,10 @@
   "lang_es": "ES",
   "source_material_notice": "Los datos y documentos de origen (nombres de agencias, acuerdos MOA, registros oficiales) permanecen en inglés tal como se publicaron originalmente.",
 
+  "news_heading": "{state} en las noticias",
+  "news_updated": "Actualizado el {date}",
+  "news_source_note": "Este resumen se compila automáticamente a partir de la cobertura de prensa publicada y los acuerdos firmados por las agencias, con enlaces a las fuentes originales. Verifique con esas fuentes antes de volver a publicar.",
+
   "home_meta_title": "287(g) Watch — Alianzas locales de cumplimiento de ICE",
   "home_meta_description_with_count": "{count} agencias locales de seguridad pública han firmado acuerdos 287(g) con ICE que autorizan a sus oficiales a hacer cumplir la ley federal de inmigración. Las rastreamos todas.",
   "home_meta_description_no_data": "Rastreo de agencias locales de seguridad pública con acuerdos 287(g) que autorizan a sus oficiales a hacer cumplir la ley federal de inmigración.",

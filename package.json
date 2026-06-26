@@ -10,6 +10,7 @@
     "deploy": "node scripts/deploy.mjs",
     "deploy:staging:assets": "node scripts/deploy.mjs --stage staging --bake-og --bake-video",
     "deploy:prod:assets": "node scripts/deploy.mjs --stage prod --bake-og --bake-video",
+    "news": "pnpm -F pipeline news",
     "diff:staging": "sst diff --stage staging",
     "diff:prod": "sst diff --stage prod",
     "remove:staging": "sst remove --stage staging",
