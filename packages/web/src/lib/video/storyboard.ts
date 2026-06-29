@@ -1,71 +1,80 @@
-// ── Map+trend social video storyboard (#167) ───────────────────────────────
+// ── Map+trend social video storyboard (#167, title card #213) ───────────────
 // The single source of timing for the /video/national composite. The route
 // imports `frameState`/`sceneLabel` to render (and to preview), and the bake
 // script (scripts/bake-map-trend-video.mjs) imports `TOTAL_SECONDS` to size its
 // frame sweep — so the page (preview) and the encode can never disagree.
 //
 // Storyboard:
-//   intro hold — today, big counter
-//   fade-in    — dip to black; under cover, snap the cursor back to the start
-//   start hold — hold on the Dec 2024 starting state before the sweep
+//   intro      — composite at today (one frame of breathing room for a clean loop)
+//   title in   — dissolve the title card UP over the composite (big TODAY number,
+//                ghosted US map behind it)
+//   title hold — hold the card; under its opaque cover, snap the cursor back to
+//                the Dec 2024 start so the reveal lands on the starting frame
+//   title out  — dissolve the title card DOWN, revealing the composite at the start
+//   start hold — settle on the Dec 2024 starting state before the sweep
 //   run        — sweep start → today; map dots fade in, trend playhead tracks
-//   outro hold — settle on today, big counter
+//   outro hold — settle on today
 //
-// The run ENDS on today, so there's no fade-out — the clip just holds on the
-// latest date (a trailing fade dipped to black and back to the same frame,
-// which read as an odd flash). On loop, outro(today) → intro(today) is seamless.
-//
-// One counter (always reads the count at the cursor); the single fade dips the
-// whole frame to a *full-black plateau* and the cursor snap happens inside that
-// plateau, so the number never visibly jumps. All beats are wall-clock seconds;
+// The title card REPLACES the old fade-to-black: it dissolves over the composite
+// instead of dipping through black, so it "fades into the video." Because both
+// ends sit on the composite-at-today, outro → intro stays a seamless loop. The
+// cursor snap (today → start) hides under the card while it's fully opaque, so
+// the animated counters never visibly jump. All beats are wall-clock seconds;
 // `t` is seconds from the start of the clip.
 
 export const BEATS = {
-  introHold: 1.5,
-  fadeIn: 0.7,
-  startHold: 1.5,
+  introHold: 0.4,
+  titleIn: 0.7,
+  titleHold: 1.5,
+  titleOut: 0.8,
+  startHold: 0.8,
   run: 8.0,
   outroHold: 2.0,
 } as const;
 
-// Fraction of a fade beat held at full black in the middle (the cursor snap
-// hides here). 0.34 → ~0.24s of solid black on a 0.7s fade.
-const VEIL_HOLD = 0.34;
-
 export const TOTAL_SECONDS =
-  BEATS.introHold + BEATS.fadeIn + BEATS.startHold + BEATS.run + BEATS.outroHold; // 13.7
+  BEATS.introHold +
+  BEATS.titleIn +
+  BEATS.titleHold +
+  BEATS.titleOut +
+  BEATS.startHold +
+  BEATS.run +
+  BEATS.outroHold; // 14.2
 
 // Beat boundaries (cumulative end times), so phase tests read top-to-bottom.
-const T_INTRO_END = BEATS.introHold; // 1.5
-const T_FADEIN_END = T_INTRO_END + BEATS.fadeIn; // 2.2
-const T_STARTHOLD_END = T_FADEIN_END + BEATS.startHold; // 3.7
-const T_RUN_END = T_STARTHOLD_END + BEATS.run; // 11.7
-// outro ends at TOTAL_SECONDS (13.7)
+const T_INTRO_END = BEATS.introHold; // 0.4
+const T_TITLEIN_END = T_INTRO_END + BEATS.titleIn; // 1.1
+const T_TITLEHOLD_END = T_TITLEIN_END + BEATS.titleHold; // 2.6
+const T_TITLEOUT_END = T_TITLEHOLD_END + BEATS.titleOut; // 3.4
+const T_STARTHOLD_END = T_TITLEOUT_END + BEATS.startHold; // 4.2
+const T_RUN_END = T_STARTHOLD_END + BEATS.run; // 12.2
+// outro ends at TOTAL_SECONDS (14.2)
 
 export type FrameState = {
-  // Fractional-month cursor for the map, the trend playhead, and the counter.
+  // Fractional-month cursor for the map, the trend playhead, and the counters.
   cursorIdx: number;
-  // Full-frame black veil for the fade transitions (0 = clear, 1 = black).
+  // Full-frame black veil (kept for safety; unused by the title-card intro).
   veilOpacity: number;
+  // Title-card opacity (1 = card fully covers the composite, 0 = composite only).
+  titleOpacity: number;
 };
 
-export type Scene = "intro" | "fade-in" | "start-hold" | "run" | "outro";
+export type Scene =
+  | "intro"
+  | "title-in"
+  | "title-hold"
+  | "title-out"
+  | "start-hold"
+  | "run"
+  | "outro";
 
 const clamp01 = (p: number) => (p < 0 ? 0 : p > 1 ? 1 : p);
 
-// Trapezoid: ramp 0→1, hold at 1 across the middle `hold` fraction, ramp 1→0.
-// The flat top guarantees the cursor snap is hidden under solid black.
-function veilTrapezoid(p: number, hold = VEIL_HOLD): number {
-  const q = clamp01(p);
-  const ramp = (1 - hold) / 2;
-  if (q < ramp) return q / ramp;
-  if (q > 1 - ramp) return (1 - q) / ramp;
-  return 1;
-}
-
 export function sceneAt(t: number): Scene {
   if (t < T_INTRO_END) return "intro";
-  if (t < T_FADEIN_END) return "fade-in";
+  if (t < T_TITLEIN_END) return "title-in";
+  if (t < T_TITLEHOLD_END) return "title-hold";
+  if (t < T_TITLEOUT_END) return "title-out";
   if (t < T_STARTHOLD_END) return "start-hold";
   if (t < T_RUN_END) return "run";
   return "outro";
@@ -74,9 +83,13 @@ export function sceneAt(t: number): Scene {
 export function sceneLabel(t: number): string {
   switch (sceneAt(t)) {
     case "intro":
-      return "Intro hold (today)";
-    case "fade-in":
-      return "Fade to start";
+      return "Intro (today)";
+    case "title-in":
+      return "Title card in";
+    case "title-hold":
+      return "Title card hold";
+    case "title-out":
+      return "Title card out";
     case "start-hold":
       return "Hold on start (Dec 2024)";
     case "run":
@@ -91,29 +104,42 @@ export function sceneLabel(t: number): string {
 export function frameState(t: number, minIdx: number, maxIdx: number): FrameState {
   const time = Math.max(0, Math.min(t, TOTAL_SECONDS));
 
-  // Intro hold — today.
+  // Intro — composite at today (loop seam).
   if (time < T_INTRO_END) {
-    return { cursorIdx: maxIdx, veilOpacity: 0 };
+    return { cursorIdx: maxIdx, veilOpacity: 0, titleOpacity: 0 };
   }
 
-  // Fade-in — dip to black; snap cursor maxIdx → minIdx at the veil's midpoint
-  // (inside the full-black plateau, so the count doesn't visibly jump).
-  if (time < T_FADEIN_END) {
-    const p = (time - T_INTRO_END) / BEATS.fadeIn;
-    return { cursorIdx: p < 0.5 ? maxIdx : minIdx, veilOpacity: veilTrapezoid(p) };
+  // Title in — dissolve the card up over the composite-at-today.
+  if (time < T_TITLEIN_END) {
+    const p = (time - T_INTRO_END) / BEATS.titleIn;
+    return { cursorIdx: maxIdx, veilOpacity: 0, titleOpacity: clamp01(p) };
+  }
+
+  // Title hold — card fully opaque. Snap cursor maxIdx → minIdx past the 60%
+  // mark, hidden under the card, so the composite is already at the start when
+  // the card lifts.
+  if (time < T_TITLEHOLD_END) {
+    const p = (time - T_TITLEIN_END) / BEATS.titleHold;
+    return { cursorIdx: p < 0.6 ? maxIdx : minIdx, veilOpacity: 0, titleOpacity: 1 };
+  }
+
+  // Title out — dissolve the card down, revealing the composite at the start.
+  if (time < T_TITLEOUT_END) {
+    const p = (time - T_TITLEHOLD_END) / BEATS.titleOut;
+    return { cursorIdx: minIdx, veilOpacity: 0, titleOpacity: 1 - clamp01(p) };
   }
 
   // Start hold — settle on the Dec 2024 starting state before the sweep.
   if (time < T_STARTHOLD_END) {
-    return { cursorIdx: minIdx, veilOpacity: 0 };
+    return { cursorIdx: minIdx, veilOpacity: 0, titleOpacity: 0 };
   }
 
   // Run — sweep start → today.
   if (time < T_RUN_END) {
     const p = (time - T_STARTHOLD_END) / BEATS.run;
-    return { cursorIdx: minIdx + (maxIdx - minIdx) * p, veilOpacity: 0 };
+    return { cursorIdx: minIdx + (maxIdx - minIdx) * p, veilOpacity: 0, titleOpacity: 0 };
   }
 
   // Outro hold — today. The run already ended here, so just hold (no fade).
-  return { cursorIdx: maxIdx, veilOpacity: 0 };
+  return { cursorIdx: maxIdx, veilOpacity: 0, titleOpacity: 0 };
 }
