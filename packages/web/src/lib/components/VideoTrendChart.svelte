@@ -51,7 +51,7 @@
   let measuredW = 0;
   $: W = Math.max(640, Math.round(measuredW) || 980);
   $: H = height;
-  const PAD = { t: 34, r: 424, b: 52, l: 30 };
+  const PAD = { t: 34, r: 440, b: 52, l: 30 };
   $: innerW = W - PAD.l - PAD.r;
   $: innerH = H - PAD.t - PAD.b;
   $: baselineY = PAD.t + innerH;
@@ -113,15 +113,9 @@
   $: labelX = W - PAD.r + 22; // left edge of the big-label column
   $: dotX = xAt(cur);
 
-  // x-axis: 4 evenly spaced month ticks incl. first + last.
-  $: ticks = (() => {
-    const n = months.length;
-    if (n <= 1) return months;
-    const count = Math.min(n, 4);
-    const set = new Set<number>();
-    for (let i = 0; i < count; i++) set.add(months[Math.round((i * (n - 1)) / (count - 1))]);
-    return [...set];
-  })();
+  // x-axis: just the first + last month (bigger labels — the line itself carries
+  // the shape between them).
+  $: ticks = months.length > 1 ? [months[0], months[months.length - 1]] : months;
   // A few faint horizontal gridlines for depth (no numbers — the big labels carry values).
   $: gridYs = [0, 0.25, 0.5, 0.75, 1].map((f) => PAD.t + innerH * f);
 </script>
@@ -133,7 +127,7 @@
         <line x1={PAD.l} y1={gy} x2={W - PAD.r} y2={gy} stroke="rgba(255,255,255,0.16)" />
       {/each}
       {#each ticks as t, i}
-        <text x={xAt(t)} y={H - 14} text-anchor={i === 0 ? "start" : i === ticks.length - 1 ? "end" : "middle"} fill="#94a3b8" style="font-size: 26px;">{monthLabelShort(t)}</text>
+        <text x={xAt(t)} y={H - 12} text-anchor={i === 0 ? "start" : "end"} fill="#94a3b8" style="font-size: 34px;">{monthLabelShort(t)}</text>
       {/each}
 
       {#each series as s}

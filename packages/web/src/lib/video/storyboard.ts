@@ -28,7 +28,7 @@ export const BEATS = {
   titleHold: 1.5,
   titleOut: 0.8,
   startHold: 0.8,
-  run: 8.0,
+  run: 9.5,
   outroHold: 2.0,
 } as const;
 
@@ -39,7 +39,7 @@ export const TOTAL_SECONDS =
   BEATS.titleOut +
   BEATS.startHold +
   BEATS.run +
-  BEATS.outroHold; // 14.2
+  BEATS.outroHold; // 15.7
 
 // Beat boundaries (cumulative end times), so phase tests read top-to-bottom.
 const T_INTRO_END = BEATS.introHold; // 0.4
@@ -47,8 +47,8 @@ const T_TITLEIN_END = T_INTRO_END + BEATS.titleIn; // 1.1
 const T_TITLEHOLD_END = T_TITLEIN_END + BEATS.titleHold; // 2.6
 const T_TITLEOUT_END = T_TITLEHOLD_END + BEATS.titleOut; // 3.4
 const T_STARTHOLD_END = T_TITLEOUT_END + BEATS.startHold; // 4.2
-const T_RUN_END = T_STARTHOLD_END + BEATS.run; // 12.2
-// outro ends at TOTAL_SECONDS (14.2)
+const T_RUN_END = T_STARTHOLD_END + BEATS.run; // 13.7
+// outro ends at TOTAL_SECONDS (15.7)
 
 export type FrameState = {
   // Fractional-month cursor for the map, the trend playhead, and the counters.

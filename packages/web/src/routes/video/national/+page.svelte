@@ -3,9 +3,10 @@
   // A fixed 1080×1920 (9:16) canvas, recomposed (#213) to put the most important
   // figures in the social-safe optical centre: the trend chart up top, a center
   // band (headline agencies number on the left + an animated stat stack on the
-  // right), and the national map as the bottom beat. A title card (big TODAY
-  // number over a ghosted US map) dissolves into the run at the start. The bake
-  // script (scripts/bake-map-trend-video.mjs) frame-steps it via window.__bake;
+  // right, split by a central spine), and the national map as the bottom beat. A
+  // title card (big TODAY number over a ghosted US map with today's dots)
+  // dissolves into the run at the start. The bake script
+  // (scripts/bake-map-trend-video.mjs) frame-steps it via window.__bake;
   // storyboard timing lives in $lib/video/storyboard so preview + bake agree.
   //
   // Visit /<locale>/video/national?preview for on-screen play/scrub controls
@@ -106,9 +107,9 @@
   // Bake hook: the script waits on ready(), reads bounds(), then seek()s each
   // frame. chartW>0 means VideoTrendChart has measured (its viewBox is width-driven).
   let chartW = 0;
-  // The composite renders TWO maps — the running map and the faint title-card
-  // backdrop — so the bake must wait for both to settle. Count readies rather
-  // than leaning on the single window.__mapReady global (which either map sets).
+  // The composite renders TWO maps — the running map and the title-card backdrop
+  // — so the bake must wait for both to settle. Count readies rather than leaning
+  // on the single window.__mapReady global (which either map sets).
   let mapsReady = 0;
   const MAPS_EXPECTED = 2;
   const onMapReady = () => (mapsReady += 1);
@@ -202,19 +203,20 @@
         data-video-canvas
         style:transform={previewMode ? `scale(${previewScale})` : "none"}
       >
-    <!-- Trend chart: top band — the climb, broken out by model -->
-    <div class="vid-chart" bind:clientWidth={chartW}>
-      <VideoTrendChart trendMonths={data.trendMonths} trend={data.trend} {cursorIdx} height={520} />
+    <!-- Map: top beat — where the agreements are -->
+    <div class="vid-map">
+      <NationalMap agencies={data.agencies} terminatedAgencies={data.terminatedAgencies} {cursorIdx} lower48 dotScale={1.3} onReady={onMapReady} />
     </div>
 
     <!-- Center band: headline agencies number (left) + animated stat stack
-         (right), sat in the optical middle where social chrome (caption, handle,
-         action rail) can't reach. -->
+         (right) split by a central spine, sat in the optical middle where social
+         chrome (caption, handle, action rail) can't reach. -->
     <div class="vid-band">
       <div class="vid-hero">
         <div class="vid-hero-num">{intFmt.format(Math.round(countAtCursor))}</div>
         <div class="vid-hero-unit">{m.video_hero_unit()}</div>
       </div>
+      <div class="vid-band-div" aria-hidden="true"></div>
       <div class="vid-stats">
         <div class="vid-stat-date">{exactDate}</div>
         <div class="vid-stat">
@@ -233,9 +235,9 @@
       </div>
     </div>
 
-    <!-- Map: the bottom beat — where the agreements are -->
-    <div class="vid-map">
-      <NationalMap agencies={data.agencies} terminatedAgencies={data.terminatedAgencies} {cursorIdx} lower48 dotScale={1.3} onReady={onMapReady} />
+    <!-- Trend chart: bottom band — the climb, broken out by model -->
+    <div class="vid-chart" bind:clientWidth={chartW}>
+      <VideoTrendChart trendMonths={data.trendMonths} trend={data.trend} {cursorIdx} height={440} />
     </div>
 
     <!-- Source, lower-left corner (over the map) -->
@@ -254,17 +256,19 @@
     <!-- Crossfade veil (kept for safety; unused by the title-card intro) -->
     <div class="vid-veil" style:opacity={veilOpacity}></div>
 
-    <!-- Title card: the TODAY headline over a ghosted US map, dissolving into
-         the running composite. Opaque dark panel so it hides the cursor snap. -->
+    <!-- Title card: the TODAY headline over a ghosted US map (today's dots),
+         dissolving into the running composite. Opaque panel so it hides the
+         cursor snap. -->
     <div class="vid-title" style:opacity={titleOpacity} aria-hidden={titleOpacity === 0}>
       <div class="vid-title-map">
-        <NationalMap agencies={[]} terminatedAgencies={[]} lower48 dotScale={0} onReady={onMapReady} />
+        <NationalMap agencies={data.agencies} terminatedAgencies={data.terminatedAgencies} cursorIdx={maxIdx} lower48 dotScale={1.1} onReady={onMapReady} />
       </div>
       <div class="vid-title-scrim"></div>
       <div class="vid-title-inner">
         <div class="vid-title-brand">287(g) Watch</div>
         <div class="vid-title-num">{intFmt.format(Math.round(heroToday))}</div>
         <div class="vid-title-unit">{m.video_hero_unit()}</div>
+        {#if asOf}<div class="vid-title-asof">{m.video_data_as_of()} {asOf}</div>{/if}
       </div>
     </div>
       </div>
@@ -350,15 +354,20 @@
     color: #ffffff;
     display: flex;
     flex-direction: column;
+    justify-content: center;
     font-family: "Inter", system-ui, sans-serif;
     transform-origin: center center;
   }
 
-  /* Trend chart: top band. The big per-model end-labels (sized in
+  /* Trend chart: top band, dropped down off the very top edge so it clears the
+     platform's top chrome. The big per-model end-labels (sized in
      VideoTrendChart) carry the values; this just sets the gutter. */
+  /* Trend chart: bottom band — pulled in toward the centre, lifted off the
+     bottom edge so the source/brand labels have room below it. */
   .vid-chart {
     flex: 0 0 auto;
-    padding: 26px 36px 0;
+    padding: 0 36px;
+    margin-bottom: 104px;
   }
 
   /* Hide MapLibre's on-canvas controls + attribution on BOTH maps — the
@@ -374,54 +383,73 @@
     display: none !important;
   }
 
-  /* Center band: two columns. Grows to fill the gap between the chart and the
-     map and centers its content vertically, so the headline number lands on the
-     true optical centre of the frame (the social-safe zone). */
+  /* Center band: two columns split by a central spine. Grows to fill the gap
+     between the chart and the map and centers its content, so the headline
+     number lands on the true optical centre of the frame. */
   .vid-band {
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 40px;
-    padding: 0 56px;
+    justify-content: center;
+    gap: 32px;
+    margin: 26px 0;
+    padding: 0 24px;
+    /* Nudge the centred band up a touch — reads better than dead-centre and
+       opens the gap to the chart below. */
+    transform: translateY(-20px);
+  }
+  /* The central spine the two columns align to. */
+  .vid-band-div {
+    flex: 0 0 auto;
+    align-self: center;
+    width: 2px;
+    height: 230px;
+    background: rgba(255, 255, 255, 0.13);
   }
 
-  /* Left column: the headline agencies number + its unit, left-aligned. */
+  /* Left column: headline agencies number + its unit, right-aligned so both
+     hug the spine. */
   .vid-hero {
-    flex: 1 1 0;
+    flex: 0 1 auto;
     min-width: 0;
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
+    align-items: flex-end;
+    text-align: right;
   }
   .vid-hero-num {
     /* Reserve the widest value (mono → 1ch exact) so it grows in place as it
-       ticks past a digit instead of shoving the column. */
+       ticks past a digit instead of shoving the column off the spine. A soft
+       brand-tinted glow lifts it off the flat dark so it reads as the subject. */
     display: inline-block;
     min-width: 5ch;
     font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
     font-variant-numeric: tabular-nums;
-    font-size: 156px;
+    font-size: 172px;
     font-weight: 800;
     line-height: 0.86;
     letter-spacing: -0.03em;
     color: #ffffff;
+    text-shadow: 0 0 60px rgba(190, 96, 121, 0.26);
   }
   .vid-hero-unit {
-    margin-top: 16px;
-    max-width: 12ch;
+    margin-top: 18px;
+    /* Width tuned so it breaks "agencies with" / "287(g) agreements" (two tidy
+       lines) rather than after "287(g)" or splitting "287(g) agreements". */
+    max-width: 475px;
     font-family: "Inter", system-ui, sans-serif;
-    font-size: 42px;
+    font-size: 46px;
     font-weight: 700;
-    line-height: 1.08;
+    line-height: 1.1;
     letter-spacing: 0.01em;
-    color: #cbd5e1;
+    color: #d7dee8;
   }
 
-  /* Right column: smaller numbers, bigger labels (per the brief). Numbers
-     right-align in a fixed-width column so the labels begin on a common edge. */
+  /* Right column: left-aligned from the spine, smaller numbers + bigger labels
+     (per the brief). Numbers right-align in a fixed-width box so they form a
+     clean column and the labels begin on a common edge. */
   .vid-stats {
-    flex: 0 0 auto;
+    flex: 0 1 auto;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
@@ -430,23 +458,25 @@
   .vid-stat-date {
     font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
     font-variant-numeric: tabular-nums;
-    font-size: 46px;
+    font-size: 34px;
     font-weight: 700;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
+    white-space: nowrap;
     color: #e2e8f0;
-    margin-bottom: 4px;
+    margin-bottom: 8px;
   }
   .vid-stat {
     display: flex;
     align-items: baseline;
     gap: 16px;
+    white-space: nowrap;
   }
   .vid-stat-num {
-    display: inline-block;
     /* Wider than the widest value ("1,959" / "48.4M" = 5ch) so every number's
        box matches — right edges align AND the labels begin on a common edge,
        and the figures grow in place without shoving the label. */
+    display: inline-block;
     min-width: 5.5ch;
     text-align: right;
     font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -455,11 +485,13 @@
     font-weight: 800;
     line-height: 1;
     letter-spacing: -0.02em;
-    color: #ffffff;
+    /* A hair off pure white so the pure-white hero stays the single brightest
+       element — hierarchy, not a contrast cut (these stay plenty legible). */
+    color: #eaf0f6;
   }
   .vid-stat-label {
     font-family: "Inter", system-ui, sans-serif;
-    font-size: 38px;
+    font-size: 40px;
     font-weight: 600;
     color: #94a3b8;
   }
@@ -470,34 +502,34 @@
     color: #cbd5e1;
   }
   .vid-territories {
-    margin-top: 6px;
-    max-width: 19ch;
+    margin-top: 10px;
     font-family: "Inter", system-ui, sans-serif;
-    font-size: 24px;
+    font-size: 20px;
     font-weight: 500;
-    line-height: 1.2;
+    white-space: nowrap;
     color: #64748b;
   }
 
-  /* Map: the supporting bottom beat — flex-fills the height left under the chart
-     + band. A wider side gutter shrinks the country a touch so it doesn't crowd
-     the band; the source/watermark sit over its lower corners. MapLibre re-fits
-     to the narrower width automatically. */
+  /* Map: the supporting bottom beat — fixed height, lifted off the bottom edge
+     so the bigger brand/source labels have room below it. A wide side gutter
+     shrinks the country a touch; MapLibre re-fits to the narrower width. */
+  /* Map: top beat — pulled in toward the centre, with breathing room above it
+     from the centered canvas group. */
   .vid-map {
     position: relative;
     flex: 0 0 auto;
-    height: 700px;
-    padding: 0 72px 6px;
+    height: 600px;
+    padding: 0 72px;
   }
 
   /* Source credit, lower-left corner */
   .vid-source {
     position: absolute;
     left: 40px;
-    bottom: 34px;
+    bottom: 50px;
     z-index: 10;
-    max-width: 540px;
-    font-size: 20px;
+    max-width: 560px;
+    font-size: 24px;
     font-weight: 500;
     color: #94a3b8;
     line-height: 1.35;
@@ -509,27 +541,27 @@
   .vid-watermark {
     position: absolute;
     right: 40px;
-    bottom: 32px;
+    bottom: 46px;
     text-align: right;
-    line-height: 1.3;
+    line-height: 1.28;
     pointer-events: none;
     z-index: 10;
     text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
   }
   .vid-wm-brand {
-    font-size: 26px;
+    font-size: 44px;
     font-weight: 800;
     letter-spacing: 0.02em;
     color: #be6079;
   }
   .vid-wm-url {
-    margin-top: 2px;
-    font-size: 22px;
+    margin-top: 4px;
+    font-size: 27px;
     font-weight: 600;
     color: #cbd5e1;
   }
   .vid-wm-meta {
-    font-size: 18px;
+    font-size: 22px;
     color: #94a3b8;
   }
 
@@ -552,9 +584,9 @@
     z-index: 40;
   }
 
-  /* Title card: opaque dark panel + ghosted US map + centered TODAY headline.
-     Dissolves over the composite (driven by titleOpacity); opaque so the cursor
-     snap (today → Dec 2024 start) hides under it. */
+  /* Title card: opaque dark panel + ghosted US map (today's dots) + centered
+     TODAY headline. Dissolves over the composite (driven by titleOpacity);
+     opaque so the cursor snap (today → Dec 2024 start) hides under it. */
   .vid-title {
     position: absolute;
     inset: 0;
@@ -566,13 +598,14 @@
   .vid-title-map {
     position: absolute;
     inset: 0;
-    opacity: 0.55;
+    opacity: 0.7;
   }
-  /* Darken the centre so the big number reads, keep the map edges visible. */
+  /* Darken the centre so the big number reads over the dots, keep the dotted
+     edges visible. */
   .vid-title-scrim {
     position: absolute;
     inset: 0;
-    background: radial-gradient(ellipse 86% 54% at 50% 47%, rgba(12, 17, 23, 0.82) 0%, rgba(12, 17, 23, 0.24) 48%, rgba(12, 17, 23, 0.78) 100%);
+    background: radial-gradient(ellipse 84% 52% at 50% 47%, rgba(12, 17, 23, 0.86) 0%, rgba(12, 17, 23, 0.36) 48%, rgba(12, 17, 23, 0.72) 100%);
   }
   .vid-title-inner {
     position: absolute;
@@ -610,6 +643,14 @@
     font-weight: 700;
     line-height: 1.08;
     color: #cbd5e1;
+  }
+  .vid-title-asof {
+    margin-top: 28px;
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 30px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: #94a3b8;
   }
 
   /* Preview-only controls — a panel beside the phone */
