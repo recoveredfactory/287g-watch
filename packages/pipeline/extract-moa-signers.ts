@@ -570,15 +570,41 @@ function parseAddendum(text: string): { addendum_date: string | null; addendum_s
 }
 
 // Labels and fragments that look like names but aren't
-const SIGNER_BLOCKLIST = /^(?:For ICE:|Department of Homeland|U\.S\. Immigration|Name:|Title:)/i;
+const SIGNER_BLOCKLIST = /^(?:For\s*ICE|For\s*the\s*LEA|Department of Homeland|U\.S\. Immigration|Name|Title|Signature)\b/i;
+// Bare job titles that sometimes land in the name slot (no personal name).
+const SIGNER_TITLE_RE = /^(?:Acting\s+|Deputy\s+|Assistant\s+|Field\s+Office\s+)?(?:Director|Chief(?:\s+of\s+Police)?|Sheriff|Officer)$/i;
+
+// Sanitize a raw signer-name capture: strip digital-signature stamps, dates, and
+// OCR punctuation, collapse whitespace, dedupe repeated tokens, and reject
+// anything that isn't a plausible "First [M.] Last" personal name. The signature
+// page often renders a stamp / date / column-gap right after the typed name, so
+// cut at the first such artifact rather than trusting the whole captured string.
+function cleanSignerName(raw: string | null): string | null {
+  if (!raw) return null;
+  let s = raw;
+  // Cut at the first artifact: a "signed"/"Date:" stamp, any digit, a column gap
+  // (3+ spaces), or signature punctuation (: \ ~ @).
+  const cut = s.search(/\bsigned\b|\bdate\s*:|\d|[:\\~@]| {3,}/i);
+  if (cut >= 0) s = s.slice(0, cut);
+  // Drop leading/trailing non-name characters and collapse internal whitespace.
+  s = s.replace(/^[^A-Za-z]+/, "").replace(/[^A-Za-z.]+$/, "").replace(/\s+/g, " ").trim();
+  if (!s) return null;
+  // Dedupe consecutive repeated tokens: "Noah Noah" → "Noah", "LYONS LYONS" → "LYONS".
+  const toks = s.split(" ").filter((t, i, a) => i === 0 || t.toLowerCase() !== a[i - 1].toLowerCase());
+  s = toks.join(" ");
+  // Reject labels / bare titles / single tokens / a trailing lone initial.
+  if (SIGNER_BLOCKLIST.test(s) || SIGNER_TITLE_RE.test(s)) return null;
+  if (toks.length < 2) return null;
+  if (/^[A-Za-z]\.?$/.test(toks[toks.length - 1])) return null;
+  return s;
+}
 
 function parseMoa(text: string): Omit<MoaExtract, "agency_key" | "pdf_url" | "model" | "extracted_at"> {
-  const ice = parseIceName(text);
   return {
-    ice_signer_name: ice && !SIGNER_BLOCKLIST.test(ice) ? ice : null,
+    ice_signer_name: cleanSignerName(parseIceName(text)),
     ice_signer_title: parseIceTitle(text),
     ice_field_office: parseFieldOffice(text),
-    lea_signer_name: parseLeaName(text),
+    lea_signer_name: cleanSignerName(parseLeaName(text)),
     lea_signer_title: parseLeaTitle(text),
     date_signed: parseDateSigned(text),
     ...parseLeaPoc(text),
