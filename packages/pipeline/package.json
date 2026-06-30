@@ -8,8 +8,10 @@
     "cache:warm": "node warm-cache.mjs",
     "build:muckrock": "tsx build-muckrock-snapshot.ts",
     "build:moa-index": "tsx build-moa-index.ts",
+    "build:agreement-index": "tsx build-agreement-index.ts",
     "scrape:contacts": "tsx scrape-contacts.ts",
-    "extract:moa-signers": "tsx extract-moa-signers.ts"
+    "extract:moa-signers": "tsx extract-moa-signers.ts",
+    "check:agreements": "tsx check-agreements.ts"
   },
   "dependencies": {
     "adm-zip": "^0.5.16",

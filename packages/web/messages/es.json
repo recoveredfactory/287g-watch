@@ -185,6 +185,12 @@
   "agency_signed_by_ice": "Firmado por (ICE)",
   "agency_signed_by_lea": "Firmado por (agencia)",
   "agency_from_moa": "Del MOA firmado",
+  "agency_agreements_heading": "Acuerdos registrados",
+  "agency_agreements_caption": "Del archivo público de MOA de ICE, que está incompleto: es posible que no aparezcan todos los acuerdos vigentes.",
+  "agency_agreements_coverage": "{onFile} de {total} modelos registrados",
+  "agency_agreements_signed": "Firmado el {date}",
+  "agency_agreements_other_model": "Otro modelo",
+  "agency_agreements_pa_contact": "Contacto de prensa",
 
   "agency_records_heading": "Profundizar",
   "agency_records_intro": "Los datos de participación en 287(g) no nos dicen nada sobre lo que sucedió después de que se firmó el acuerdo. Para saber más, el público necesita preguntar o solicitar información formalmente. MuckRock está organizando solicitudes públicas de registros sobre el cumplimiento de inmigración en todo el país:",

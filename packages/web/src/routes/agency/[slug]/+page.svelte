@@ -99,6 +99,18 @@
     !!agency.first_seen_date &&
     (!agency.signed_date ||
       Math.abs(+new Date(agency.first_seen_date) - +new Date(agency.signed_date)) > 14 * DAY_MS);
+
+  // Per-agreement display (#3). An agency can hold several agreements (JEM/TFM/WSO)
+  // whose ICE signer / date / public-affairs POC sometimes diverge. We show the
+  // grouped "Agreements on file" section when there's more than one agreement, or
+  // when the roster lists a model we have no PDF for (partial coverage) — that's
+  // when the single-tile view would either hide a divergent POC or imply the
+  // archive is complete. A lone, fully-covered agreement still renders "as today".
+  $: coverage = agency.agreement_coverage;
+  $: isPartial = !!coverage && coverage.onFile < coverage.modelsListed;
+  $: showAgreements =
+    !!agency.agreements && agency.agreements.length > 0 &&
+    (agency.agreements.length > 1 || isPartial);
 </script>
 
 <svelte:head>
@@ -268,13 +280,15 @@
         <dd class="mt-1 text-xl font-bold text-slate-900">{dateFmt(agency.first_seen_date)}</dd>
       </div>
     {/if}
-    {#if agency.ice_field_office}
+    <!-- ICE field office / signer tiles: shown only in the single-agreement view;
+         multi-agreement agencies get the per-agreement "Agreements on file" section. -->
+    {#if !showAgreements && agency.ice_field_office}
       <div>
         <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_field_office()}</dt>
         <dd class="mt-1 text-xl font-bold text-slate-900">{agency.ice_field_office}</dd>
       </div>
     {/if}
-    {#if agency.ice_signer_name}
+    {#if !showAgreements && agency.ice_signer_name}
       <div>
         <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_signed_by_ice()}</dt>
         <dd class="mt-1 text-xl font-bold text-slate-900">{agency.ice_signer_name}</dd>
@@ -284,7 +298,7 @@
         <dd class="mt-0.5 text-xs italic text-slate-400">{m.agency_from_moa()}</dd>
       </div>
     {/if}
-    {#if agency.lea_signer_name}
+    {#if !showAgreements && agency.lea_signer_name}
       <div>
         <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_signed_by_lea()}</dt>
         <dd class="mt-1 text-xl font-bold text-slate-900">{agency.lea_signer_name}</dd>
@@ -375,8 +389,10 @@
     </section>
   {/if}
 
-  <!-- Public affairs contact (named in the signed MOA — a document fact, not a hotline) -->
-  {#if agency.moa_poc_name || agency.moa_poc_email || agency.moa_poc_phone || agency.moa_poc_address}
+  <!-- Public affairs contact (single-agreement view): named in the signed MOA —
+       a document fact, not a hotline. Multi-agreement agencies show this per
+       agreement inside the "Agreements on file" section below instead. -->
+  {#if !showAgreements && (agency.moa_poc_name || agency.moa_poc_email || agency.moa_poc_phone || agency.moa_poc_address)}
     <section class="mt-10">
       <h2 class="font-serif text-xl font-bold text-slate-900">{m.agency_pa_contact_heading()}</h2>
       <dl class="mt-4 space-y-3">
@@ -405,6 +421,114 @@
           </div>
         {/if}
       </dl>
+      <p class="mt-3 text-xs italic text-slate-400">{m.agency_pa_contact_note()}</p>
+    </section>
+  {/if}
+
+  <!-- Agreements on file (#3): one block per model-agreement (JEM/TFM/WSO). Their
+       ICE signer / date / public-affairs POC sometimes diverge, so each is shown
+       and attributed separately. Framed as "on file" — the archive is incomplete. -->
+  {#if showAgreements && agency.agreements}
+    <section class="mt-10">
+      <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h2 class="font-serif text-xl font-bold text-slate-900">{m.agency_agreements_heading()}</h2>
+        {#if coverage && coverage.modelsListed > 1}
+          <p class="text-xs font-semibold uppercase tracking-wider {isPartial ? 'text-amber-700' : 'text-slate-500'}">
+            {m.agency_agreements_coverage({ onFile: coverage.onFile, total: coverage.modelsListed })}
+          </p>
+        {/if}
+      </div>
+      <p class="mt-1 text-sm text-slate-500">{m.agency_agreements_caption()}</p>
+
+      <div class="mt-5 space-y-4">
+        {#each agency.agreements as ag}
+          {@const agDate = dateFmt(ag.date_signed ?? ag.date_filename)}
+          <article class="rounded-lg border border-slate-200 p-4 sm:p-5">
+            <!-- Model header + date + PDF link -->
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              {#if ag.model}
+                <span
+                  class="rounded px-2 py-0.5 text-xs font-bold"
+                  style="background: {MODEL_COLORS[ag.model] ?? '#e2e8f0'}; color: {MODEL_TEXT_COLORS[ag.model] ?? '#0f172a'};"
+                >{MODEL_SHORT[ag.model] ?? ag.model}</span>
+              {:else}
+                <span class="rounded bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-600">{m.agency_agreements_other_model()}</span>
+              {/if}
+              {#if agDate}
+                <span class="text-xs text-slate-500">{m.agency_agreements_signed({ date: agDate })}</span>
+              {/if}
+              {#if ag.pdf_url}
+                <a
+                  href={ag.pdf_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  class="ml-auto text-xs font-semibold no-underline hover:underline"
+                >{m.agency_moa_view_pdf()}</a>
+              {/if}
+            </div>
+
+            <!-- Signer / field-office facts -->
+            {#if ag.ice_field_office || ag.ice_signer_name || ag.lea_signer_name}
+              <dl class="mt-3 grid gap-3 sm:grid-cols-3">
+                {#if ag.ice_field_office}
+                  <div>
+                    <dt class="text-xs font-semibold uppercase tracking-wider text-slate-500">{m.agency_field_office()}</dt>
+                    <dd class="mt-0.5 font-bold text-slate-900">{ag.ice_field_office}</dd>
+                  </div>
+                {/if}
+                {#if ag.ice_signer_name}
+                  <div>
+                    <dt class="text-xs font-semibold uppercase tracking-wider text-slate-500">{m.agency_signed_by_ice()}</dt>
+                    <dd class="mt-0.5 font-bold text-slate-900">{ag.ice_signer_name}</dd>
+                    {#if ag.ice_signer_title}
+                      <dd class="text-xs text-slate-400">{ag.ice_signer_title}</dd>
+                    {/if}
+                  </div>
+                {/if}
+                {#if ag.lea_signer_name}
+                  <div>
+                    <dt class="text-xs font-semibold uppercase tracking-wider text-slate-500">{m.agency_signed_by_lea()}</dt>
+                    <dd class="mt-0.5 font-bold text-slate-900">{ag.lea_signer_name}</dd>
+                  </div>
+                {/if}
+              </dl>
+            {/if}
+
+            <!-- Per-agreement public-affairs POC -->
+            {#if ag.moa_poc_name || ag.moa_poc_email || ag.moa_poc_phone || ag.moa_poc_address}
+              <div class="mt-4 border-t border-slate-100 pt-3">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">{m.agency_agreements_pa_contact()}</p>
+                <dl class="mt-2 space-y-1.5 text-sm">
+                  {#if ag.moa_poc_name}
+                    <div class="flex gap-3">
+                      <dt class="w-16 shrink-0 text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_contact_name()}</dt>
+                      <dd class="text-slate-700">{ag.moa_poc_name}</dd>
+                    </div>
+                  {/if}
+                  {#if ag.moa_poc_address}
+                    <div class="flex gap-3">
+                      <dt class="w-16 shrink-0 text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_contact_address()}</dt>
+                      <dd class="text-slate-700">{ag.moa_poc_address}</dd>
+                    </div>
+                  {/if}
+                  {#if ag.moa_poc_phone}
+                    <div class="flex gap-3">
+                      <dt class="w-16 shrink-0 text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_contact_phone()}</dt>
+                      <dd><a href="tel:{ag.moa_poc_phone}">{ag.moa_poc_phone}</a></dd>
+                    </div>
+                  {/if}
+                  {#if ag.moa_poc_email}
+                    <div class="flex gap-3">
+                      <dt class="w-16 shrink-0 text-xs font-semibold uppercase tracking-wider text-slate-400">{m.agency_contact_email()}</dt>
+                      <dd><a href="mailto:{ag.moa_poc_email}">{ag.moa_poc_email}</a></dd>
+                    </div>
+                  {/if}
+                </dl>
+              </div>
+            {/if}
+          </article>
+        {/each}
+      </div>
       <p class="mt-3 text-xs italic text-slate-400">{m.agency_pa_contact_note()}</p>
     </section>
   {/if}
