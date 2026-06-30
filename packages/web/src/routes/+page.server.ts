@@ -11,6 +11,8 @@ export type {
   HistoryEvent,
   LeeData,
   AgreementMetadata,
+  Agreement,
+  AgreementCoverage,
   AgencyNote,
   Agency,
   StateMeta,

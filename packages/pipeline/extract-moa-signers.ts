@@ -2,10 +2,15 @@
 /**
  * extract-moa-signers.ts
  *
- * Downloads one PDF per agency from the MOA archive and extracts structured
- * signer data using pdftotext (must be installed: `brew install poppler`).
+ * Extracts structured signer data from EVERY agreement PDF an agency has on file
+ * (one per model: JEM / TFM / WSO), using pdftotext (install poppler).
  *
- * Extracted per MOA:
+ * Source of truth is data/moa_agreements.json (built by build-agreement-index.ts),
+ * which unions PDFs across all ~83 incremental snapshots. An agency can hold
+ * several agreements whose ICE signer / date / public-affairs POC diverge
+ * (e.g. Autauga County SO), so we parse them all rather than a single pick.
+ *
+ * Extracted per agreement PDF:
  *   - ice_signer_name    — name typed under the ICE signature (right column)
  *   - ice_signer_title   — "Deputy Director", "Field Office Director", etc.
  *   - ice_field_office   — e.g. "New Orleans" (from Section VII POC line)
@@ -16,15 +21,24 @@
  *   - lea_poc_phone
  *   - model              — JEM / TFM / WSO (from PDF filename)
  *
+ * Output (data/moa_extracts.json): one entry per agency holding an `agreements[]`
+ * array (every PDF) plus flat top-level fields copied from a chosen "primary"
+ * agreement (JEM>TFM>WSO>first) so back-compat consumers keep working.
+ *
  * Runs incrementally: already-processed agencies are skipped unless --force.
  *
  * Usage:
  *   pnpm -F pipeline extract:moa-signers
  *   pnpm -F pipeline extract:moa-signers -- --force          # reprocess all
+ *   pnpm -F pipeline extract:moa-signers -- --retry          # retry errors / empties
  *   pnpm -F pipeline extract:moa-signers -- --limit 50       # first N agencies
  *
+ * Prereq:
+ *   pnpm -F pipeline build:agreement-index   (writes data/moa_agreements.json)
+ *
  * Env:
- *   GH_TOKEN   GitHub personal access token (raises rate limit 60→5000/hr)
+ *   GITHUB_TOKEN / GH_TOKEN   GitHub token (raises rate limit 60→5000/hr; needed
+ *                             for the authenticated blob downloads)
  */
 
 import { execFileSync } from "node:child_process";
@@ -34,7 +48,7 @@ import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const MOA_INDEX_PATH = resolve(__dirname, "data/moa_index.json");
+const MOA_AGREEMENTS_PATH = resolve(__dirname, "data/moa_agreements.json");
 const OUT_PATH = resolve(__dirname, "data/moa_extracts.json");
 
 const GH_TOKEN = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
@@ -53,10 +67,18 @@ const LIMIT = limitArg >= 0 ? parseInt(args[limitArg + 1], 10) : Infinity;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type MoaExtract = {
-  agency_key: string;          // "AL|autauga county sheriffs office"
-  pdf_url: string;             // raw.githubusercontent.com URL used
+// One agency's entry in moa_agreements.json (built by build-agreement-index.ts).
+type IndexedAgreement = {
   model: string | null;        // JEM | TFM | WSO | null
+  pdf_url: string;             // GitHub blob URL (display)
+  sha: string;                 // blob SHA (download via the blobs API)
+  snapshot: string;
+  date_filename: string | null;
+  filename: string;
+};
+
+// Fields parsed out of a single PDF.
+type ParsedFields = {
   ice_signer_name: string | null;
   ice_signer_title: string | null;
   ice_field_office: string | null;
@@ -69,108 +91,33 @@ type MoaExtract = {
   lea_poc_address: string | null;   // street + city/state/zip from Appendix C
   addendum_date: string | null;     // date of embedded addendum (if any)
   addendum_signer: string | null;   // ICE official who signed the addendum
+};
+
+// One extracted agreement = its index metadata + parsed fields (+ any per-PDF error).
+type AgreementExtract = IndexedAgreement & ParsedFields & { error?: string };
+
+// One agency = every agreement on file, plus flat fields copied from the chosen
+// "primary" agreement (JEM>TFM>WSO>first) for back-compat with ingest §7b.
+type MoaExtract = ParsedFields & {
+  agency_key: string;          // "AL|autauga county sheriffs office"
+  pdf_url: string;             // primary agreement's PDF (display)
+  model: string | null;        // primary agreement's model
+  agreements: AgreementExtract[];
   extracted_at: string;
-  error?: string;
+  error?: string;              // agency-level error (e.g. no agreements on file)
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-// Convert a GitHub tree URL → repo-relative path
-// "https://github.com/appelson/Tracking_287g/tree/main/agreements/SNAP/STATE/AGENCY"
-// → "agreements/SNAP/STATE/AGENCY"
-function treeUrlToPath(treeUrl: string): string {
-  const path = treeUrl.replace("https://github.com/appelson/Tracking_287g/tree/main/", "");
-  // Fully decode percent-encoding (%E2%80%99 curly apostrophe, %26 &, %2C comma,
-  // %27 straight quote, …) so this key matches the decodeURIComponent'd keys in
-  // pdfCache. A partial decode (e.g. only %27) silently misses those agencies →
-  // Contents-API fallback → 404.
-  try {
-    return decodeURIComponent(path);
-  } catch {
-    return path; // malformed %-sequence: fall back to the raw path
-  }
-}
+// Primary-agreement preference (back-compat with the old single-pick behavior).
+const MODEL_PRIORITY = ["JEM", "TFM", "WSO"];
 
-// ── Pre-fetch PDF file lists per snapshot via the GitHub Trees API ─────────────
-// The recursive trees API returns all files in a subtree in ONE call, reducing
-// per-agency directory listings (1428 calls) to ~2 calls per unique snapshot
-// (~39 snapshots → ~78 calls total instead of 1428).
-//
-// Structure: snapshot → agency dir path → [{ name, download_url }]
-const pdfCache = new Map<string, GhFile[]>(); // key: agency dir path (decoded)
-
-async function prefetchSnapshot(snapPath: string): Promise<void> {
-  // Step 1: get the SHA of the snapshot directory from its Contents entry
-  const contentsUrl = `https://api.github.com/repos/appelson/Tracking_287g/contents/${encodeURIComponent(snapPath)}`;
-  const cr = await fetch(contentsUrl, { headers: ghHeaders });
-  if (!cr.ok) {
-    console.warn(`  ⚠ Contents ${cr.status} for ${snapPath}`);
-    return;
-  }
-  // Contents on a directory returns an array of entries; each has a SHA.
-  // We want the SHA of the snapshot directory ITSELF — use the parent path trick:
-  // ask for the parent and find this dir's entry.
-  const parentPath = snapPath.split("/").slice(0, -1).join("/");
-  const snapName = snapPath.split("/").at(-1)!;
-  const pr = await fetch(
-    `https://api.github.com/repos/appelson/Tracking_287g/contents/${parentPath}`,
-    { headers: ghHeaders }
-  );
-  if (!pr.ok) {
-    console.warn(`  ⚠ Parent ${pr.status} for ${parentPath}`);
-    return;
-  }
-  const parentEntries: any[] = await pr.json();
-  const snapEntry = parentEntries.find((e: any) => e.name === snapName);
-  if (!snapEntry?.sha) return;
-
-  // Step 2: recursive tree — returns every file path under this snapshot
-  const treeUrl = `https://api.github.com/repos/appelson/Tracking_287g/git/trees/${snapEntry.sha}?recursive=1`;
-  const tr = await fetch(treeUrl, { headers: ghHeaders });
-  if (!tr.ok) {
-    console.warn(`  ⚠ Tree ${tr.status} for snapshot ${snapName}`);
-    return;
-  }
-  const { tree }: { tree: Array<{ path: string; type: string; sha: string }> } = await tr.json();
-
-  // Index by agency directory (two levels: STATE/AGENCY_DIR)
-  for (const item of tree) {
-    if (item.type !== "blob" || !item.path.toLowerCase().endsWith(".pdf")) continue;
-    // path is "STATE/AGENCY_DIR/filename.pdf"
-    const parts = item.path.split("/");
-    if (parts.length < 3) continue;
-    const agencyDir = decodeURIComponent(`${snapPath}/${parts.slice(0, 2).join("/")}`);
-    const filename = parts[parts.length - 1];
-    const downloadUrl = `https://raw.githubusercontent.com/appelson/Tracking_287g/main/${snapPath}/${parts.join("/")}`;
-    const existing = pdfCache.get(agencyDir) ?? [];
-    existing.push({ name: filename, download_url: downloadUrl, sha: item.sha });
-    pdfCache.set(agencyDir, existing);
-  }
-}
-
-async function getPdfsForAgency(treeUrl: string): Promise<GhFile[]> {
-  const agencyPath = treeUrlToPath(treeUrl);
-  if (pdfCache.has(agencyPath)) return pdfCache.get(agencyPath)!;
-  // Cache miss — fall back to direct Contents API (e.g. if snapshot wasn't prefetched)
-  const url = `https://api.github.com/repos/appelson/Tracking_287g/contents/${encodeURIComponent(agencyPath)}`;
-  const r = await fetch(url, { headers: ghHeaders });
-  if (!r.ok) throw new Error(`GitHub API ${r.status} for ${agencyPath}`);
-  const files: any[] = await r.json();
-  return files.filter((f) => f.name.toLowerCase().endsWith(".pdf"));
-}
-
-async function downloadPdf(file: GhFile, dest: string): Promise<void> {
-  // Prefer the authenticated git-blobs API: it draws on the token's 5000 req/hr
-  // budget and is NOT subject to raw.githubusercontent.com's burst throttling
-  // (which otherwise blocks the IP after a handful of concurrent downloads).
-  // Fall back to the raw URL only when we have no blob SHA.
-  const useApi = !!file.sha;
-  const url = useApi
-    ? `https://api.github.com/repos/appelson/Tracking_287g/git/blobs/${file.sha}`
-    : file.download_url!;
-  const headers = useApi
-    ? { ...ghHeaders, Accept: "application/vnd.github.raw" }
-    : {};
+// Download a PDF by its blob SHA. The authenticated git-blobs API draws on the
+// token's 5000 req/hr budget and is NOT subject to raw.githubusercontent.com's
+// burst throttling (which blocks the IP after a handful of concurrent downloads).
+async function downloadPdf(sha: string, dest: string): Promise<void> {
+  const url = `https://api.github.com/repos/appelson/Tracking_287g/git/blobs/${sha}`;
+  const headers = { ...ghHeaders, Accept: "application/vnd.github.raw" };
 
   const MAX_ATTEMPTS = 3;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -201,25 +148,23 @@ function pdfToText(pdfPath: string): string {
   }
 }
 
-// Pick the preferred PDF from a directory listing: JEM > TFM > WSO > first
-const MODEL_PRIORITY = ["JEM", "TFM", "WSO"];
-type GhFile = { name: string; download_url: string | null; sha?: string | null };
-
-function pickPdf(files: GhFile[]): GhFile | null {
-  const pdfs = files.filter((f) => f.name.toLowerCase().endsWith(".pdf"));
-  for (const model of MODEL_PRIORITY) {
-    const match = pdfs.find((f) => f.name.toUpperCase().includes(`_${model}_`));
-    if (match) return match;
-  }
-  return pdfs[0] ?? null;
+function emptyParsedFields(): ParsedFields {
+  return {
+    ice_signer_name: null, ice_signer_title: null, ice_field_office: null,
+    lea_signer_name: null, lea_signer_title: null, date_signed: null,
+    lea_poc_name: null, lea_poc_email: null, lea_poc_phone: null, lea_poc_address: null,
+    addendum_date: null, addendum_signer: null,
+  };
 }
 
-function detectModel(filename: string): string | null {
-  const up = filename.toUpperCase();
-  if (up.includes("_JEM_")) return "JEM";
-  if (up.includes("_TFM_")) return "TFM";
-  if (up.includes("_WSO_")) return "WSO";
-  return null;
+// Choose the primary agreement for back-compat flat fields: JEM > TFM > WSO,
+// else the first successfully-parsed agreement, else the first overall.
+function pickPrimary(agreements: AgreementExtract[]): AgreementExtract | null {
+  for (const model of MODEL_PRIORITY) {
+    const match = agreements.find((a) => a.model === model && !a.error);
+    if (match) return match;
+  }
+  return agreements.find((a) => !a.error) ?? agreements[0] ?? null;
 }
 
 // ── Parsers ───────────────────────────────────────────────────────────────────
@@ -599,7 +544,7 @@ function cleanSignerName(raw: string | null): string | null {
   return s;
 }
 
-function parseMoa(text: string): Omit<MoaExtract, "agency_key" | "pdf_url" | "model" | "extracted_at"> {
+function parseMoa(text: string): ParsedFields {
   return {
     ice_signer_name: cleanSignerName(parseIceName(text)),
     ice_signer_title: parseIceTitle(text),
@@ -614,101 +559,90 @@ function parseMoa(text: string): Omit<MoaExtract, "agency_key" | "pdf_url" | "mo
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-if (!existsSync(MOA_INDEX_PATH)) {
-  console.error(`moa_index.json not found at ${MOA_INDEX_PATH}`);
-  console.error("Run: pnpm -F pipeline build:moa-index");
+if (!existsSync(MOA_AGREEMENTS_PATH)) {
+  console.error(`moa_agreements.json not found at ${MOA_AGREEMENTS_PATH}`);
+  console.error("Run: pnpm -F pipeline build:agreement-index");
   process.exit(1);
 }
 
-const moaIndex: Record<string, string> = JSON.parse(readFileSync(MOA_INDEX_PATH, "utf8"));
+const moaAgreements: Record<string, IndexedAgreement[]> = JSON.parse(
+  readFileSync(MOA_AGREEMENTS_PATH, "utf8"),
+);
 
 // Load existing extracts (incremental mode)
 const existing: Record<string, MoaExtract> = existsSync(OUT_PATH)
   ? JSON.parse(readFileSync(OUT_PATH, "utf8"))
   : {};
 
-const entries = Object.entries(moaIndex);
+const entries = Object.entries(moaAgreements).filter(([, ags]) => ags.length > 0);
 // --force: reprocess all | default: skip successfully-extracted entries
 // --retry: reprocess only past errors + entries still missing key fields
 const RETRY = args.includes("--retry");
+function needsRetry(v: MoaExtract | undefined): boolean {
+  if (!v || v.error) return true; // errors always retry
+  // Retry if any agreement failed to parse, or the primary has no useful fields.
+  if (v.agreements?.some((a) => a.error)) return true;
+  return !v.ice_field_office && !v.ice_signer_name && !v.lea_poc_name;
+}
 const toProcess = FORCE
   ? entries
   : RETRY
-  ? entries.filter(([key]) => {
-      const v = existing[key];
-      if (!v || v.error) return true; // errors always retry
-      // Retry if PDF downloaded but all signer/office fields are empty
-      return !v.ice_field_office && !v.ice_signer_name && !v.lea_poc_name;
-    })
+  ? entries.filter(([key]) => needsRetry(existing[key]))
   : entries.filter(([key]) => !existing[key] || existing[key].error);
 
-console.log(`${entries.length} total agencies | ${toProcess.length} to process (${Object.keys(existing).length} already done)`);
-
-// Pre-fetch snapshot file trees to collapse 1428 API calls → ~78
-// Only prefetch snapshots that have agencies we're actually processing.
-const snapsToPrefetch = new Set<string>();
-for (const [, treeUrl] of toProcess.slice(0, isFinite(LIMIT) ? LIMIT : undefined)) {
-  const path = treeUrlToPath(treeUrl);
-  // snapshot is at depth 1 of agreements/: "agreements/SNAP_NAME"
-  const parts = path.split("/");
-  if (parts.length >= 2) snapsToPrefetch.add(`${parts[0]}/${parts[1]}`);
-}
-if (snapsToPrefetch.size > 0) {
-  process.stdout.write(`Pre-fetching ${snapsToPrefetch.size} snapshot tree(s)…`);
-  for (const snap of snapsToPrefetch) {
-    await prefetchSnapshot(snap);
-    process.stdout.write(" ✓");
-    await new Promise((r) => setTimeout(r, 300)); // polite between tree calls
-  }
-  process.stdout.write(`\nCached ${pdfCache.size} agency PDF lists\n\n`);
-}
+const totalPdfs = entries.reduce((n, [, ags]) => n + ags.length, 0);
+console.log(
+  `${entries.length} agencies / ${totalPdfs} agreements | ` +
+    `${toProcess.length} agencies to process (${Object.keys(existing).length} already done)`,
+);
 
 const CONCURRENCY = 6;
 const work = toProcess.slice(0, isFinite(LIMIT) ? LIMIT : undefined);
-let done = 0, errors = 0;
+let done = 0, agencyErrors = 0, pdfErrors = 0, pdfTotal = 0;
 let cursor = 0;
 
-async function processAgency(agencyKey: string, treeUrl: string, tmpPdf: string): Promise<MoaExtract> {
-  const extract: MoaExtract = {
-    agency_key: agencyKey,
-    pdf_url: "",
-    model: null,
-    ice_signer_name: null,
-    ice_signer_title: null,
-    ice_field_office: null,
-    lea_signer_name: null,
-    lea_signer_title: null,
-    date_signed: null,
-    lea_poc_name: null,
-    lea_poc_email: null,
-    lea_poc_phone: null,
-    lea_poc_address: null,
-    addendum_date: null,
-    addendum_signer: null,
-    extracted_at: new Date().toISOString(),
-  };
-
+// Extract one PDF: download by SHA → pdftotext → parse. Errors are captured on
+// the agreement (so one bad PDF doesn't sink the agency's other agreements).
+async function extractAgreement(ag: IndexedAgreement, tmpPdf: string): Promise<AgreementExtract> {
+  const out: AgreementExtract = { ...ag, ...emptyParsedFields() };
   try {
-    const files = await getPdfsForAgency(treeUrl);
-    const pdf = pickPdf(files);
-
-    if (!pdf?.download_url) {
-      throw new Error("no PDF found in directory");
-    }
-
-    extract.pdf_url = pdf.download_url;
-    extract.model = detectModel(pdf.name);
-
-    await downloadPdf(pdf, tmpPdf);
+    await downloadPdf(ag.sha, tmpPdf);
     const text = pdfToText(tmpPdf);
-
     if (!text.trim()) throw new Error("pdftotext returned empty text");
-
-    Object.assign(extract, parseMoa(text));
+    Object.assign(out, parseMoa(text));
   } catch (e: any) {
-    extract.error = e.message ?? String(e);
+    out.error = e.message ?? String(e);
+  }
+  return out;
+}
+
+async function processAgency(agencyKey: string, ags: IndexedAgreement[], tmpPdf: string): Promise<MoaExtract> {
+  const agreements: AgreementExtract[] = [];
+  for (const ag of ags) {
+    agreements.push(await extractAgreement(ag, tmpPdf));
+  }
+  const primary = pickPrimary(agreements);
+  // Copy the primary's parsed fields up to the top level for back-compat. Strip
+  // the index/error keys so only ParsedFields remain.
+  let flat = emptyParsedFields();
+  if (primary) {
+    const { model: _m, pdf_url: _p, sha: _s, snapshot: _sn, date_filename: _d, filename: _f, error: _e, ...primaryFields } =
+      primary;
+    flat = primaryFields;
   }
 
+  const extract: MoaExtract = {
+    agency_key: agencyKey,
+    pdf_url: primary?.pdf_url ?? "",
+    model: primary?.model ?? null,
+    ...flat,
+    agreements,
+    extracted_at: new Date().toISOString(),
+  };
+  // Agency-level error only when every agreement failed (nothing usable extracted).
+  if (agreements.length > 0 && agreements.every((a) => a.error)) {
+    extract.error = agreements[0].error;
+  }
   return extract;
 }
 
@@ -719,17 +653,21 @@ async function worker(slot: number): Promise<void> {
   while (true) {
     const i = cursor++;            // synchronous claim — no interleaving here
     if (i >= work.length) return;
-    const [agencyKey, treeUrl] = work[i];
+    const [agencyKey, ags] = work[i];
 
-    const extract = await processAgency(agencyKey, treeUrl, tmpPdf);
+    const extract = await processAgency(agencyKey, ags, tmpPdf);
 
     existing[agencyKey] = extract;
     done++;
-    if (extract.error) errors++;
+    pdfTotal += extract.agreements.length;
+    pdfErrors += extract.agreements.filter((a) => a.error).length;
+    if (extract.error) agencyErrors++;
 
+    const ok = extract.agreements.filter((a) => !a.error).length;
+    const models = extract.agreements.map((a) => a.model ?? "?").join("/");
     const status = extract.error
       ? `✗ ${extract.error}`
-      : `✓ ${extract.ice_field_office ?? "?"} FOD / ${extract.ice_signer_name ?? "?"}`;
+      : `✓ ${ok}/${extract.agreements.length} PDF [${models}] — ${extract.ice_field_office ?? "?"} FOD / ${extract.ice_signer_name ?? "?"}`;
     process.stdout.write(`[${done}/${work.length}] ${agencyKey} … ${status}\n`);
 
     // Write periodically to preserve progress
@@ -743,7 +681,10 @@ await Promise.all(
   Array.from({ length: Math.min(CONCURRENCY, work.length) }, (_, s) => worker(s)),
 );
 
-writeFileSync(OUT_PATH, JSON.stringify(existing, null, 2));
 mkdirSync(resolve(__dirname, "data"), { recursive: true });
+writeFileSync(OUT_PATH, JSON.stringify(existing, null, 2));
 
-console.log(`\nDone. ${done} processed, ${errors} errors → ${OUT_PATH}`);
+console.log(
+  `\nDone. ${done} agencies / ${pdfTotal} PDFs processed, ` +
+    `${agencyErrors} agency errors, ${pdfErrors} PDF errors → ${OUT_PATH}`,
+);

@@ -3,7 +3,47 @@
 **Branch:** `agreements/per-agreement-index` (off `tory-split/moa-signers-fields`)
 **Scope:** #2 cross-snapshot agreement index (the data foundation) + #3 per-agreement
 "agreements on file" UX on the agency page.
-**Status:** spec only — not yet implemented. This doc is the handoff for a fresh session.
+**Status:** ✅ IMPLEMENTED (2026-06-30). See "What shipped" below.
+
+---
+
+## What shipped
+
+- **#2** `packages/pipeline/build-agreement-index.ts` → `data/moa_agreements.json`
+  (`<STATE>|moaNorm(name)` → `[{model, pdf_url, sha, snapshot, date_filename, filename}]`).
+  Crawls all 83 snapshot trees, dedupes by (model, normFilename). Coverage on the
+  current dataset: **262 multi-model agencies — full 47% / partial 33% / none 19%**
+  (the spike's 51/34/15 was over 234; the set has grown). Guard fails the build if
+  full < 40%. Script: `pnpm -F pipeline build:agreement-index`.
+- **#1** `extract-moa-signers.ts` reshaped to read `moa_agreements.json` and extract
+  EVERY PDF (1413 agencies / 1657 PDFs, 0 errors). Output `moa_extracts.json` now =
+  `{ agency_key: { …primary flat fields…, agreements: [{…per-PDF…}] } }`. Parsers
+  unchanged; primary = JEM>TFM>WSO>first. Dropped the trees/prefetch/pickPdf machinery
+  (the index already carries each blob SHA).
+- **ingest §7b** attaches `a.agreements` (mapped: tag→full model name, `lea_poc_*`→
+  `moa_poc_*`, filename date→ISO `date_filename`) and `a.agreement_coverage =
+  {onFile, modelsListed}`. Flat primary fields still populated (no regression).
+- **#3** `packages/web/src/lib/homeData.types.ts` adds `Agreement` + `AgreementCoverage`;
+  `agency/[slug]/+page.svelte` shows an "Agreements on file" section (per-model card:
+  signer / date / field office / public-affairs POC) when there's >1 agreement OR
+  coverage is partial — otherwise renders "as today". i18n keys added to en + es.
+- **Test/sentinel** `check-agreements.ts` (`pnpm -F pipeline check:agreements`):
+  divergence report. Current data: **POC 17% / signer 1% / field office 6%** of the
+  202 multi-agreement agencies diverge. `--assert` fails if zero divergence (a
+  collapse-back-to-one regression). Render audit done live (Autauga 3/3, a partial
+  1/3, a single-full) — all correct.
+
+### Notes / follow-ups
+- **Paths:** the web app is `packages/web/…` (the spec said `web/…`).
+- **Golden parser fixtures** (committed pdftotext `.txt` → expected fields) were NOT
+  added — the parsers are unchanged by this work, and the divergence sentinel + live
+  render audit cover the reshape. Add later if the parsers get touched.
+- The POC-divergence report includes some parser near-duplicates ("Public Information
+  and Community" vs "…Services Division"); email-keyed cases (e.g. Autauga) are real.
+
+---
+
+### Original spec (for reference)
 
 ---
 
