@@ -40,7 +40,6 @@ const DIST_DIR = resolve(__dirname, '../web/static/data/dist')
 const OUT_DIR = resolve(DIST_DIR, 'news')
 const RAW_DIR = resolve(__dirname, 'data/news_raw') // cached program responses (gitignored)
 const GNEWS_CACHE = resolve(__dirname, 'data/gnews_cache.json') // gnews URL → publisher URL
-const AGENCY_INDEX = resolve(DIST_DIR, 'agency_index.json')
 
 const UA =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
@@ -407,8 +406,11 @@ function statesToBuild(): Array<{ abbr: string; name: string }> {
   if (cliStates.length) {
     abbrs = cliStates
   } else {
-    const agencies = JSON.parse(readFileSync(AGENCY_INDEX, 'utf8')) as Array<{ state: string }>
-    abbrs = [...new Set(agencies.map((a) => a.state))].sort()
+    // Every state the pipeline knows (all 50 + DC + GU/MP), NOT just the agency
+    // roster — non-participating states get a summary too. For them the absence
+    // IS the story (e.g. CA: "no agencies, state law bars joining, but sheriffs
+    // and cities keep testing the line"). The program handles a zero-roster state.
+    abbrs = Object.keys(STATE_NAMES).sort()
   }
   return abbrs
     .filter((a) => STATE_NAMES[a])
