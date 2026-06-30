@@ -270,25 +270,25 @@
     {/if}
     {#if agency.ice_field_office}
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">ICE Field Office</dt>
+        <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_field_office()}</dt>
         <dd class="mt-1 text-xl font-bold text-slate-900">{agency.ice_field_office}</dd>
       </div>
     {/if}
     {#if agency.ice_signer_name}
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">Signed by (ICE)</dt>
+        <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_signed_by_ice()}</dt>
         <dd class="mt-1 text-xl font-bold text-slate-900">{agency.ice_signer_name}</dd>
         {#if agency.ice_signer_title}
           <dd class="mt-0.5 text-xs text-slate-400">{agency.ice_signer_title}</dd>
         {/if}
-        <dd class="mt-0.5 text-xs italic text-slate-400">From signed MOA</dd>
+        <dd class="mt-0.5 text-xs italic text-slate-400">{m.agency_from_moa()}</dd>
       </div>
     {/if}
     {#if agency.lea_signer_name}
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">Signed by (LEA)</dt>
+        <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_signed_by_lea()}</dt>
         <dd class="mt-1 text-xl font-bold text-slate-900">{agency.lea_signer_name}</dd>
-        <dd class="mt-0.5 text-xs italic text-slate-400">From signed MOA</dd>
+        <dd class="mt-0.5 text-xs italic text-slate-400">{m.agency_from_moa()}</dd>
       </div>
     {/if}
     {#if agency.lee?.population != null}
