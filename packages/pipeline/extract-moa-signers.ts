@@ -240,6 +240,19 @@ function detectModel(filename: string): string | null {
 //
 // We try all patterns for each field and return the first hit.
 
+// US state abbreviations + full names — used to validate a parsed "City, State"
+// so we don't mistake template prose ("OPLA, through") for a field-office city.
+const US_STATES = new Set([
+  "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD",
+  "MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC",
+  "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","DC",
+  "Alabama","Alaska","Arizona","Arkansas","California","Colorado","Connecticut","Delaware","Florida",
+  "Georgia","Hawaii","Idaho","Illinois","Indiana","Iowa","Kansas","Kentucky","Louisiana","Maine",
+  "Maryland","Massachusetts","Michigan","Minnesota","Mississippi","Missouri","Montana","Nebraska",
+  "Nevada","Ohio","Oklahoma","Oregon","Pennsylvania","Tennessee","Texas","Utah","Vermont","Virginia",
+  "Washington","Wisconsin","Wyoming",
+]);
+
 const ICE_TITLE_RE = /Title:\s*[-– \t]*(Acting\s*Director|Deputy\s*Director|Field\s*Office\s*Director|Assistant\s*Director)/i;
 // Matches "First Last", "First M. Last", "First Middle Last" — at least two words,
 // each starting uppercase. Does NOT require a third word after a middle initial.
@@ -264,6 +277,34 @@ function parseFieldOffice(text: string): string | null {
   // Pattern 3: "local ICE {City} Field Office" — sometimes in body text
   const m3 = text.match(/local\s+ICE\s+([A-Za-z][A-Za-z ]+?)\s+Field\s+Office\b(?!\s+Director)/i);
   if (m3 && m3[1].toLowerCase() !== "the") return m3[1].trim();
+
+  // Pattern 4: TFM fill-in "…OPLA field location at <City, State>". The blank is
+  // usually empty, OCR garbage, or the default "OPLA-DCLD-TortClaims@ice.dhs.gov";
+  // only accept a genuine "City, State" (validated against US_STATES) and reject
+  // the default email text. City can wrap to the next line in -layout output, so
+  // scan a 180-char window. Conservative by design — precision over recall.
+  const fl = text.search(/field\s+location\s+at\b/i);
+  if (fl >= 0) {
+    const region = text.slice(fl, fl + 180)
+      .replace(/field\s+location\s+at\b/i, " ")
+      .replace(/_/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const cm = region.match(/\b([A-Z][a-zA-Z.]+(?:\s+[A-Z][a-zA-Z.]+){0,3}),\s*([A-Z]{2}|[A-Z][a-z]{3,})\b/);
+    if (cm && US_STATES.has(cm[2])) {
+      const city = cm[1].replace(/\s+/g, " ").trim();
+      // Reject address fragments: when the blank holds a street address (e.g. the
+      // ICE HQ "…12th St SW, Washington, DC"), the city capture is junk. Street
+      // suffixes / directionals signal an address. "St"/"Saint" leading the city
+      // (St Petersburg, St Louis) is fine — only reject a TRAILING "… St".
+      const hasStreetWord = /\b(?:Ave|Avenue|Blvd|Boulevard|Rd|Road|Dr|Drive|Lane|Court|Suite|Ste|Floor|NW|NE|SW|SE|Street)\b/i.test(city);
+      const hasTrailingSt = /\w+\s+St\b/i.test(city);
+      const isDefault = /@|TortClaims|DCLD|ice\.dhs|OPLA-/i.test(region.slice(0, cm.index));
+      if (!hasStreetWord && !hasTrailingSt && !isDefault) {
+        return `${city}, ${cm[2]}`;
+      }
+    }
+  }
 
   return null;
 }
@@ -366,14 +407,14 @@ function parseDateSigned(text: string): string | null {
 //   JEM old:  "Chief Deputy Tom Allen 334-361-2500" (name+phone on one line)
 //   TFM:      "For the LEA:        Sean Scheller" (name on SAME line as label)
 //             "For LEA:            Sheriff Boyd" (no "the")
-function parseLeaPoc(text: string): { lea_poc_name: string | null; lea_poc_email: string | null; lea_poc_phone: string | null } {
+function parseLeaPoc(text: string): { lea_poc_name: string | null; lea_poc_email: string | null; lea_poc_phone: string | null; lea_poc_address: string | null } {
   const idx = text.search(/APPENDIX\s*C/);
-  if (idx < 0) return { lea_poc_name: null, lea_poc_email: null, lea_poc_phone: null };
+  if (idx < 0) return { lea_poc_name: null, lea_poc_email: null, lea_poc_phone: null, lea_poc_address: null };
   const chunk = text.slice(idx, idx + 1200);
 
   // Match "For [the] LEA:" with optional "the" (TFM drops "the")
   const leaIdx = chunk.search(/For (?:the )?LEA:/i);
-  if (leaIdx < 0) return { lea_poc_name: null, lea_poc_email: null, lea_poc_phone: null };
+  if (leaIdx < 0) return { lea_poc_name: null, lea_poc_email: null, lea_poc_phone: null, lea_poc_address: null };
 
   // Check if there's a name on the SAME line (TFM pattern):
   //   "For the LEA:        Sean Scheller"
