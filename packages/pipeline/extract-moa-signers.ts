@@ -79,9 +79,16 @@ type MoaExtract = {
 // "https://github.com/appelson/Tracking_287g/tree/main/agreements/SNAP/STATE/AGENCY"
 // → "agreements/SNAP/STATE/AGENCY"
 function treeUrlToPath(treeUrl: string): string {
-  return treeUrl
-    .replace("https://github.com/appelson/Tracking_287g/tree/main/", "")
-    .replace(/%27/g, "'");
+  const path = treeUrl.replace("https://github.com/appelson/Tracking_287g/tree/main/", "");
+  // Fully decode percent-encoding (%E2%80%99 curly apostrophe, %26 &, %2C comma,
+  // %27 straight quote, …) so this key matches the decodeURIComponent'd keys in
+  // pdfCache. A partial decode (e.g. only %27) silently misses those agencies →
+  // Contents-API fallback → 404.
+  try {
+    return decodeURIComponent(path);
+  } catch {
+    return path; // malformed %-sequence: fall back to the raw path
+  }
 }
 
 // ── Pre-fetch PDF file lists per snapshot via the GitHub Trees API ─────────────
@@ -124,7 +131,7 @@ async function prefetchSnapshot(snapPath: string): Promise<void> {
     console.warn(`  ⚠ Tree ${tr.status} for snapshot ${snapName}`);
     return;
   }
-  const { tree }: { tree: Array<{ path: string; type: string }> } = await tr.json();
+  const { tree }: { tree: Array<{ path: string; type: string; sha: string }> } = await tr.json();
 
   // Index by agency directory (two levels: STATE/AGENCY_DIR)
   for (const item of tree) {
@@ -136,7 +143,7 @@ async function prefetchSnapshot(snapPath: string): Promise<void> {
     const filename = parts[parts.length - 1];
     const downloadUrl = `https://raw.githubusercontent.com/appelson/Tracking_287g/main/${snapPath}/${parts.join("/")}`;
     const existing = pdfCache.get(agencyDir) ?? [];
-    existing.push({ name: filename, download_url: downloadUrl });
+    existing.push({ name: filename, download_url: downloadUrl, sha: item.sha });
     pdfCache.set(agencyDir, existing);
   }
 }
@@ -152,11 +159,35 @@ async function getPdfsForAgency(treeUrl: string): Promise<GhFile[]> {
   return files.filter((f) => f.name.toLowerCase().endsWith(".pdf"));
 }
 
-async function downloadPdf(url: string, dest: string): Promise<void> {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`HTTP ${r.status} fetching ${url}`);
-  const buf = await r.arrayBuffer();
-  writeFileSync(dest, Buffer.from(buf));
+async function downloadPdf(file: GhFile, dest: string): Promise<void> {
+  // Prefer the authenticated git-blobs API: it draws on the token's 5000 req/hr
+  // budget and is NOT subject to raw.githubusercontent.com's burst throttling
+  // (which otherwise blocks the IP after a handful of concurrent downloads).
+  // Fall back to the raw URL only when we have no blob SHA.
+  const useApi = !!file.sha;
+  const url = useApi
+    ? `https://api.github.com/repos/appelson/Tracking_287g/git/blobs/${file.sha}`
+    : file.download_url!;
+  const headers = useApi
+    ? { ...ghHeaders, Accept: "application/vnd.github.raw" }
+    : {};
+
+  const MAX_ATTEMPTS = 3;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      // 30s deadline (covers connect + body) so one stalled download can't
+      // wedge the worker; AbortSignal aborts the response stream too.
+      const r = await fetch(url, { headers, signal: AbortSignal.timeout(30_000) });
+      if (!r.ok) throw new Error(`HTTP ${r.status} fetching ${url}`);
+      const buf = await r.arrayBuffer();
+      writeFileSync(dest, Buffer.from(buf));
+      return;
+    } catch (e: any) {
+      // Don't retry real HTTP status errors (404 etc.) — only timeouts/network.
+      const isHttp = typeof e?.message === "string" && e.message.startsWith("HTTP ");
+      if (isHttp || attempt === MAX_ATTEMPTS) throw e;
+    }
+  }
 }
 
 function pdfToText(pdfPath: string): string {
@@ -172,7 +203,7 @@ function pdfToText(pdfPath: string): string {
 
 // Pick the preferred PDF from a directory listing: JEM > TFM > WSO > first
 const MODEL_PRIORITY = ["JEM", "TFM", "WSO"];
-type GhFile = { name: string; download_url: string | null };
+type GhFile = { name: string; download_url: string | null; sha?: string | null };
 
 function pickPdf(files: GhFile[]): GhFile | null {
   const pdfs = files.filter((f) => f.name.toLowerCase().endsWith(".pdf"));
@@ -565,13 +596,13 @@ if (snapsToPrefetch.size > 0) {
   process.stdout.write(`\nCached ${pdfCache.size} agency PDF lists\n\n`);
 }
 
-const tmpPdf = resolve(tmpdir(), "moa_extract_tmp.pdf");
+const CONCURRENCY = 6;
+const work = toProcess.slice(0, isFinite(LIMIT) ? LIMIT : undefined);
 let done = 0, errors = 0;
+let cursor = 0;
 
-for (const [agencyKey, treeUrl] of toProcess.slice(0, isFinite(LIMIT) ? LIMIT : undefined)) {
-  process.stdout.write(`[${done + 1}/${Math.min(toProcess.length, LIMIT)}] ${agencyKey} … `);
-
-  let extract: MoaExtract = {
+async function processAgency(agencyKey: string, treeUrl: string, tmpPdf: string): Promise<MoaExtract> {
+  const extract: MoaExtract = {
     agency_key: agencyKey,
     pdf_url: "",
     model: null,
@@ -601,27 +632,49 @@ for (const [agencyKey, treeUrl] of toProcess.slice(0, isFinite(LIMIT) ? LIMIT : 
     extract.pdf_url = pdf.download_url;
     extract.model = detectModel(pdf.name);
 
-    await downloadPdf(pdf.download_url, tmpPdf);
+    await downloadPdf(pdf, tmpPdf);
     const text = pdfToText(tmpPdf);
 
     if (!text.trim()) throw new Error("pdftotext returned empty text");
 
     Object.assign(extract, parseMoa(text));
-    process.stdout.write(`✓ ${extract.ice_field_office ?? "?"} FOD / ${extract.ice_signer_name ?? "?"}\n`);
   } catch (e: any) {
     extract.error = e.message ?? String(e);
-    process.stdout.write(`✗ ${extract.error}\n`);
-    errors++;
   }
 
-  existing[agencyKey] = extract;
-  done++;
+  return extract;
+}
 
-  // Write after every 25 to preserve progress
-  if (done % 25 === 0) {
-    writeFileSync(OUT_PATH, JSON.stringify(existing, null, 2));
+// Worker pool: each worker pulls the next agency off a shared cursor and uses
+// its own temp file so concurrent downloads never clobber one another.
+async function worker(slot: number): Promise<void> {
+  const tmpPdf = resolve(tmpdir(), `moa_extract_tmp_${slot}.pdf`);
+  while (true) {
+    const i = cursor++;            // synchronous claim — no interleaving here
+    if (i >= work.length) return;
+    const [agencyKey, treeUrl] = work[i];
+
+    const extract = await processAgency(agencyKey, treeUrl, tmpPdf);
+
+    existing[agencyKey] = extract;
+    done++;
+    if (extract.error) errors++;
+
+    const status = extract.error
+      ? `✗ ${extract.error}`
+      : `✓ ${extract.ice_field_office ?? "?"} FOD / ${extract.ice_signer_name ?? "?"}`;
+    process.stdout.write(`[${done}/${work.length}] ${agencyKey} … ${status}\n`);
+
+    // Write periodically to preserve progress
+    if (done % 25 === 0) {
+      writeFileSync(OUT_PATH, JSON.stringify(existing, null, 2));
+    }
   }
 }
+
+await Promise.all(
+  Array.from({ length: Math.min(CONCURRENCY, work.length) }, (_, s) => worker(s)),
+);
 
 writeFileSync(OUT_PATH, JSON.stringify(existing, null, 2));
 mkdirSync(resolve(__dirname, "data"), { recursive: true });
