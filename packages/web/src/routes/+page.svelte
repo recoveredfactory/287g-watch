@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { PageData } from "./$types";
   import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_DARK_COLORS, MODEL_SHORT, MODEL_MINI, MODEL_SLUG, MODEL_ORDER } from "$lib/colors";
-  import { STATE_NAMES } from "$lib/states";
+  import { STATE_NAMES, NAVIGABLE_STATES } from "$lib/states";
   import NationalMap from "$lib/components/NationalMap.svelte";
   import MapTimelineScrubber from "$lib/components/MapTimelineScrubber.svelte";
   import TrendCharts from "$lib/components/TrendCharts.svelte";
@@ -115,15 +115,14 @@
     const stateName = STATE_NAMES[detectedState];
     const meta = data.stateMeta[detectedState];
     if (!stateName || !meta || !meta.local_le_agencies) return null;
-    const boldState = `<b>${stateName}</b>`;
-    if (!statesWithAnyAgreement.has(detectedState)) {
-      // No participating agencies → no /state/<abbr> page (it 404s), so leave
-      // the name as plain bold rather than linking into a dead route.
-      return m.home_hero_state_callout_none({ state: boldState });
-    }
-    // Participating states have a /state/<abbr> page — link the name to it.
+    // Every navigable state now has a /state/<abbr> page — participating or not —
+    // so link the name in both the "has agreements" and the "none" callout. (meta
+    // exists only for the 50 states + DC, so detectedState here is always navigable.)
     const stateHref = localizeHref(`/state/${detectedState.toLowerCase()}`);
     const linkedState = `<a href="${stateHref}" class="font-bold underline underline-offset-2 decoration-[#BE6079] hover:text-slate-900">${stateName}</a>`;
+    if (!statesWithAnyAgreement.has(detectedState)) {
+      return m.home_hero_state_callout_none({ state: linkedState });
+    }
     const agencyPct = Math.round((meta.participating / meta.local_le_agencies) * 100);
     const popPct = meta.state_local_population > 0
       ? Math.round((meta.population_served / meta.state_local_population) * 100)
@@ -572,6 +571,20 @@
                 <span aria-hidden="true" class="opacity-70">×</span>
               </button>
             {/each}
+
+            <!-- Narrowed to one state → offer a jump to its full page (the select
+                 above only filters the map/list). Guarded to navigable states. -->
+            {#if selectedStates.size === 1 && NAVIGABLE_STATES[[...selectedStates][0]]}
+              {@const only = [...selectedStates][0]}
+              <a
+                href={localizeHref(`/state/${only.toLowerCase()}`)}
+                class="text-xs font-medium underline underline-offset-2"
+                style="color: #BE6079;"
+              >
+                {m.home_view_state_page({ state: STATE_NAMES[only] ?? only })}
+                <span aria-hidden="true">→</span>
+              </a>
+            {/if}
 
             {#if detectedState && statesWithAnyAgreement.has(detectedState) && !selectedStates.has(detectedState)}
               <button

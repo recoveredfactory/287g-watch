@@ -123,7 +123,10 @@
     @apply font-semibold text-slate-900;
   }
   .news-prose a {
-    @apply text-slate-900 decoration-1 underline decoration-slate-400 underline-offset-2;
+    /* font-normal overrides the global semibold link weight — with this many
+       inline citations, bold links read as noise. Underline + a touch darker
+       than the body carries the affordance. */
+    @apply font-normal text-slate-900 decoration-1 underline decoration-slate-300 underline-offset-2;
   }
   .news-prose a:hover {
     @apply decoration-slate-700;
@@ -137,7 +140,7 @@
     list-style-type: decimal;
   }
   .news-prose p {
-    @apply mb-3;
+    @apply mb-4;
   }
   .news-prose p:last-child {
     @apply mb-0;
@@ -145,12 +148,13 @@
 
   /* TL;DR: a gray, italic standfirst — the lead-in above the darker body. */
   .news-tldr {
-    @apply text-[15px] italic leading-relaxed text-slate-600;
+    @apply text-[15px] italic leading-[1.7] text-slate-600;
   }
 
-  /* Expanded body: same size as the TL;DR but darker and roman — the main read. */
+  /* Expanded body: same size as the TL;DR but darker and roman — the main read.
+     Looser leading for a classic, newspaper-like reading rhythm. */
   .news-body {
-    @apply text-[15px] leading-relaxed text-slate-800;
+    @apply text-[15px] leading-[1.75] text-slate-800;
   }
   .news-body h2 {
     @apply mt-6 font-serif text-base font-bold text-slate-900;
@@ -176,6 +180,24 @@
   }
   .news-chev {
     @apply text-[0.7rem] leading-none transition-transform duration-200;
+  }
+
+  /* Discovered-articles apron — the screened source list, in a scrolling
+     container (.news-articles wrapper sets max-height + overflow). The header
+     sticks so columns stay labeled while the long list scrolls. */
+  .news-articles-table {
+    @apply w-full border-collapse text-left text-xs text-slate-600;
+  }
+  .news-articles-table th {
+    @apply sticky top-0 z-10 whitespace-nowrap border-b border-slate-300 bg-slate-50
+      px-2 py-2 text-left align-bottom font-semibold text-slate-700;
+  }
+  .news-articles-table td {
+    @apply border-b border-slate-100 px-2 py-1.5 align-top;
+  }
+  .news-articles-table a {
+    @apply font-medium text-slate-800 underline decoration-slate-300 underline-offset-2
+      hover:decoration-slate-600;
   }
 
   .model-badge {

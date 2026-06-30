@@ -27,8 +27,13 @@
 
   "news_heading": "{state} en las noticias",
   "news_updated": "Actualizado el {date} · Generado con PromptQL",
-  "news_read_more": "Leer más",
+  "news_show_more": "Mostrar más",
   "news_show_less": "Mostrar menos",
+  "news_col_title": "Título",
+  "news_col_publication": "Publicación",
+  "news_col_date": "Fecha",
+  "news_col_agencies": "Agencias",
+  "news_col_counties": "Condados",
   "news_source_note": "Este resumen se compila mediante un modelo de lenguaje grande a partir de la cobertura de prensa publicada y los acuerdos firmados por las agencias, con enlaces a las fuentes originales. Verifique con esas fuentes antes de volver a publicar.",
 
   "state_meta_title": "Agencias 287(g) de {state}",
@@ -46,6 +51,9 @@
   "state_search_placeholder": "Buscar agencias…",
   "state_result_count": "{filtered} de {total} agencias",
   "state_no_match": "Ninguna agencia coincide con tus filtros.",
+  "state_no_agencies_title": "No hay acuerdos 287(g) en {state}",
+  "state_no_agencies_body": "Ninguna agencia del orden público en {state} tiene actualmente un acuerdo 287(g) firmado con ICE.",
+  "state_no_agencies_cta": "Explorar el mapa nacional",
   "state_th_agency": "Agencia",
   "state_th_type": "Tipo",
   "state_th_models": "Modelos",
@@ -102,6 +110,7 @@
   "home_search_baseline": "{rows} filas de {agencies} agencias en {states} estados y territorios",
   "home_search_no_match": "Ninguna agencia coincide con tu búsqueda.",
   "home_search_use_detected_state": "Usar mi estado ({state})",
+  "home_view_state_page": "Ver la página de {state}",
   "home_search_year_signed": "Año de firma",
 
   "home_pagination_previous": "Anterior",

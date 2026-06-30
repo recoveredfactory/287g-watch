@@ -27,8 +27,13 @@
 
   "news_heading": "{state} in the news",
   "news_updated": "Updated {date} · Generated with PromptQL",
-  "news_read_more": "Read more",
+  "news_show_more": "Show more",
   "news_show_less": "Show less",
+  "news_col_title": "Title",
+  "news_col_publication": "Publication",
+  "news_col_date": "Date",
+  "news_col_agencies": "Agencies",
+  "news_col_counties": "Counties",
   "news_source_note": "This summary is compiled using a large language model from published news coverage and the agencies' signed agreements, with links to the original sources. Verify against those sources before republishing.",
 
   "state_meta_title": "{state} 287(g) Agencies",
@@ -46,6 +51,9 @@
   "state_search_placeholder": "Search agencies…",
   "state_result_count": "{filtered} of {total} agencies",
   "state_no_match": "No agencies match your filters.",
+  "state_no_agencies_title": "No 287(g) agreements in {state}",
+  "state_no_agencies_body": "No law enforcement agency in {state} currently has a signed 287(g) agreement with ICE.",
+  "state_no_agencies_cta": "Explore the national map",
   "state_th_agency": "Agency",
   "state_th_type": "Type",
   "state_th_models": "Models",
@@ -102,6 +110,7 @@
   "home_search_baseline": "{rows} rows across {agencies} agencies in {states} states & territories",
   "home_search_no_match": "No agencies match your search.",
   "home_search_use_detected_state": "Use my state ({state})",
+  "home_view_state_page": "View {state} page",
   "home_search_year_signed": "Year signed",
 
   "home_pagination_previous": "Previous",

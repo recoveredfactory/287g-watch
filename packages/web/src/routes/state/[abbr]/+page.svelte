@@ -20,11 +20,10 @@
 
   $: newsUpdatedDate = data.news ? dateFmt.format(new Date(data.news.generated_at)) : "";
 
-  // News summary collapses to its TL;DR lead paragraph; the rest expands on tap.
-  // The expand trigger stays anchored under the TL;DR (the body renders below
-  // it), and a second "show less" sits at the foot of the long body so a reader
-  // isn't stranded mid-page. Collapsing from the foot scrolls the section back
-  // into view.
+  // The TL;DR is always shown; one "show more" toggle unfurls BOTH the full
+  // narrative body and the source-article table, and a single "show less" at the
+  // foot collapses them (the fixed-height table keeps the expanded block from
+  // running too long). Collapsing from the foot scrolls the section back up.
   let newsExpanded = false;
   let newsSection: HTMLElement;
   async function collapseNews() {
@@ -32,6 +31,15 @@
     await tick();
     newsSection?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
+
+  // Server ships the relevant article rows already shaped (cleaned title + link,
+  // publication, date, agencies, counties) and sorted newest-first. The program's
+  // Date is an RSS string ("Thu, 02 Apr 2026 07:00:00 GMT"); render it as a locale
+  // month-day-year, falling back to the raw value if unparseable.
+  const fmtArticleDate = (raw: string) => {
+    const d = new Date(raw);
+    return isNaN(d.getTime()) ? raw : dateFmt.format(d);
+  };
 
   // ── Filters ─────────────────────────────────────────────────────────────────
   let activeModels: Set<string> = new Set();
@@ -216,10 +224,10 @@
         {@html data.news.tldr_html}
       </div>
 
-      {#if data.news.body_html}
-        <!-- Trigger is anchored under the TL;DR; the body expands below it, so it
-             never bounces to the bottom of the page on expand. Centered pill,
-             flanked by hairline rules. -->
+      {#if data.news.body_html || data.news.articles?.length}
+        <!-- One trigger unfurls BOTH the full narrative and the source-article
+             table. Anchored under the TL;DR; centered pill flanked by hairline
+             rules. Default collapsed → only the TL;DR shows. -->
         <div class="news-toggle-row mt-4">
           <span class="news-rule" aria-hidden="true"></span>
           <button
@@ -227,20 +235,64 @@
             class="news-toggle"
             on:click={() => (newsExpanded = !newsExpanded)}
             aria-expanded={newsExpanded}
-            aria-controls="news-body"
+            aria-controls="news-expand"
           >
-            {newsExpanded ? m.news_show_less() : m.news_read_more()}
+            {newsExpanded ? m.news_show_less() : m.news_show_more()}
             <span class="news-chev" class:rotate-180={newsExpanded} aria-hidden="true">▾</span>
           </button>
           <span class="news-rule" aria-hidden="true"></span>
         </div>
 
         {#if newsExpanded}
-          <div id="news-body" class="news-prose news-body mt-5 max-w-prose">
-            {@html data.news.body_html}
+          <div id="news-expand">
+            {#if data.news.body_html}
+              <div class="news-prose news-body mt-5 max-w-prose">
+                {@html data.news.body_html}
+              </div>
+            {/if}
+
+            {#if data.news.articles?.length}
+              <!-- Source-article list: fixed-height scroll, sticky header, newest
+                   first (sorted server-side). Title links out (a gnews redirect
+                   unless it resolved); Link/Relevant/Found-Via columns dropped. -->
+              <div
+                id="news-articles"
+                class="news-articles mt-6 max-h-[28rem] overflow-auto rounded-lg border border-slate-200"
+              >
+                <table class="news-articles-table">
+                  <thead>
+                    <tr>
+                      <th>{m.news_col_title()}</th>
+                      <th>{m.news_col_publication()}</th>
+                      <th>{m.news_col_date()}</th>
+                      <th>{m.news_col_agencies()}</th>
+                      <th>{m.news_col_counties()}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {#each data.news.articles as a}
+                      <tr>
+                        <td>
+                          {#if a.url}
+                            <a href={a.url} target="_blank" rel="noopener noreferrer">{a.title}</a>
+                          {:else}
+                            {a.title}
+                          {/if}
+                        </td>
+                        <td>{a.publication}</td>
+                        <td class="whitespace-nowrap tabular-nums">{fmtArticleDate(a.date)}</td>
+                        <td>{a.agencies}</td>
+                        <td>{a.counties}</td>
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
+              </div>
+            {/if}
           </div>
-          <!-- Second collapse at the foot of the long body. -->
-          <div class="news-toggle-row mt-5">
+
+          <!-- Single collapse at the foot of the expanded block. -->
+          <div class="news-toggle-row mt-6">
             <span class="news-rule" aria-hidden="true"></span>
             <button type="button" class="news-toggle" on:click={collapseNews}>
               {m.news_show_less()}
@@ -264,6 +316,7 @@
         {m.state_agencies_heading({ state: stateName })}
       </h2>
 
+      {#if agencies.length}
       <!-- Model filter pills (split-button: toggle left, ⓘ info right) -->
       <div class="mt-4 flex flex-wrap gap-2">
         {#each MODEL_ORDER as model}
@@ -435,6 +488,23 @@
               {/each}
             </tbody>
           </table>
+        </div>
+      {/if}
+      {:else}
+        <!-- Non-participating state: no signed 287(g) agreement on the current
+             roster. A deliberately-empty state (the "why" lives in the news
+             summary above when present) — not a data-missing error. -->
+        <div class="mt-4 rounded-lg border border-slate-200 bg-white px-6 py-10 text-center">
+          <p class="text-base font-semibold text-slate-800">
+            {m.state_no_agencies_title({ state: stateName })}
+          </p>
+          <p class="mx-auto mt-2 max-w-prose text-sm leading-relaxed text-slate-600">
+            {m.state_no_agencies_body({ state: stateName })}
+          </p>
+          <a
+            href={localizeHref("/")}
+            class="mt-4 inline-block text-sm font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900"
+          >{m.state_no_agencies_cta()}</a>
         </div>
       {/if}
     </div>

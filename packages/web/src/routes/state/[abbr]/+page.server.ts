@@ -1,5 +1,5 @@
 import { error } from "@sveltejs/kit";
-import { STATE_NAMES } from "$lib/states";
+import { NAVIGABLE_STATES } from "$lib/states";
 import type { Agency, StateMeta } from "../../+page.server";
 import type { HomeAgency } from "$lib/homeData.types";
 import { buildTimeline, type TimelinePoint } from "$lib/timeline";
@@ -32,14 +32,67 @@ export type StatePageData = {
 // both EN and ES. The page shows the TL;DR and expands the body behind a "read
 // more" toggle. We resolve the active locale here so only that language's HTML
 // ships to the client.
-export type StateNews = { tldr_html: string; body_html: string; generated_at: string };
+//
+// `articles` is the program's discovered-article table (language-independent,
+// stored raw under `internal`). We shape it for display here: keep only relevant
+// rows, project to the columns the table shows, strip Google News' " - Publisher"
+// suffix off the headline (publisher is its own column), and move the link onto
+// the title. The full raw table stays in the JSON's `internal` for debugging.
+export type NewsArticle = {
+  title: string;
+  url: string;
+  publication: string;
+  date: string;
+  agencies: string;
+  counties: string;
+};
+export type StateNews = {
+  tldr_html: string;
+  body_html: string;
+  generated_at: string;
+  articles: NewsArticle[];
+};
 
+type RawArticle = Record<string, unknown>;
 type NewsLangBlock = { tldr_html?: string; summary_html?: string };
 type NewsFile = {
   generated_at?: string;
   en?: NewsLangBlock;
   es?: NewsLangBlock;
+  internal?: { relevant_articles?: RawArticle[] };
 };
+
+const str = (v: unknown): string => (typeof v === "string" ? v : v == null ? "" : String(v));
+
+// "Headline - Idaho Capital Sun" → "Headline", but only when the trailing segment
+// is exactly the publication, so headlines that legitimately contain " - " survive.
+const cleanTitle = (title: string, publication: string): string => {
+  const suffix = ` - ${publication}`;
+  return publication && title.endsWith(suffix) ? title.slice(0, -suffix.length).trim() : title;
+};
+
+// Parse the program's date (RSS "Thu, 02 Apr 2026 …" or ISO "2025-10-15") to a
+// sortable number; unparseable dates sort to the bottom.
+const dateValue = (d: string): number => {
+  const t = new Date(d).getTime();
+  return isNaN(t) ? -Infinity : t;
+};
+
+const shapeArticles = (rows: RawArticle[]): NewsArticle[] =>
+  rows
+    .filter((r) => str(r.Relevant).toLowerCase() === "yes")
+    .map((r) => {
+      const publication = str(r.Publication);
+      return {
+        title: cleanTitle(str(r.Title), publication),
+        url: str(r.Link),
+        publication,
+        date: str(r.Date),
+        agencies: str(r.Agencies),
+        counties: str(r.Counties),
+      };
+    })
+    .sort((a, b) => dateValue(b.date) - dateValue(a.date)); // newest first
 
 const pickNews = (raw: NewsFile | null): StateNews | null => {
   if (!raw) return null;
@@ -49,13 +102,14 @@ const pickNews = (raw: NewsFile | null): StateNews | null => {
     tldr_html: block.tldr_html ?? "",
     body_html: block.summary_html ?? "",
     generated_at: raw.generated_at ?? "",
+    articles: shapeArticles(raw.internal?.relevant_articles ?? []),
   };
 };
 
 export const load = async ({ fetch, params }): Promise<StatePageData> => {
   const abbr = params.abbr.toUpperCase();
-  const stateName = STATE_NAMES[abbr];
-  if (!stateName) throw error(404, `Unknown state: ${abbr}`);
+  const stateName = NAVIGABLE_STATES[abbr];
+  if (!stateName) throw error(404, `No state page for: ${abbr}`);
 
   const [agenciesRes, metaRes, terminatedRes, newsRes] = await Promise.all([
     fetch("/data/dist/agency_index.json"),
@@ -67,8 +121,9 @@ export const load = async ({ fetch, params }): Promise<StatePageData> => {
 
   const allAgencies: Agency[] = await agenciesRes.json();
   const terminatedRaw: Agency[] = terminatedRes.ok ? await terminatedRes.json() : [];
+  // No agency-count gate: non-participating states get a page too (an empty-state
+  // plus their news summary). Only abbrs outside NAVIGABLE_STATES 404 (above).
   const agencies = allAgencies.filter((a) => a.state === abbr);
-  if (agencies.length === 0) throw error(404, `No 287(g) agencies found for ${abbr}`);
 
   // National, slim, map-only projection — the same shape the homepage ships to
   // NationalMap (#135). Lets the state map render every dot while keeping the
