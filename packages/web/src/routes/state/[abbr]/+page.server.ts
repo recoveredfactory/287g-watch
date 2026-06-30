@@ -36,14 +36,17 @@ export type StatePageData = {
 // `articles` is the program's discovered-article table (language-independent,
 // stored raw under `internal`). We shape it for display here: keep only relevant
 // rows, project to the columns the table shows, strip Google News' " - Publisher"
-// suffix off the headline (publisher is its own column), and move the link onto
-// the title. The full raw table stays in the JSON's `internal` for debugging.
+// suffix off the headline (publisher is its own column), move the link onto the
+// title, and resolve each named agency against the state roster so real 287(g)
+// agencies link to their page (legislatures, associations, etc. stay plain). The
+// full raw table stays in the JSON's `internal` for debugging.
+export type NewsAgencyRef = { name: string; slug: string | null };
 export type NewsArticle = {
   title: string;
   url: string;
   publication: string;
   date: string;
-  agencies: string;
+  agencies: NewsAgencyRef[];
   counties: string;
 };
 export type StateNews = {
@@ -78,8 +81,30 @@ const dateValue = (d: string): number => {
   return isNaN(t) ? -Infinity : t;
 };
 
-const shapeArticles = (rows: RawArticle[]): NewsArticle[] =>
-  rows
+const normName = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+// Resolve a free-text agency name from the news data to a roster slug, or null.
+// Tolerant of the program's looser naming ("Bingham County Sheriff" →
+// "Bingham County Sheriff's Office") via word-boundary prefix matching either way,
+// so only names that actually correspond to a 287(g) agency get linked.
+const makeAgencyMatcher = (roster: Array<{ name: string; slug: string }>) => {
+  const normed = roster.map((a) => ({ n: normName(a.name), slug: a.slug })).filter((a) => a.n);
+  return (fragment: string): string | null => {
+    const f = normName(fragment);
+    if (!f) return null;
+    for (const a of normed) {
+      if (a.n === f || a.n.startsWith(f + " ") || f.startsWith(a.n + " ")) return a.slug;
+    }
+    return null;
+  };
+};
+
+const shapeArticles = (
+  rows: RawArticle[],
+  roster: Array<{ name: string; slug: string }>,
+): NewsArticle[] => {
+  const matchAgency = makeAgencyMatcher(roster);
+  return rows
     .filter((r) => str(r.Relevant).toLowerCase() === "yes")
     .map((r) => {
       const publication = str(r.Publication);
@@ -88,13 +113,21 @@ const shapeArticles = (rows: RawArticle[]): NewsArticle[] =>
         url: str(r.Link),
         publication,
         date: str(r.Date),
-        agencies: str(r.Agencies),
+        agencies: str(r.Agencies)
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .map((name) => ({ name, slug: matchAgency(name) })),
         counties: str(r.Counties),
       };
     })
     .sort((a, b) => dateValue(b.date) - dateValue(a.date)); // newest first
+};
 
-const pickNews = (raw: NewsFile | null): StateNews | null => {
+const pickNews = (
+  raw: NewsFile | null,
+  roster: Array<{ name: string; slug: string }>,
+): StateNews | null => {
   if (!raw) return null;
   const block = raw[getLocale() as "en" | "es"] ?? raw.en;
   if (!block?.tldr_html && !block?.summary_html) return null;
@@ -102,7 +135,7 @@ const pickNews = (raw: NewsFile | null): StateNews | null => {
     tldr_html: block.tldr_html ?? "",
     body_html: block.summary_html ?? "",
     generated_at: raw.generated_at ?? "",
-    articles: shapeArticles(raw.internal?.relevant_articles ?? []),
+    articles: shapeArticles(raw.internal?.relevant_articles ?? [], roster),
   };
 };
 
@@ -226,7 +259,8 @@ export const load = async ({ fetch, params }): Promise<StatePageData> => {
   };
 
   const newsRaw = newsRes.ok ? await newsRes.json() : null;
-  const news = pickNews(newsRaw);
+  // Pass the state roster so the news table can link named agencies to their pages.
+  const news = pickNews(newsRaw, agencies.map((a) => ({ name: a.name, slug: a.slug })));
 
   return {
     abbr, stateName, agencies, mapAgencies, stateMeta, snapshotDate, modelCounts, agencyTypeCounts,

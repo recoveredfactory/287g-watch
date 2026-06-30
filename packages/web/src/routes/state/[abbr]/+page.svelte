@@ -281,7 +281,7 @@
                         </td>
                         <td>{a.publication}</td>
                         <td class="whitespace-nowrap tabular-nums">{fmtArticleDate(a.date)}</td>
-                        <td>{a.agencies}</td>
+                        <td>{#each a.agencies as ag, i}{#if i > 0}, {/if}{#if ag.slug}<a href={localizeHref(`/agency/${ag.slug}`)}>{ag.name}</a>{:else}{ag.name}{/if}{/each}</td>
                         <td>{a.counties}</td>
                       </tr>
                     {/each}
