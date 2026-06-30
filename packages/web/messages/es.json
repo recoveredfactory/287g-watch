@@ -178,6 +178,9 @@
   "agency_contact_phone": "Teléfono",
   "agency_contact_email": "Correo electrónico",
   "agency_contact_website": "Sitio web",
+  "agency_contact_name": "Nombre",
+  "agency_pa_contact_heading": "Contacto de prensa (MOA)",
+  "agency_pa_contact_note": "Indicado en el acuerdo 287(g) firmado",
 
   "agency_records_heading": "Profundizar",
   "agency_records_intro": "Los datos de participación en 287(g) no nos dicen nada sobre lo que sucedió después de que se firmó el acuerdo. Para saber más, el público necesita preguntar o solicitar información formalmente. MuckRock está organizando solicitudes públicas de registros sobre el cumplimiento de inmigración en todo el país:",

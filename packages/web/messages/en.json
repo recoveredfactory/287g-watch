@@ -178,6 +178,9 @@
   "agency_contact_phone": "Phone",
   "agency_contact_email": "Email",
   "agency_contact_website": "Website",
+  "agency_contact_name": "Name",
+  "agency_pa_contact_heading": "Public affairs contact (MOA)",
+  "agency_pa_contact_note": "Named in the signed 287(g) agreement",
 
   "agency_records_heading": "Dive deeper",
   "agency_records_intro": "The 287(g) participation data doesn't tell us anything about what happened after the agreement was signed. To learn more, the public will need to ask or formally request information. MuckRock is organizing public records requests about immigration enforcement nationwide:",

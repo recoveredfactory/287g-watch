@@ -375,7 +375,41 @@
     </section>
   {/if}
 
-  <!-- Contact -->
+  <!-- Public affairs contact (named in the signed MOA — a document fact, not a hotline) -->
+  {#if agency.moa_poc_name || agency.moa_poc_email || agency.moa_poc_phone || agency.moa_poc_address}
+    <section class="mt-10">
+      <h2 class="font-serif text-xl font-bold text-slate-900">{m.agency_pa_contact_heading()}</h2>
+      <dl class="mt-4 space-y-3">
+        {#if agency.moa_poc_name}
+          <div class="flex gap-4">
+            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{m.agency_contact_name()}</dt>
+            <dd class="text-slate-700">{agency.moa_poc_name}</dd>
+          </div>
+        {/if}
+        {#if agency.moa_poc_address}
+          <div class="flex gap-4">
+            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{m.agency_contact_address()}</dt>
+            <dd class="text-slate-700">{agency.moa_poc_address}</dd>
+          </div>
+        {/if}
+        {#if agency.moa_poc_phone}
+          <div class="flex gap-4">
+            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{m.agency_contact_phone()}</dt>
+            <dd><a href="tel:{agency.moa_poc_phone}">{agency.moa_poc_phone}</a></dd>
+          </div>
+        {/if}
+        {#if agency.moa_poc_email}
+          <div class="flex gap-4">
+            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{m.agency_contact_email()}</dt>
+            <dd><a href="mailto:{agency.moa_poc_email}">{agency.moa_poc_email}</a></dd>
+          </div>
+        {/if}
+      </dl>
+      <p class="mt-3 text-xs italic text-slate-400">{m.agency_pa_contact_note()}</p>
+    </section>
+  {/if}
+
+  <!-- Contact (the agency's own public contact info, sourced separately) -->
   <section class="mt-10">
     <h2 class="font-serif text-xl font-bold text-slate-900">{m.agency_contact_heading()}</h2>
     {#if agency.contact_address || agency.contact_phone || agency.contact_email || agency.contact_website}
@@ -404,34 +438,6 @@
             <dd class="min-w-0 break-all"><a href={agency.contact_website} target="_blank" rel="noreferrer">{agency.contact_website}</a></dd>
           </div>
         {/if}
-      </dl>
-    {:else if agency.moa_poc_name || agency.moa_poc_email || agency.moa_poc_phone}
-      <dl class="mt-4 space-y-3">
-        {#if agency.moa_poc_name}
-          <div class="flex gap-4">
-            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-500">POC</dt>
-            <dd class="text-slate-700">{agency.moa_poc_name}</dd>
-          </div>
-        {/if}
-        {#if agency.moa_poc_address}
-          <div class="flex gap-4">
-            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Address</dt>
-            <dd class="text-slate-700">{agency.moa_poc_address}</dd>
-          </div>
-        {/if}
-        {#if agency.moa_poc_phone}
-          <div class="flex gap-4">
-            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Phone</dt>
-            <dd><a href="tel:{agency.moa_poc_phone}">{agency.moa_poc_phone}</a></dd>
-          </div>
-        {/if}
-        {#if agency.moa_poc_email}
-          <div class="flex gap-4">
-            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Email</dt>
-            <dd><a href="mailto:{agency.moa_poc_email}">{agency.moa_poc_email}</a></dd>
-          </div>
-        {/if}
-        <p class="text-xs italic text-slate-400">Source: signed MOA public affairs contact</p>
       </dl>
     {:else}
       <p class="mt-3 text-sm italic text-slate-600">{m.agency_contact_none()}</p>
