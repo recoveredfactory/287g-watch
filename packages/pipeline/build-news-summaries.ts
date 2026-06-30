@@ -13,14 +13,18 @@
  *   2. Renders the markdown prose to controlled HTML so the SvelteKit side can
  *      drop it in via {@html} with no client-side markdown dependency.
  *
- * Only the *summaries* are public (statewide_tldr + statewide_summary, each in
- * EN and ES), so only the links inside those prose fields get resolved. The
- * screened article table, publications, roster grounding and cost ledger are
- * stored raw for internal use and are not rendered yet.
+ * The summaries are public (statewide_tldr + statewide_summary, each in EN and
+ * ES) and their links are resolved + rendered. The screened article table is
+ * now surfaced too (state page, raw for now), so its Link column is resolved as
+ * well: every gnews link across prose + table is gathered, de-duped, and
+ * resolved in one bounded-concurrency pass (see resolveAll). Publications,
+ * roster grounding and cost ledger stay raw/internal.
  *
  * Output: packages/web/static/data/dist/news/<abbr>.json (+ news/index.json)
  *
  * Env: PQL_NEWS_URL, PQL_NEWS_TOKEN (read from process.env or repo-root .env).
+ *      RESOLVE_CONCURRENCY (default 6) and RESOLVE_DELAY_MS (default 150) tune
+ *      the gnews link-resolution worker pool.
  * Run: pnpm news            # every state with agencies
  *      pnpm news OH PA      # just these states
  *      pnpm news ID --force # bypass both caches; re-gather from scratch
@@ -41,7 +45,18 @@ const AGENCY_INDEX = resolve(DIST_DIR, 'agency_index.json')
 const UA =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
 const AFTER = process.env.AFTER || '2025-01-01'
-const RESOLVE_DELAY_MS = 200
+// Link resolution runs as a small worker pool. Google tolerates a handful of
+// parallel batchexecute calls from one residential/CI IP; the per-call delay
+// keeps the aggregate rate civil. Conservative defaults because once Google
+// IP-throttles us it withholds the resolve tokens for the rest of the run (and a
+// while after) — see resolveAll's early-abort. All three are env-tunable; for a
+// gentle retry after a throttle, e.g. RESOLVE_CONCURRENCY=2 RESOLVE_DELAY_MS=500.
+const RESOLVE_CONCURRENCY = Number(process.env.RESOLVE_CONCURRENCY) || 4
+const RESOLVE_DELAY_MS = Number(process.env.RESOLVE_DELAY_MS) || 250
+// Consecutive token-absent (consent-wall) responses that mean "we're throttled,
+// stop hammering" — abort resolution for the rest of the run rather than grind
+// through thousands of doomed requests (which only prolongs the cooldown).
+const RESOLVE_THROTTLE_ABORT = Number(process.env.RESOLVE_THROTTLE_ABORT) || 8
 // `--force` (or FORCE=1) bypasses BOTH caches — the local raw-response file and
 // the program's own server-side cache (passed through as force:true in the
 // params row) — so the run re-gathers from scratch instead of replaying a
@@ -60,6 +75,9 @@ const STATE_NAMES: Record<string, string> = {
   RI: 'Rhode Island', SC: 'South Carolina', SD: 'South Dakota', TN: 'Tennessee',
   TX: 'Texas', UT: 'Utah', VT: 'Vermont', VA: 'Virginia', WA: 'Washington',
   WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming', DC: 'District of Columbia',
+  // Territories present in the roster data — included so every agency's state
+  // gets a summary (the homepage "states" count still excludes them elsewhere).
+  GU: 'Guam', MP: 'Northern Mariana Islands',
 }
 
 // ── Env ──────────────────────────────────────────────────────────────────────
@@ -128,8 +146,16 @@ const gnewsCache: Record<string, string> = existsSync(GNEWS_CACHE)
 
 const isGnews = (url: string) => /^https?:\/\/news\.google\.com\/(rss\/)?articles\//.test(url)
 
-async function resolveGnews(url: string): Promise<string> {
-  if (gnewsCache[url]) return gnewsCache[url]
+// Outcome of one resolution attempt. Two failure shapes, because a block can
+// surface either way: 'throttled' = the token-bearing page was withheld
+// (empty/consent wall); 'error' = the request threw (connection-level block or a
+// one-off network/parse hiccup). resolveAll counts a streak of EITHER toward its
+// abort. Both leave the link as its original gnews URL — still clickable, and
+// uncached so a later run retries it.
+type ResolveOutcome = 'resolved' | 'throttled' | 'error'
+
+async function resolveGnews(url: string): Promise<ResolveOutcome> {
+  if (gnewsCache[url]) return 'resolved'
   try {
     const id = new URL(url).pathname.split('/').pop() as string
     const page = await fetch(`https://news.google.com/rss/articles/${id}`, {
@@ -139,7 +165,7 @@ async function resolveGnews(url: string): Promise<string> {
     const sg = html.match(/data-n-a-sg="([^"]+)"/)?.[1]
     const ts = html.match(/data-n-a-ts="([^"]+)"/)?.[1]
     const aid = html.match(/data-n-a-id="([^"]+)"/)?.[1]
-    if (!sg || !ts || !aid) return url // consent wall / format change → leave clickable
+    if (!sg || !ts || !aid) return 'throttled' // tokens withheld → IP-throttled / consent wall
     const inner = JSON.stringify([
       'garturlreq',
       [['X', 'X', ['X', 'X'], null, null, 1, 1, 'US:en', null, 1, null, null, null, null, null, 0, 1],
@@ -159,9 +185,9 @@ async function resolveGnews(url: string): Promise<string> {
     const part = (arr.find((x) => Array.isArray(x) && x[1] === 'Fbv4je') as unknown[]) || arr[0]
     const resolved = JSON.parse((part as unknown[])[2] as string)[1] as string
     gnewsCache[url] = resolved
-    return resolved
+    return 'resolved'
   } catch {
-    return url // any failure → keep the original (a browser click still redirects)
+    return 'error' // one-off network/parse hiccup → keep the original gnews link
   }
 }
 
@@ -176,7 +202,10 @@ function inline(text: string, links: Record<string, string>): string {
   // resolved-link map; wiki:// and non-http hrefs degrade to plain text. The
   // <…> branch handles markdown's angle-bracket URLs, which may hold spaces and
   // parentheses (PromptQL's wiki:// provenance links do).
-  let out = text.replace(/\[([^\]]+)\]\(\s*(<[^>]*>|[^)]*)\s*\)/g, (_m, label: string, href: string) => {
+  // The label allows one level of nested [...] — editorial insertions inside a
+  // quoted link text ("just want[s] to lend a hand.") are common in the prose,
+  // and a plain [^\]]+ would stop at that inner ] and fail to parse the link.
+  let out = text.replace(/\[((?:[^[\]]|\[[^\]]*\])*)\]\(\s*(<[^>]*>|[^)]*)\s*\)/g, (_m, label: string, href: string) => {
     const clean = href.replace(/^<|>$/g, '').trim()
     const target = links[clean] ?? clean
     if (!/^https?:\/\//.test(target)) return inlineEmphasis(label, links)
@@ -238,7 +267,7 @@ function mdToHtml(md: string, links: Record<string, string>): string {
 
 function gnewsLinksIn(md: string): string[] {
   const urls = new Set<string>()
-  for (const m of md.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)) {
+  for (const m of md.matchAll(/\[(?:[^[\]]|\[[^\]]*\])*\]\(([^)]+)\)/g)) {
     const href = m[1].replace(/^<|>$/g, '').trim()
     if (isGnews(href)) urls.add(href)
   }
@@ -246,6 +275,47 @@ function gnewsLinksIn(md: string): string[] {
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+// Once Google IP-throttles us, EVERY further resolve fails for the rest of the
+// run (and a while after) — so the first state that trips the limit flips this,
+// and later states skip resolution entirely (links stay gnews, retryable) rather
+// than grind through thousands of doomed requests. Cleared per process start.
+let resolutionThrottled = false
+
+// Resolve a batch of gnews URLs through a bounded worker pool. The input is
+// already de-duped and uncached, and workers pull distinct indices, so no URL is
+// resolved twice. Stops early (and latches resolutionThrottled) once we see
+// RESOLVE_THROTTLE_ABORT consecutive consent-wall responses. Returns how many
+// actually resolved and whether we bailed out throttled.
+async function resolveAll(urls: string[]): Promise<{ resolved: number; throttled: boolean }> {
+  if (resolutionThrottled) return { resolved: 0, throttled: true }
+  let next = 0
+  let resolved = 0
+  let consecutive = 0 // shared across workers; a real throttle makes every outcome 'throttled'
+  const worker = async () => {
+    while (next < urls.length && !resolutionThrottled) {
+      const outcome = await resolveGnews(urls[next++])
+      // A run of consecutive failures of EITHER kind means we're blocked: an
+      // empty consent wall surfaces as 'throttled', a connection-level block
+      // surfaces as 'error'. Any success resets the streak, so a healthy run
+      // (successes interleaved) never trips this.
+      if (outcome === 'resolved') {
+        resolved++
+        consecutive = 0
+      } else if (++consecutive >= RESOLVE_THROTTLE_ABORT) {
+        resolutionThrottled = true
+      }
+      if (RESOLVE_DELAY_MS) await sleep(RESOLVE_DELAY_MS)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(RESOLVE_CONCURRENCY, urls.length) }, worker))
+  return { resolved, throttled: resolutionThrottled }
+}
+
+// Persist the gnews cache eagerly (after each state) so a crash mid-run doesn't
+// discard everything resolved so far — cheap insurance now that a cold run
+// resolves thousands of links rather than a few dozen.
+const persistGnewsCache = () => writeFileSync(GNEWS_CACHE, JSON.stringify(gnewsCache, null, 2))
 
 // ── Per-state build ──────────────────────────────────────────────────────────
 async function buildState(abbr: string, name: string) {
@@ -271,15 +341,28 @@ async function buildState(abbr: string, name: string) {
   }
   const allMd = [prose.en.tldr, prose.en.summary, prose.es.tldr, prose.es.summary]
 
-  // Resolve every gnews link across all four prose fields. The source links are
-  // language-independent, so resolve the union once and apply the map to each.
-  const toResolve = [...new Set(allMd.flatMap(gnewsLinksIn))].filter((u) => !gnewsCache[u])
-  for (const url of toResolve) {
-    await resolveGnews(url)
-    await sleep(RESOLVE_DELAY_MS)
-  }
+  // Resolve ONLY the prose links — the citations rendered inside the public
+  // summaries (few per state, high value). The screened-article table's links are
+  // deliberately NOT bulk-resolved: ~150/state from one datacenter IP re-trips
+  // Google's rate limit fast, and the table just lets readers click through (a
+  // gnews redirect resolves itself in the browser). Table Links still pick up a
+  // resolved URL for free below wherever an article was also cited in prose or is
+  // already cached.
+  const articleRows =
+    (artifact(result, 'relevant_articles')?.data as Array<Record<string, unknown>>) ?? []
+  const proseGnews = allMd.flatMap(gnewsLinksIn)
+  const toResolve = [...new Set(proseGnews)].filter((u) => !gnewsCache[u])
+  const resolveStats = await resolveAll(toResolve)
+  persistGnewsCache()
+
+  // Prose: a gnews→publisher map substituted into the rendered HTML by mdToHtml.
   const links: Record<string, string> = {}
-  for (const url of allMd.flatMap(gnewsLinksIn)) links[url] = gnewsCache[url] ?? url
+  for (const url of proseGnews) links[url] = gnewsCache[url] ?? url
+  // Table: rewrite each gnews Link in place to its resolved publisher URL
+  // (unresolved ones stay the still-clickable gnews redirect).
+  const relevantArticles = articleRows.map((r) =>
+    typeof r.Link === 'string' && gnewsCache[r.Link] ? { ...r, Link: gnewsCache[r.Link] } : r,
+  )
 
   const out = {
     abbr,
@@ -294,9 +377,9 @@ async function buildState(abbr: string, name: string) {
       tldr_html: mdToHtml(prose.es.tldr, links),
       summary_html: mdToHtml(prose.es.summary, links),
     },
-    // Internal — stored raw, not rendered.
+    // Internal — raw (article Link resolved above), not styled yet.
     internal: {
-      relevant_articles: artifact(result, 'relevant_articles')?.data ?? [],
+      relevant_articles: relevantArticles,
       publications: artifact(result, 'publications')?.data ?? [],
       roster_grounding: artifact(result, 'roster_grounding')?.data ?? [],
       cost_ledger: artifact(result, 'cost_ledger')?.data ?? [],
@@ -305,7 +388,12 @@ async function buildState(abbr: string, name: string) {
 
   mkdirSync(OUT_DIR, { recursive: true })
   writeFileSync(resolve(OUT_DIR, `${abbr}.json`), JSON.stringify(out, null, 2))
-  console.log(`ok (${toResolve.length} new links resolved)`)
+  const left = toResolve.length - resolveStats.resolved
+  console.log(
+    resolveStats.throttled
+      ? `THROTTLED — resolved ${resolveStats.resolved}/${toResolve.length}, ${left} left as gnews (retry after cooldown)`
+      : `ok (${resolveStats.resolved}/${toResolve.length} links resolved)`,
+  )
   return { abbr, state: name, generated_at: out.generated_at }
 }
 
@@ -341,3 +429,10 @@ writeFileSync(
   JSON.stringify({ generated_at: new Date().toISOString(), states: manifest }, null, 2),
 )
 console.log(`\nWrote ${manifest.length} states → ${OUT_DIR}`)
+if (resolutionThrottled) {
+  console.log(
+    '\n⚠  Google throttled link resolution partway through — later states kept raw gnews links.\n' +
+      '   They are uncached, so re-run WITHOUT --force after a cooldown to retry only the failures,\n' +
+      '   ideally gentler: RESOLVE_CONCURRENCY=2 RESOLVE_DELAY_MS=500 pnpm news <states…>',
+  )
+}
