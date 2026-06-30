@@ -181,6 +181,10 @@
   "agency_contact_name": "Nombre",
   "agency_pa_contact_heading": "Contacto de prensa (MOA)",
   "agency_pa_contact_note": "Indicado en el acuerdo 287(g) firmado",
+  "agency_field_office": "Oficina de campo de ICE",
+  "agency_signed_by_ice": "Firmado por (ICE)",
+  "agency_signed_by_lea": "Firmado por (agencia)",
+  "agency_from_moa": "Del MOA firmado",
 
   "agency_records_heading": "Profundizar",
   "agency_records_intro": "Los datos de participación en 287(g) no nos dicen nada sobre lo que sucedió después de que se firmó el acuerdo. Para saber más, el público necesita preguntar o solicitar información formalmente. MuckRock está organizando solicitudes públicas de registros sobre el cumplimiento de inmigración en todo el país:",
