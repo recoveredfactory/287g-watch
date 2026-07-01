@@ -15,6 +15,9 @@
     --color-model-jail: #BE6079;
     --color-model-taskforce: #3C97E2;
     --color-model-wso: #5E9148;
+    /* News reading text is set in a classic transitional serif (system-safe, no
+       font load) — pairs with the Bitter slab headings for an editorial feel. */
+    --font-news-serif: Georgia, "Times New Roman", serif;
   }
 
   @media (min-width: 640px) {
@@ -124,12 +127,16 @@
   }
   .news-prose a {
     /* font-normal overrides the global semibold link weight — with this many
-       inline citations, bold links read as noise. Underline + a touch darker
-       than the body carries the affordance. */
-    @apply font-normal text-slate-900 decoration-1 underline decoration-slate-300 underline-offset-2;
+       inline citations, bold links read as noise. The pop comes from the
+       underline instead: a navy hairline at 2px, set just under the text, that
+       deepens to full navy on hover. Reads clearly as a link without shouting. */
+    @apply font-normal text-slate-900 underline underline-offset-2 transition-colors duration-150;
+    text-decoration-color: var(--color-navy-light);
+    text-decoration-thickness: 2px;
   }
   .news-prose a:hover {
-    @apply decoration-slate-700;
+    color: var(--color-navy);
+    text-decoration-color: var(--color-navy);
   }
   .news-prose ul,
   .news-prose ol {
@@ -140,24 +147,27 @@
     list-style-type: decimal;
   }
   .news-prose p {
-    @apply mb-4;
+    @apply mb-5;
   }
   .news-prose p:last-child {
     @apply mb-0;
   }
 
-  /* TL;DR: a gray, italic standfirst — the lead-in above the darker body. */
+  /* TL;DR: a gray, italic standfirst — the lead-in above the darker body. Set
+     in the news serif at a comfortable 16px with open leading. */
   .news-tldr {
-    @apply text-[15px] italic leading-[1.7] text-slate-600;
+    font-family: var(--font-news-serif);
+    @apply text-base italic leading-[1.8] text-slate-600;
   }
 
   /* Expanded body: same size as the TL;DR but darker and roman — the main read.
-     Looser leading for a classic, newspaper-like reading rhythm. */
+     Serif + open leading for a classic, newspaper-like reading rhythm. */
   .news-body {
-    @apply text-[15px] leading-[1.75] text-slate-800;
+    font-family: var(--font-news-serif);
+    @apply text-base leading-[1.8] text-slate-800;
   }
   .news-body h2 {
-    @apply mt-6 font-serif text-base font-bold text-slate-900;
+    @apply mt-6 font-serif text-lg font-bold text-slate-900;
   }
   .news-body h3 {
     @apply mt-5 font-serif text-[15px] font-bold text-slate-800;
@@ -196,8 +206,17 @@
     @apply border-b border-slate-100 px-2 py-1.5 align-top;
   }
   .news-articles-table a {
-    @apply font-medium text-slate-800 underline decoration-slate-300 underline-offset-2
-      hover:decoration-slate-600;
+    /* Article titles read as a news index: navy link with a faint hairline
+       underline (the dense table can't take a heavy rule) that fills in on
+       hover. */
+    @apply font-medium underline underline-offset-2 transition-colors;
+    color: var(--color-navy-light);
+    text-decoration-color: color-mix(in srgb, var(--color-navy-light) 22%, transparent);
+    text-decoration-thickness: 1px;
+  }
+  .news-articles-table a:hover {
+    color: var(--color-navy);
+    text-decoration-color: color-mix(in srgb, var(--color-navy) 55%, transparent);
   }
 
   .model-badge {
