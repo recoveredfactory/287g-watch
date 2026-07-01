@@ -109,13 +109,13 @@ export const load = async ({ fetch }): Promise<StatesIndexData> => {
     }
   }
 
-  // Five biggest departments per state (by sworn officers), for the expanded
-  // card's right rail.
+  // Ten biggest departments per state (by sworn officers) — for the nerds — in
+  // the expanded card's right rail.
   const buildTopAgencies = (abbr: string): StateTopAgency[] =>
     [...(agenciesByState.get(abbr) ?? [])]
       .filter((a) => a.name)
       .sort((a, b) => (b.lee?.officer_ct ?? 0) - (a.lee?.officer_ct ?? 0) || a.name.localeCompare(b.name))
-      .slice(0, 5)
+      .slice(0, 10)
       .map((a) => ({
         slug: a.slug,
         name: a.name,
