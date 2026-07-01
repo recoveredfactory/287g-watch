@@ -161,24 +161,39 @@
     added: string[];
     removed: string[];
   };
-  $: signedDateByModel = buildSignedMap(agency.agreements ?? []);
-  function buildSignedMap(ags: Agreement[]): Map<string, string> {
-    const map = new Map<string, string>();
+  $: signedDatesByModel = buildSignedMap(agency.agreements ?? []);
+  function buildSignedMap(ags: Agreement[]): Map<string, string[]> {
+    const map = new Map<string, string[]>();
     for (const a of ags) {
       const d = a.date_signed ?? a.date_filename;
-      if (a.model && d) map.set(a.model, d);
+      if (!a.model || !d) continue;
+      const list = map.get(a.model);
+      if (list) list.push(d);
+      else map.set(a.model, [d]);
     }
+    for (const list of map.values()) list.sort((x, y) => +new Date(x) - +new Date(y));
     return map;
   }
-  $: historyRows = buildHistoryRows(agency.history ?? [], signedDateByModel);
-  function buildHistoryRows(history: HistoryEvent[], signed: Map<string, string>): HistoryRow[] {
+  // A model can be signed, dropped, and re-signed (e.g. a TFM signed twice). Match
+  // an addition detected at `detected` to the most recent signing on or before it
+  // — a model can't enter the roster before it's signed — so each appearance keeps
+  // its own signing date instead of collapsing to one. Falls back to the earliest.
+  function pickSignedDate(dates: string[] | undefined, detected: string): string | null {
+    if (!dates || dates.length === 0) return null;
+    const dt = +new Date(detected);
+    let best: string | null = null;
+    for (const d of dates) if (+new Date(d) <= dt) best = d; // sorted asc → last ≤ dt wins
+    return best ?? dates[0];
+  }
+  $: historyRows = buildHistoryRows(agency.history ?? [], signedDatesByModel);
+  function buildHistoryRows(history: HistoryEvent[], signed: Map<string, string[]>): HistoryRow[] {
     const rows: HistoryRow[] = [];
     for (const ev of history) {
       // Group this event's added models by their effective (signing) date, so a
       // same-snapshot batch signed on different days splits into separate rows.
       const groups = new Map<string, HistoryRow>();
       for (const model of ev.added) {
-        const s = signed.get(model);
+        const s = pickSignedDate(signed.get(model), ev.date);
         const date = s ?? ev.date;
         const key = `${date}|${s ? "s" : "d"}`;
         let g = groups.get(key);
