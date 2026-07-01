@@ -4,17 +4,21 @@
   import { localizeHref, getLocale } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
   import StateMiniMap from "$lib/components/StateMiniMap.svelte";
-  import StateSparkline from "$lib/components/StateSparkline.svelte";
+  import StateTrendMini from "$lib/components/StateTrendMini.svelte";
 
   export let data: PageData;
-  $: ({ rows, generatedAt } = data);
+  $: ({ rows, generatedAt, trendMonths } = data);
 
   const localeTag = getLocale() === "es" ? "es-MX" : "en-US";
   const intFmt = new Intl.NumberFormat(localeTag);
   const popFmt = new Intl.NumberFormat(localeTag, { notation: "compact", maximumFractionDigits: 1 });
   const dateFmt = new Intl.DateTimeFormat(localeTag, { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
+  const monthFmt = new Intl.DateTimeFormat(localeTag, { month: "short", year: "2-digit", timeZone: "UTC" });
+  const monthLabel = (ym: string | undefined) => (ym ? monthFmt.format(new Date(`${ym}-01`)) : "");
 
   $: updatedDate = generatedAt ? dateFmt.format(new Date(generatedAt)) : "";
+  $: trendStart = monthLabel(trendMonths?.[0]);
+  $: trendEnd = monthLabel(trendMonths?.at(-1));
 
   // Per-row expand state. Expand-all only targets rows that actually have a full
   // body to reveal (the TL;DR is always visible).
@@ -150,11 +154,13 @@
                 </div>
               {/if}
               {#if row.spark}
-                <!-- Growth sparkline under the map: a scannable right rail for the
-                     "do they all just go up?" comparison. -->
-                <div class="mt-2 h-9 w-full">
-                  <StateSparkline
+                <!-- Labeled growth chart under the map — the model lines and how
+                     they diverge are the point. -->
+                <div class="mt-2 aspect-[2/1] w-full">
+                  <StateTrendMini
                     series={row.spark}
+                    startLabel={trendStart}
+                    endLabel={trendEnd}
                     label={m.states_index_spark_aria({ state: row.stateName })}
                   />
                 </div>
