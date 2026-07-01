@@ -145,13 +145,16 @@
   // Agreement history, re-keyed on signing dates. ICE's roster snapshots tell us
   // when a model was first *detected* (event.date); the signed MOAs tell us when
   // it was actually *signed*. We show the signing date as the primary date on the
-  // timeline — falling back to the detection date when no signed PDF exists — and
-  // keep the "first seen in ICE data" date as a secondary note. Additions carry a
-  // signing date; removals don't, so they stay on the detection date.
+  // timeline — falling back to the detection date when no signed PDF exists.
+  //
+  // The "first seen in ICE data" note is only worth showing when detection lagged
+  // signing by more than a week: ICE publishes 2–3 roster updates a week, so a few
+  // days' gap is normal publishing lag, not signal. A longer gap is a real oddity.
+  const HISTORY_LAG_MS = 7 * DAY_MS;
   type HistoryRow = {
     date: string;          // effective date shown (signed if known, else detected)
     detectionDate: string; // when the model first appeared in ICE's roster
-    usedSigned: boolean;   // whether `date` came from a signed MOA
+    flagFirstSeen: boolean; // show the "first seen" note (detection lagged >1 week)
     added: string[];
     removed: string[];
   };
@@ -176,12 +179,16 @@
         const date = s ?? ev.date;
         const key = `${date}|${s ? "s" : "d"}`;
         let g = groups.get(key);
-        if (!g) { g = { date, detectionDate: ev.date, usedSigned: !!s, added: [], removed: [] }; groups.set(key, g); }
+        if (!g) {
+          const lag = +new Date(ev.date) - +new Date(date);
+          g = { date, detectionDate: ev.date, flagFirstSeen: !!s && lag > HISTORY_LAG_MS, added: [], removed: [] };
+          groups.set(key, g);
+        }
         g.added.push(model);
       }
       rows.push(...groups.values());
       if (ev.removed.length > 0) {
-        rows.push({ date: ev.date, detectionDate: ev.date, usedSigned: false, added: [], removed: ev.removed });
+        rows.push({ date: ev.date, detectionDate: ev.date, flagFirstSeen: false, added: [], removed: ev.removed });
       }
     }
     rows.sort((a, b) => +new Date(a.date) - +new Date(b.date));
@@ -625,7 +632,7 @@
             <time class="block text-xs font-semibold uppercase tracking-wider text-slate-500">
               {dateFmt(event.date)}
             </time>
-            {#if event.usedSigned && event.detectionDate !== event.date}
+            {#if event.flagFirstSeen}
               <p class="mt-0.5 text-xs text-slate-400">{m.agency_first_seen()} · {dateFmt(event.detectionDate)}</p>
             {/if}
             <ul class="mt-1 space-y-0.5">

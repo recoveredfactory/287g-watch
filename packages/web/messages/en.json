@@ -159,7 +159,7 @@
   "agency_ended_heading": "No longer in ICE's 287(g) data",
   "agency_ended_body": "{agency_name} no longer appears in ICE's published 287(g) data; it was last listed on {date}. ICE doesn't announce departures, so this reflects removal from the public roster rather than a formal termination.",
   "agency_history_heading": "Agreement History",
-  "agency_history_intro": "Dated by when each agreement was signed, with the date it first appeared in ICE's data noted below. Changes we can't tie to a signed document are dated by when they were detected.",
+  "agency_history_intro": "Dated by when each agreement was signed; where ICE's public data lagged noticeably behind, the first-seen date is noted too. Changes we can't tie to a signed document are dated by when they were detected.",
   "agency_population": "Residential population",
   "agency_population_policed": "Population policed",
   "agency_source_moa": "As reported in the agency's MOA",

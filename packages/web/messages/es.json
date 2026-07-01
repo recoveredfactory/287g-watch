@@ -159,7 +159,7 @@
   "agency_ended_heading": "Ya no figura en los datos de 287(g) de ICE",
   "agency_ended_body": "{agency_name} ya no aparece en los datos públicos de 287(g) de ICE; figuró por última vez el {date}. ICE no anuncia las salidas, por lo que esto refleja su eliminación del registro público y no una terminación formal.",
   "agency_history_heading": "Historial del acuerdo",
-  "agency_history_intro": "Fechado según cuándo se firmó cada acuerdo, con la fecha de su primera aparición en los datos de ICE indicada debajo. Los cambios que no podemos vincular a un documento firmado se fechan según cuándo se detectaron.",
+  "agency_history_intro": "Fechado según cuándo se firmó cada acuerdo; cuando los datos públicos de ICE tardaron notablemente en reflejarlo, se indica también la fecha de primera aparición. Los cambios que no podemos vincular a un documento firmado se fechan según cuándo se detectaron.",
   "agency_population": "Población residencial",
   "agency_population_policed": "Población vigilada",
   "agency_source_moa": "Según el MOA de la agencia",
