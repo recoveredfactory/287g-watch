@@ -4,6 +4,7 @@
   import { localizeHref, getLocale } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
   import StateMiniMap from "$lib/components/StateMiniMap.svelte";
+  import StateSparkline from "$lib/components/StateSparkline.svelte";
 
   export let data: PageData;
   $: ({ rows, generatedAt } = data);
@@ -130,20 +131,34 @@
             {/if}
           </div>
 
-          {#if row.map}
-            <!-- Fluid 3:2 box: the SVG fits inside via preserveAspectRatio="meet",
-                 so wide states (TN) and tall states (VT) both letterbox to the
-                 same footprint, sized to the column rather than fixed pixels. -->
-            <div class="mt-4 aspect-[3/2] w-full sm:mt-0">
-              <StateMiniMap
-                id={row.abbr}
-                w={row.map.w}
-                h={row.map.h}
-                outline={row.map.outline}
-                highways={row.map.highways}
-                dots={row.map.dots}
-                label={m.states_index_map_aria({ state: row.stateName })}
-              />
+          {#if row.map || row.spark}
+            <div class="mt-4 sm:mt-0">
+              {#if row.map}
+                <!-- Fluid 3:2 box: the SVG fits inside via preserveAspectRatio
+                     "meet", so wide states (TN) and tall states (VT) both
+                     letterbox to the same footprint, sized to the column. -->
+                <div class="aspect-[3/2] w-full">
+                  <StateMiniMap
+                    id={row.abbr}
+                    w={row.map.w}
+                    h={row.map.h}
+                    outline={row.map.outline}
+                    highways={row.map.highways}
+                    dots={row.map.dots}
+                    label={m.states_index_map_aria({ state: row.stateName })}
+                  />
+                </div>
+              {/if}
+              {#if row.spark}
+                <!-- Growth sparkline under the map: a scannable right rail for the
+                     "do they all just go up?" comparison. -->
+                <div class="mt-2 h-9 w-full">
+                  <StateSparkline
+                    series={row.spark}
+                    label={m.states_index_spark_aria({ state: row.stateName })}
+                  />
+                </div>
+              {/if}
             </div>
           {/if}
         </div>

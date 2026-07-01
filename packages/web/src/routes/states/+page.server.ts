@@ -1,8 +1,9 @@
 import { NAVIGABLE_STATES } from "$lib/states";
 import type { Agency, StateMeta } from "$lib/homeData.types";
 import { getLocale } from "$lib/paraglide/runtime";
-import { MODEL_COLORS } from "$lib/colors";
+import { MODEL_COLORS, MODEL_SLUG } from "$lib/colors";
 import { getStateGeometry, projectDot } from "$lib/server/stateMaps";
+import { buildTimeline } from "$lib/timeline";
 
 // ── Prototype state index ────────────────────────────────────────────────────
 // A throwaway preview surface (to be replaced/merged by the IA-redesign ticket):
@@ -29,6 +30,10 @@ export type StateMapMini = {
   dots: StateMapDot[];
 };
 
+// Model-split cumulative agency counts sampled onto the shared month grid — a
+// tiny growth sparkline per state, comparable across states on one x-axis.
+export type StateSpark = { jail: number[]; taskforce: number[]; wso: number[] };
+
 export type StateIndexRow = {
   abbr: string;
   stateName: string;
@@ -39,11 +44,13 @@ export type StateIndexRow = {
   populationServed: number | null;
   news: StateIndexNews | null;
   map: StateMapMini | null;
+  spark: StateSpark | null;
 };
 
 export type StatesIndexData = {
   rows: StateIndexRow[];
   generatedAt: string | null;
+  trendMonths: string[];
 };
 
 type NewsLangBlock = { tldr_html?: string; summary_html?: string };
@@ -66,11 +73,13 @@ const pickNews = (raw: NewsFile | null): StateIndexNews | null => {
 export const load = async ({ fetch }): Promise<StatesIndexData> => {
   const abbrs = Object.keys(NAVIGABLE_STATES);
 
-  const [agenciesRes, metaRes] = await Promise.all([
+  const [agenciesRes, metaRes, terminatedRes] = await Promise.all([
     fetch("/data/dist/agency_index.json"),
     fetch("/data/dist/state_meta.json"),
+    fetch("/data/dist/terminated_agencies.json"),
   ]);
   const allAgencies: Agency[] = agenciesRes.ok ? await agenciesRes.json() : [];
+  const terminated: Agency[] = terminatedRes.ok ? await terminatedRes.json() : [];
   const stateMetaArr: StateMeta[] = metaRes.ok ? await metaRes.json() : [];
   const metaByState = new Map(stateMetaArr.map((s) => [s.state, s]));
 
@@ -90,6 +99,69 @@ export const load = async ({ fetch }): Promise<StatesIndexData> => {
       locatedByState.set(a.state, arr);
     }
   }
+
+  // ── Growth sparkline data ──────────────────────────────────────────────────
+  // A shared month grid (Dec 2024 → latest event) so every state's sparkline
+  // shares one x-axis, then per-state model-split cumulative counts sampled onto
+  // it. Mirrors the state page's trend sampling, incl. the flat-line fallback for
+  // states whose agencies all appear on a single date.
+  const TREND_START = "2024-12";
+  const nextYm = (ym: string) => {
+    const y = Number(ym.slice(0, 4)), mo = Number(ym.slice(5, 7));
+    return mo === 12 ? `${y + 1}-01` : `${y}-${String(mo + 1).padStart(2, "0")}`;
+  };
+  const allForTrend = [...allAgencies, ...terminated];
+  let lastMonth = TREND_START;
+  for (const a of allForTrend)
+    for (const h of a.history ?? [])
+      if (h.date.slice(0, 7) > lastMonth) lastMonth = h.date.slice(0, 7);
+  const trendMonths: string[] = [];
+  for (let ym = TREND_START; ym <= lastMonth; ym = nextYm(ym)) trendMonths.push(ym);
+
+  const stateForTrend = new Map<string, Agency[]>();
+  for (const a of allForTrend) {
+    const arr = stateForTrend.get(a.state) ?? [];
+    arr.push(a);
+    stateForTrend.set(a.state, arr);
+  }
+
+  const buildSpark = (abbr: string): StateSpark | null => {
+    const group = stateForTrend.get(abbr) ?? [];
+    if (!group.length) return null;
+    const out: StateSpark = { jail: [], taskforce: [], wso: [] };
+    const pts = buildTimeline(group);
+    if (pts.length) {
+      let i = -1;
+      for (const ym of trendMonths) {
+        while (i + 1 < pts.length && pts[i + 1].date.slice(0, 7) <= ym) i++;
+        out.jail.push(i >= 0 ? pts[i].jail : 0);
+        out.taskforce.push(i >= 0 ? pts[i].taskforce : 0);
+        out.wso.push(i >= 0 ? pts[i].wso : 0);
+      }
+    } else {
+      // No multi-date timeline: hold the current model counts flat from the first
+      // history month onward (0 before it).
+      const firstYm = group.flatMap((a) => (a.history ?? []).map((h) => h.date.slice(0, 7))).sort()[0];
+      if (!firstYm) return null;
+      const startYm = firstYm > TREND_START ? firstYm : TREND_START;
+      const now = { jail: 0, taskforce: 0, wso: 0 };
+      for (const a of group) {
+        if (a.terminated_date) continue;
+        for (const m of a.models) {
+          const k = MODEL_SLUG[m] as keyof typeof now | undefined;
+          if (k && k in now) now[k]++;
+        }
+      }
+      for (const ym of trendMonths) {
+        const on = ym >= startYm;
+        out.jail.push(on ? now.jail : 0);
+        out.taskforce.push(on ? now.taskforce : 0);
+        out.wso.push(on ? now.wso : 0);
+      }
+    }
+    const some = [...out.jail, ...out.taskforce, ...out.wso].some((v) => v > 0);
+    return some ? out : null;
+  };
 
   // Per-state SVG geometry (outline + highways), built once and cached. Dots are
   // projected here so the client just draws prepared paths.
@@ -126,11 +198,18 @@ export const load = async ({ fetch }): Promise<StatesIndexData> => {
     populationServed: metaByState.get(abbr)?.population_served ?? null,
     news: newsByState.get(abbr) ?? null,
     map: buildMap(abbr),
+    spark: buildSpark(abbr),
   }));
 
-  // Most-participating first (a quick leaderboard), then alphabetical.
+  // Most-participating first (a quick leaderboard). Ties — notably the whole
+  // block of non-participating states at 0 — fall to population (biggest first),
+  // then name, so scanning the 0s reads largest-state-down rather than A–Z.
+  const statePop = (abbr: string) => metaByState.get(abbr)?.state_local_population ?? 0;
   rows.sort(
-    (a, b) => b.agencyCount - a.agencyCount || a.stateName.localeCompare(b.stateName),
+    (a, b) =>
+      b.agencyCount - a.agencyCount ||
+      statePop(b.abbr) - statePop(a.abbr) ||
+      a.stateName.localeCompare(b.stateName),
   );
 
   // Newest summary timestamp across the set, for the page's "updated" line.
@@ -141,5 +220,5 @@ export const load = async ({ fetch }): Promise<StatesIndexData> => {
       .sort()
       .at(-1) ?? null;
 
-  return { rows, generatedAt };
+  return { rows, generatedAt, trendMonths };
 };

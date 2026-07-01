@@ -48,6 +48,7 @@
   "states_index_no_summary": "No summary available yet.",
   "states_index_open_state": "Open {state} page",
   "states_index_map_aria": "Map of {state} with 287(g) agency locations",
+  "states_index_spark_aria": "Agency growth in {state} since December 2024",
 
   "state_meta_title": "{state} 287(g) Agencies",
   "state_meta_description": "{count} agencies in {state} participating in the 287(g) immigration enforcement program.",
