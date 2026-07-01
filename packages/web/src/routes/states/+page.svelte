@@ -5,6 +5,7 @@
   import { m } from "$lib/paraglide/messages.js";
   import StateMiniMap from "$lib/components/StateMiniMap.svelte";
   import StateTrendMini from "$lib/components/StateTrendMini.svelte";
+  import StateTopAgencies from "$lib/components/StateTopAgencies.svelte";
 
   export let data: PageData;
   $: ({ rows, generatedAt, trendMonths } = data);
@@ -129,9 +130,9 @@
         </div>
 
         {#if canExpand}
-          <!-- ── read more / less ── centered pill between hairline rules -->
-          <div class="news-toggle-row mt-5">
-            <span class="news-rule" aria-hidden="true"></span>
+          <!-- ── read more / less ── centered pill, full-width hairline rules -->
+          <div class="mt-5 flex items-center gap-3">
+            <span class="h-px flex-1 bg-slate-200" aria-hidden="true"></span>
             <button
               type="button"
               class="news-toggle"
@@ -142,20 +143,17 @@
               {isExp ? m.states_index_hide_summary() : m.states_index_read_summary()}
               <span class="news-chev" class:rotate-180={isExp} aria-hidden="true">▾</span>
             </button>
-            <span class="news-rule" aria-hidden="true"></span>
+            <span class="h-px flex-1 bg-slate-200" aria-hidden="true"></span>
           </div>
 
           {#if isExp}
-            <!-- Block 2 (expanded): full narrative | trend chart. Fades in, with a
-                 soft gradient at the top edge where it emerges from the rule. -->
-            <div id={`exp-${row.abbr}`} class="states-reveal mt-5 sm:grid sm:grid-cols-[3fr_2fr] sm:items-start sm:gap-8">
-              <div class="states-reveal-body min-w-0">
-                {#if row.news?.body_html}
-                  <div class="news-prose news-body max-w-prose">{@html row.news.body_html}</div>
-                {/if}
-              </div>
+            <!-- Block 2 (expanded): full narrative | chart + largest agencies.
+                 DOM order (chart, body, agencies) drives the mobile stack — chart
+                 first, agencies last; the grid reflows them into the right rail
+                 on desktop. -->
+            <div id={`exp-${row.abbr}`} class="states-reveal mt-5 sm:grid sm:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] sm:gap-x-8 sm:gap-y-5">
               {#if row.spark}
-                <div class="mt-4 aspect-[2/1] w-full sm:mt-0">
+                <div class="mb-4 h-28 w-full sm:col-start-2 sm:row-start-1 sm:mb-0 sm:h-auto sm:aspect-[2/1]">
                   <StateTrendMini
                     series={row.spark}
                     startLabel={trendStart}
@@ -164,6 +162,23 @@
                   />
                 </div>
               {/if}
+              <div class="min-w-0 sm:col-start-1 sm:row-start-1 sm:row-span-2">
+                {#if row.news?.body_html}
+                  <div class="news-prose news-body max-w-prose">{@html row.news.body_html}</div>
+                {/if}
+              </div>
+              {#if row.topAgencies.length}
+                <div class="mt-5 sm:col-start-2 sm:row-start-2 sm:mt-0">
+                  <StateTopAgencies agencies={row.topAgencies} />
+                </div>
+              {/if}
+            </div>
+          {:else if row.news?.body_html}
+            <!-- Collapsed peek: the top of the hidden narrative, clipped and faded
+                 out so it reads as "there's more here". inert keeps its citation
+                 links out of the tab order while it's a decorative teaser. -->
+            <div class="states-peek" inert aria-hidden="true">
+              <div class="news-prose news-body max-w-prose">{@html row.news.body_html}</div>
             </div>
           {/if}
         {/if}
@@ -173,7 +188,7 @@
 </main>
 
 <style>
-  /* Expanded block fades + eases in on reveal. */
+  /* Expanded block eases in on reveal. */
   .states-reveal {
     animation: states-reveal 240ms ease both;
   }
@@ -181,11 +196,14 @@
     from { opacity: 0; transform: translateY(-4px); }
     to { opacity: 1; transform: none; }
   }
-  /* Soft gradient at the top edge of the long narrative, so it emerges from the
-     "read more" rule rather than hard-cutting. */
-  .states-reveal-body {
-    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 0.9rem);
-    mask-image: linear-gradient(to bottom, transparent, #000 0.9rem);
+  /* Collapsed peek: show the top of the hidden narrative, clipped short and
+     faded to nothing so it reads as a teaser. */
+  .states-peek {
+    margin-top: 1rem;
+    max-height: 3.25rem;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(to bottom, #000 25%, transparent);
+    mask-image: linear-gradient(to bottom, #000 25%, transparent);
   }
   @media (prefers-reduced-motion: reduce) {
     .states-reveal { animation: none; }

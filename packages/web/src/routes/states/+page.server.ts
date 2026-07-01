@@ -34,6 +34,10 @@ export type StateMapMini = {
 // tiny growth sparkline per state, comparable across states on one x-axis.
 export type StateSpark = { jail: number[]; taskforce: number[]; wso: number[] };
 
+// Largest agencies in the state by sworn-officer count — shown beside the chart
+// in the expanded card.
+export type StateTopAgency = { slug: string; name: string; model: string; officers: number };
+
 export type StateIndexRow = {
   abbr: string;
   stateName: string;
@@ -45,6 +49,7 @@ export type StateIndexRow = {
   news: StateIndexNews | null;
   map: StateMapMini | null;
   spark: StateSpark | null;
+  topAgencies: StateTopAgency[];
 };
 
 export type StatesIndexData = {
@@ -88,17 +93,35 @@ export const load = async ({ fetch }): Promise<StatesIndexData> => {
   const agencyCount = new Map<string, number>();
   const modelCountsByState = new Map<string, Record<string, number>>();
   const locatedByState = new Map<string, Agency[]>();
+  const agenciesByState = new Map<string, Agency[]>();
   for (const a of allAgencies) {
     agencyCount.set(a.state, (agencyCount.get(a.state) ?? 0) + 1);
     const mc = modelCountsByState.get(a.state) ?? {};
     for (const m of a.models) mc[m] = (mc[m] ?? 0) + 1;
     modelCountsByState.set(a.state, mc);
+    const arr = agenciesByState.get(a.state) ?? [];
+    arr.push(a);
+    agenciesByState.set(a.state, arr);
     if (a.lat != null && a.lng != null) {
-      const arr = locatedByState.get(a.state) ?? [];
-      arr.push(a);
-      locatedByState.set(a.state, arr);
+      const loc = locatedByState.get(a.state) ?? [];
+      loc.push(a);
+      locatedByState.set(a.state, loc);
     }
   }
+
+  // Five biggest departments per state (by sworn officers), for the expanded
+  // card's right rail.
+  const buildTopAgencies = (abbr: string): StateTopAgency[] =>
+    [...(agenciesByState.get(abbr) ?? [])]
+      .filter((a) => a.name)
+      .sort((a, b) => (b.lee?.officer_ct ?? 0) - (a.lee?.officer_ct ?? 0) || a.name.localeCompare(b.name))
+      .slice(0, 5)
+      .map((a) => ({
+        slug: a.slug,
+        name: a.name,
+        model: a.primary_model,
+        officers: a.lee?.officer_ct ?? 0,
+      }));
 
   // ── Growth sparkline data ──────────────────────────────────────────────────
   // A shared month grid (Dec 2024 → latest event) so every state's sparkline
@@ -199,6 +222,7 @@ export const load = async ({ fetch }): Promise<StatesIndexData> => {
     news: newsByState.get(abbr) ?? null,
     map: buildMap(abbr),
     spark: buildSpark(abbr),
+    topAgencies: buildTopAgencies(abbr),
   }));
 
   // Most-participating first (a quick leaderboard). Ties — notably the whole
