@@ -18,8 +18,9 @@ export type StateIndexNews = {
 
 // Compact SVG mini-map: state outline + a hint of highways, both pre-projected
 // into `w`×`h` viewBox units, plus agency dots (x/y in the same space, c = model
-// color). WebGL-free so it scales to 53 small-multiples. Null if no geometry.
-export type StateMapDot = { x: number; y: number; c: string };
+// color, o = sworn-officer count for sqrt radius scaling à la the homepage map).
+// WebGL-free so it scales to 53 small-multiples. Null if no geometry.
+export type StateMapDot = { x: number; y: number; c: string; o: number };
 export type StateMapMini = {
   w: number;
   h: number;
@@ -98,7 +99,7 @@ export const load = async ({ fetch }): Promise<StatesIndexData> => {
     if (!g) return null;
     const dots: StateMapDot[] = (locatedByState.get(abbr) ?? []).map((a) => {
       const [x, y] = projectDot(g, abbr, a.lng!, a.lat!);
-      return { x, y, c: MODEL_COLORS[a.primary_model] ?? "#64748b" };
+      return { x, y, c: MODEL_COLORS[a.primary_model] ?? "#64748b", o: a.lee?.officer_ct ?? 0 };
     });
     return { w: g.w, h: g.h, outline: g.outline, highways: g.highways, dots };
   };

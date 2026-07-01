@@ -6,19 +6,22 @@
   export let h: number;
   export let outline: string;
   export let highways: string[] = [];
-  export let dots: { x: number; y: number; c: string }[] = [];
+  export let dots: { x: number; y: number; c: string; o: number }[] = [];
   export let id: string; // unique per card, for the clipPath
   export let label = "";
 
-  // Dots are a stand-in until we render county/jurisdiction shapes, so scale the
-  // radius down as they get dense — otherwise a Texas or Florida turns into one
-  // solid blob. Sparse states keep a legible ~1.7; the densest settle near 1.0.
-  $: dotR = Math.max(1.0, Math.min(1.7, 16 / Math.sqrt(Math.max(1, dots.length))));
+  // Radius by sworn-officer count, à la the homepage map: sqrt scale, domain
+  // capped at ~1,000 officers (sqrt ≈ 32). Big departments pop; rural sheriffs
+  // stay a legible floor. A stand-in until county/jurisdiction shapes land.
+  const R_MIN = 0.9;
+  const R_MAX = 5;
+  const radius = (officers: number) =>
+    R_MIN + Math.min(1, Math.sqrt(Math.max(0, officers)) / 32) * (R_MAX - R_MIN);
 </script>
 
 <svg
   viewBox="0 0 {w} {h}"
-  class="block h-full w-auto"
+  class="block h-full w-full"
   role="img"
   aria-label={label}
   preserveAspectRatio="xMidYMid meet"
@@ -45,8 +48,8 @@
     {/each}
   </g>
 
-  <!-- Agency locations -->
+  <!-- Agency locations, sized by sworn-officer count -->
   {#each dots as dot}
-    <circle cx={dot.x} cy={dot.y} r={dotR} fill={dot.c} stroke="#ffffff" stroke-width="0.45" />
+    <circle cx={dot.x} cy={dot.y} r={radius(dot.o)} fill={dot.c} stroke="#ffffff" stroke-width="0.45" />
   {/each}
 </svg>

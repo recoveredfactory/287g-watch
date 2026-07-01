@@ -97,10 +97,10 @@
         </div>
 
         <!-- Two-column on desktop: summary left, mini-map right. Falls back to a
-             single column when the state has no baked geometry. The map column is
-             auto-width: each SVG is a fixed height, so landscape and portrait
-             states share a row height while the summary takes the rest. -->
-        <div class="mt-4 {row.map ? 'sm:grid sm:grid-cols-[1fr_auto] sm:items-start sm:gap-8' : ''}">
+             single column when the state has no baked geometry. Fluid: the map
+             column is a fraction of the card and the SVG letterboxes inside a
+             3:2 box, so it scales with the layout and never overflows. -->
+        <div class="mt-4 {row.map ? 'sm:grid sm:grid-cols-[3fr_2fr] sm:items-start sm:gap-8' : ''}">
           <!-- News summary: TL;DR always shown, body behind a per-row toggle -->
           <div class="min-w-0">
             {#if row.news}
@@ -131,7 +131,10 @@
           </div>
 
           {#if row.map}
-            <div class="mt-4 flex h-40 justify-start sm:mt-0 sm:h-52 sm:justify-center">
+            <!-- Fluid 3:2 box: the SVG fits inside via preserveAspectRatio="meet",
+                 so wide states (TN) and tall states (VT) both letterbox to the
+                 same footprint, sized to the column rather than fixed pixels. -->
+            <div class="mt-4 aspect-[3/2] w-full sm:mt-0">
               <StateMiniMap
                 id={row.abbr}
                 w={row.map.w}
