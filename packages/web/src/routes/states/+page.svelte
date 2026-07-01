@@ -68,6 +68,8 @@
   <!-- ── State cards ─────────────────────────────────────────────────────────── -->
   <div class="mt-8 space-y-4">
     {#each rows as row (row.abbr)}
+      {@const isExp = expanded.has(row.abbr)}
+      {@const canExpand = Boolean(row.news?.body_html) || Boolean(row.spark)}
       <article class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <!-- Topline header: state name + dead-simple figures -->
         <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
@@ -101,62 +103,59 @@
           </div>
         </div>
 
-        <!-- Two-column on desktop: summary left, mini-map right. Falls back to a
-             single column when the state has no baked geometry. Fluid: the map
-             column is a fraction of the card and the SVG letterboxes inside a
-             3:2 box, so it scales with the layout and never overflows. -->
-        <div class="mt-4 {row.map ? 'sm:grid sm:grid-cols-[3fr_2fr] sm:items-start sm:gap-8' : ''}">
-          <!-- News summary: TL;DR always shown, body behind a per-row toggle -->
+        <!-- Block 1 (always): TL;DR summary | map. Two columns on desktop; the
+             map is a fluid 3:2 box the SVG letterboxes into. Stacks on mobile. -->
+        <div class="mt-4 sm:grid sm:grid-cols-[3fr_2fr] sm:items-start sm:gap-8">
           <div class="min-w-0">
             {#if row.news}
-              <div class="news-prose news-tldr max-w-prose">
-                {@html row.news.tldr_html}
-              </div>
-
-              {#if row.news.body_html}
-                <button
-                  type="button"
-                  on:click={() => toggle(row.abbr)}
-                  aria-expanded={expanded.has(row.abbr)}
-                  class="news-toggle mt-3"
-                >
-                  {expanded.has(row.abbr) ? m.states_index_hide_summary() : m.states_index_read_summary()}
-                  <span class="news-chev" class:rotate-180={expanded.has(row.abbr)} aria-hidden="true">▾</span>
-                </button>
-
-                {#if expanded.has(row.abbr)}
-                  <div class="news-prose news-body mt-4 max-w-prose">
-                    {@html row.news.body_html}
-                  </div>
-                {/if}
-              {/if}
+              <div class="news-prose news-tldr max-w-prose">{@html row.news.tldr_html}</div>
             {:else}
               <p class="text-sm italic text-slate-400">{m.states_index_no_summary()}</p>
             {/if}
           </div>
+          {#if row.map}
+            <div class="mt-4 aspect-[3/2] w-full sm:mt-0">
+              <StateMiniMap
+                id={row.abbr}
+                w={row.map.w}
+                h={row.map.h}
+                outline={row.map.outline}
+                highways={row.map.highways}
+                dots={row.map.dots}
+                label={m.states_index_map_aria({ state: row.stateName })}
+              />
+            </div>
+          {/if}
+        </div>
 
-          {#if row.map || row.spark}
-            <div class="mt-4 sm:mt-0">
-              {#if row.map}
-                <!-- Fluid 3:2 box: the SVG fits inside via preserveAspectRatio
-                     "meet", so wide states (TN) and tall states (VT) both
-                     letterbox to the same footprint, sized to the column. -->
-                <div class="aspect-[3/2] w-full">
-                  <StateMiniMap
-                    id={row.abbr}
-                    w={row.map.w}
-                    h={row.map.h}
-                    outline={row.map.outline}
-                    highways={row.map.highways}
-                    dots={row.map.dots}
-                    label={m.states_index_map_aria({ state: row.stateName })}
-                  />
-                </div>
-              {/if}
+        {#if canExpand}
+          <!-- ── read more / less ── centered pill between hairline rules -->
+          <div class="news-toggle-row mt-5">
+            <span class="news-rule" aria-hidden="true"></span>
+            <button
+              type="button"
+              class="news-toggle"
+              on:click={() => toggle(row.abbr)}
+              aria-expanded={isExp}
+              aria-controls={`exp-${row.abbr}`}
+            >
+              {isExp ? m.states_index_hide_summary() : m.states_index_read_summary()}
+              <span class="news-chev" class:rotate-180={isExp} aria-hidden="true">▾</span>
+            </button>
+            <span class="news-rule" aria-hidden="true"></span>
+          </div>
+
+          {#if isExp}
+            <!-- Block 2 (expanded): full narrative | trend chart. Fades in, with a
+                 soft gradient at the top edge where it emerges from the rule. -->
+            <div id={`exp-${row.abbr}`} class="states-reveal mt-5 sm:grid sm:grid-cols-[3fr_2fr] sm:items-start sm:gap-8">
+              <div class="states-reveal-body min-w-0">
+                {#if row.news?.body_html}
+                  <div class="news-prose news-body max-w-prose">{@html row.news.body_html}</div>
+                {/if}
+              </div>
               {#if row.spark}
-                <!-- Labeled growth chart under the map — the model lines and how
-                     they diverge are the point. -->
-                <div class="mt-2 aspect-[2/1] w-full">
+                <div class="mt-4 aspect-[2/1] w-full sm:mt-0">
                   <StateTrendMini
                     series={row.spark}
                     startLabel={trendStart}
@@ -167,8 +166,28 @@
               {/if}
             </div>
           {/if}
-        </div>
+        {/if}
       </article>
     {/each}
   </div>
 </main>
+
+<style>
+  /* Expanded block fades + eases in on reveal. */
+  .states-reveal {
+    animation: states-reveal 240ms ease both;
+  }
+  @keyframes states-reveal {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: none; }
+  }
+  /* Soft gradient at the top edge of the long narrative, so it emerges from the
+     "read more" rule rather than hard-cutting. */
+  .states-reveal-body {
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 0.9rem);
+    mask-image: linear-gradient(to bottom, transparent, #000 0.9rem);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .states-reveal { animation: none; }
+  }
+</style>

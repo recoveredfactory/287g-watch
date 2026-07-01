@@ -8,16 +8,16 @@
   export let endLabel = "";
   export let label = "";
 
-  // Bright stroke + dark text tint per model (matches $lib/colors).
+  // Bright stroke + dark text tint + mini code per model (matches $lib/colors).
   const LINES = [
-    { key: "wso", stroke: "#5E9148", text: "#2F4A22" },
-    { key: "taskforce", stroke: "#3C97E2", text: "#1A4A7A" },
-    { key: "jail", stroke: "#BE6079", text: "#6B1F33" },
+    { key: "wso", code: "WSO", stroke: "#5E9148", text: "#2F4A22" },
+    { key: "taskforce", code: "TFM", stroke: "#3C97E2", text: "#1A4A7A" },
+    { key: "jail", code: "JEM", stroke: "#BE6079", text: "#6B1F33" },
   ] as const;
 
-  const W = 140;
-  const H = 70;
-  const PAD = { t: 9, r: 24, b: 12, l: 8 };
+  const W = 150;
+  const H = 75;
+  const PAD = { t: 9, r: 32, b: 13, l: 8 };
   const plotW = W - PAD.l - PAD.r;
   const plotH = H - PAD.t - PAD.b;
 
@@ -39,12 +39,14 @@
     };
   });
 
-  // Nudge end-value labels apart (keeping vertical order) so close finals don't
-  // collide.
+  // Nudge the WSO/TFM/JEM end labels apart (keeping vertical order) so close
+  // finals don't collide.
   $: endLabels = (() => {
-    const items = lines.filter((l) => l.has).map((l) => ({ text: l.text, final: l.final, y: l.fy }));
+    const items = lines
+      .filter((l) => l.has)
+      .map((l) => ({ text: l.text, code: l.code, final: l.final, y: l.fy }));
     items.sort((a, b) => a.y - b.y);
-    const GAP = 7;
+    const GAP = 7.5;
     for (let i = 1; i < items.length; i++)
       if (items[i].y - items[i - 1].y < GAP) items[i].y = items[i - 1].y + GAP;
     return items;
@@ -68,8 +70,8 @@
     {/if}
   {/each}
 
-  <!-- end-of-line values -->
+  <!-- end-of-line labels: model code + final count -->
   {#each endLabels as e}
-    <text x={PAD.l + plotW + 2.5} y={e.y + 1.8} fill={e.text} style="font-size:5.5px; font-weight:700;">{e.final}</text>
+    <text x={PAD.l + plotW + 2.5} y={e.y + 1.8} fill={e.text} style="font-size:5px; font-weight:700;">{e.code} {e.final}</text>
   {/each}
 </svg>
