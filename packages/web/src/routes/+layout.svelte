@@ -260,6 +260,11 @@
               aria-current={isNavActive('/', basePath) ? 'page' : undefined}
             >{m.nav_map()}</a>
             <a
+              href={localizeHref("/states")}
+              class="no-underline {isNavActive('/states', basePath) ? 'text-white underline underline-offset-4 decoration-2' : 'text-white/60 hover:text-white'}"
+              aria-current={isNavActive('/states', basePath) ? 'page' : undefined}
+            >{m.nav_states()}</a>
+            <a
               href={localizeHref("/about")}
               class="no-underline {isNavActive('/about', basePath) ? 'text-white underline underline-offset-4 decoration-2' : 'text-white/60 hover:text-white'}"
               aria-current={isNavActive('/about', basePath) ? 'page' : undefined}

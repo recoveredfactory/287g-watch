@@ -183,6 +183,24 @@
     </div>
   </div>
 
+  <!-- Automated-data caution: several figures on this page (signatories,
+       contacts, budget/population) are LLM-extracted from scanned agreement
+       PDFs and can be wrong. A prominent, always-on caveat linking to the
+       methodology write-up. -->
+  <aside class="mt-6 flex items-start gap-3 rounded-lg border border-amber-400 bg-amber-50 px-4 py-3">
+    <span class="mt-0.5 shrink-0 text-lg leading-none text-amber-600" aria-hidden="true">⚠</span>
+    <div>
+      <p class="text-sm font-bold text-amber-900">{m.agency_ai_warning_heading()}</p>
+      <p class="mt-1 text-sm leading-relaxed text-amber-800">
+        {m.agency_ai_warning_body()}
+        <a
+          href={localizeHref("/methodology#ai")}
+          class="font-semibold text-amber-900 underline decoration-amber-500 underline-offset-2 hover:decoration-amber-800"
+        >{m.agency_ai_warning_link()}</a>
+      </p>
+    </div>
+  </aside>
+
   <!-- Editorial notes -->
   {#if agency.notes && agency.notes.length > 0}
     <aside class="mt-6 rounded-lg border-l-4 border-amber-400 bg-amber-50 p-4 text-sm text-amber-900">

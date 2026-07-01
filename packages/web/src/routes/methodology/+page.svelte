@@ -79,6 +79,11 @@
       <li><Gloss text={m.methodology_limitations_li_2()} {seen} /></li>
     </ul>
 
+    <h2 id="ai" class="mt-8 scroll-mt-24 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.methodology_ai_heading()}</h2>
+
+    <p class="mt-3"><Gloss text={m.methodology_ai_body_1()} {seen} /></p>
+    <p class="mt-3"><Gloss text={m.methodology_ai_body_2()} {seen} /></p>
+
     <h2 class="mt-8 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.methodology_updates_heading()}</h2>
 
     <p class="mt-3"><Gloss text={m.methodology_updates_body()} {seen} /></p>
