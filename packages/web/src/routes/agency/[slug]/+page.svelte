@@ -94,12 +94,15 @@
   // signing date. Since signed_date is now ICE's earliest reported date (#118),
   // the two land within days for most agencies — the tile only earns its space
   // for the cases where they genuinely differ (e.g. long-standing agreements
-  // first tracked in 2025). Threshold: more than two weeks apart.
+  // first tracked in 2025). Threshold: more than two weeks apart (empirically
+  // chosen). Shared by the key-facts tile and the history "first seen" note so
+  // the two can't drift apart.
   const DAY_MS = 86_400_000;
+  const FIRST_SEEN_LAG_MS = 14 * DAY_MS;
   $: showFirstSeen =
     !!agency.first_seen_date &&
     (!agency.signed_date ||
-      Math.abs(+new Date(agency.first_seen_date) - +new Date(agency.signed_date)) > 14 * DAY_MS);
+      Math.abs(+new Date(agency.first_seen_date) - +new Date(agency.signed_date)) > FIRST_SEEN_LAG_MS);
 
   // Per-agreement display (#3). An agency can hold several agreements (JEM/TFM/WSO)
   // whose ICE signer / date / public-affairs POC sometimes diverge. We show the
@@ -148,9 +151,9 @@
   // timeline — falling back to the detection date when no signed PDF exists.
   //
   // The "first seen in ICE data" note is only worth showing when detection lagged
-  // signing by more than a week: ICE publishes 2–3 roster updates a week, so a few
-  // days' gap is normal publishing lag, not signal. A longer gap is a real oddity.
-  const HISTORY_LAG_MS = 7 * DAY_MS;
+  // signing past FIRST_SEEN_LAG_MS: ICE publishes 2–3 roster updates a week, so a
+  // few days' gap is normal publishing lag, not signal. A longer gap is a real
+  // oddity (same threshold as the key-facts tile above).
   type HistoryRow = {
     date: string;          // effective date shown (signed if known, else detected)
     detectionDate: string; // when the model first appeared in ICE's roster
@@ -181,7 +184,7 @@
         let g = groups.get(key);
         if (!g) {
           const lag = +new Date(ev.date) - +new Date(date);
-          g = { date, detectionDate: ev.date, flagFirstSeen: !!s && lag > HISTORY_LAG_MS, added: [], removed: [] };
+          g = { date, detectionDate: ev.date, flagFirstSeen: !!s && lag > FIRST_SEEN_LAG_MS, added: [], removed: [] };
           groups.set(key, g);
         }
         g.added.push(model);
