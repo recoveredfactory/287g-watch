@@ -47,6 +47,7 @@
   "states_index_hide_summary": "Ocultar resumen",
   "states_index_no_summary": "Aún no hay resumen disponible.",
   "states_index_open_state": "Abrir la página de {state}",
+  "states_index_map_aria": "Mapa de {state} con las ubicaciones de las agencias 287(g)",
 
   "state_meta_title": "Agencias 287(g) de {state}",
   "state_meta_description": "{count} agencias en {state} que participan en el programa de control migratorio 287(g).",

@@ -1,6 +1,8 @@
 import { NAVIGABLE_STATES } from "$lib/states";
 import type { Agency, StateMeta } from "$lib/homeData.types";
 import { getLocale } from "$lib/paraglide/runtime";
+import { MODEL_COLORS } from "$lib/colors";
+import { getStateGeometry, projectDot } from "$lib/server/stateMaps";
 
 // ── Prototype state index ────────────────────────────────────────────────────
 // A throwaway preview surface (to be replaced/merged by the IA-redesign ticket):
@@ -14,6 +16,18 @@ export type StateIndexNews = {
   generated_at: string;
 };
 
+// Compact SVG mini-map: state outline + a hint of highways, both pre-projected
+// into `w`×`h` viewBox units, plus agency dots (x/y in the same space, c = model
+// color). WebGL-free so it scales to 53 small-multiples. Null if no geometry.
+export type StateMapDot = { x: number; y: number; c: string };
+export type StateMapMini = {
+  w: number;
+  h: number;
+  outline: string;
+  highways: string[];
+  dots: StateMapDot[];
+};
+
 export type StateIndexRow = {
   abbr: string;
   stateName: string;
@@ -23,6 +37,7 @@ export type StateIndexRow = {
   modelCounts: Record<string, number>;
   populationServed: number | null;
   news: StateIndexNews | null;
+  map: StateMapMini | null;
 };
 
 export type StatesIndexData = {
@@ -58,15 +73,35 @@ export const load = async ({ fetch }): Promise<StatesIndexData> => {
   const stateMetaArr: StateMeta[] = metaRes.ok ? await metaRes.json() : [];
   const metaByState = new Map(stateMetaArr.map((s) => [s.state, s]));
 
-  // Per-state agency + model tallies in one pass.
+  // Per-state agency + model tallies (and the located agencies for map dots) in
+  // one pass.
   const agencyCount = new Map<string, number>();
   const modelCountsByState = new Map<string, Record<string, number>>();
+  const locatedByState = new Map<string, Agency[]>();
   for (const a of allAgencies) {
     agencyCount.set(a.state, (agencyCount.get(a.state) ?? 0) + 1);
     const mc = modelCountsByState.get(a.state) ?? {};
     for (const m of a.models) mc[m] = (mc[m] ?? 0) + 1;
     modelCountsByState.set(a.state, mc);
+    if (a.lat != null && a.lng != null) {
+      const arr = locatedByState.get(a.state) ?? [];
+      arr.push(a);
+      locatedByState.set(a.state, arr);
+    }
   }
+
+  // Per-state SVG geometry (outline + highways), built once and cached. Dots are
+  // projected here so the client just draws prepared paths.
+  const geometry = await getStateGeometry(fetch);
+  const buildMap = (abbr: string): StateMapMini | null => {
+    const g = geometry[abbr];
+    if (!g) return null;
+    const dots: StateMapDot[] = (locatedByState.get(abbr) ?? []).map((a) => {
+      const [x, y] = projectDot(g, abbr, a.lng!, a.lat!);
+      return { x, y, c: MODEL_COLORS[a.primary_model] ?? "#64748b" };
+    });
+    return { w: g.w, h: g.h, outline: g.outline, highways: g.highways, dots };
+  };
 
   // One small JSON per state, fetched in parallel. Prototype-scale fan-out
   // (~50 files); a failure degrades to a null summary for just that state.
@@ -89,6 +124,7 @@ export const load = async ({ fetch }): Promise<StatesIndexData> => {
     modelCounts: modelCountsByState.get(abbr) ?? {},
     populationServed: metaByState.get(abbr)?.population_served ?? null,
     news: newsByState.get(abbr) ?? null,
+    map: buildMap(abbr),
   }));
 
   // Most-participating first (a quick leaderboard), then alphabetical.

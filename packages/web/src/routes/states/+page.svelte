@@ -3,6 +3,7 @@
   import { MODEL_ORDER, MODEL_COLORS, MODEL_SHORT } from "$lib/colors";
   import { localizeHref, getLocale } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
+  import StateMiniMap from "$lib/components/StateMiniMap.svelte";
 
   export let data: PageData;
   $: ({ rows, generatedAt } = data);
@@ -95,32 +96,54 @@
           </div>
         </div>
 
-        <!-- News summary: TL;DR always shown, body behind a per-row toggle -->
-        {#if row.news}
-          <div class="news-prose news-tldr mt-4 max-w-prose">
-            {@html row.news.tldr_html}
+        <!-- Two-column on desktop: summary left, mini-map right. Falls back to a
+             single column when the state has no baked geometry. The map column is
+             auto-width: each SVG is a fixed height, so landscape and portrait
+             states share a row height while the summary takes the rest. -->
+        <div class="mt-4 {row.map ? 'sm:grid sm:grid-cols-[1fr_auto] sm:items-start sm:gap-8' : ''}">
+          <!-- News summary: TL;DR always shown, body behind a per-row toggle -->
+          <div class="min-w-0">
+            {#if row.news}
+              <div class="news-prose news-tldr max-w-prose">
+                {@html row.news.tldr_html}
+              </div>
+
+              {#if row.news.body_html}
+                <button
+                  type="button"
+                  on:click={() => toggle(row.abbr)}
+                  aria-expanded={expanded.has(row.abbr)}
+                  class="news-toggle mt-3"
+                >
+                  {expanded.has(row.abbr) ? m.states_index_hide_summary() : m.states_index_read_summary()}
+                  <span class="news-chev" class:rotate-180={expanded.has(row.abbr)} aria-hidden="true">▾</span>
+                </button>
+
+                {#if expanded.has(row.abbr)}
+                  <div class="news-prose news-body mt-4 max-w-prose">
+                    {@html row.news.body_html}
+                  </div>
+                {/if}
+              {/if}
+            {:else}
+              <p class="text-sm italic text-slate-400">{m.states_index_no_summary()}</p>
+            {/if}
           </div>
 
-          {#if row.news.body_html}
-            <button
-              type="button"
-              on:click={() => toggle(row.abbr)}
-              aria-expanded={expanded.has(row.abbr)}
-              class="news-toggle mt-3"
-            >
-              {expanded.has(row.abbr) ? m.states_index_hide_summary() : m.states_index_read_summary()}
-              <span class="news-chev" class:rotate-180={expanded.has(row.abbr)} aria-hidden="true">▾</span>
-            </button>
-
-            {#if expanded.has(row.abbr)}
-              <div class="news-prose news-body mt-4 max-w-prose">
-                {@html row.news.body_html}
-              </div>
-            {/if}
+          {#if row.map}
+            <div class="mt-4 flex h-40 justify-start sm:mt-0 sm:h-52 sm:justify-center">
+              <StateMiniMap
+                id={row.abbr}
+                w={row.map.w}
+                h={row.map.h}
+                outline={row.map.outline}
+                highways={row.map.highways}
+                dots={row.map.dots}
+                label={m.states_index_map_aria({ state: row.stateName })}
+              />
+            </div>
           {/if}
-        {:else}
-          <p class="mt-4 text-sm italic text-slate-400">{m.states_index_no_summary()}</p>
-        {/if}
+        </div>
       </article>
     {/each}
   </div>
