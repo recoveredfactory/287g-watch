@@ -16,8 +16,10 @@
   const reduceMotion = browser && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   // Peek clamp height, in px — MUST match the .states-collapsible fallback
-  // `max-height` in the CSS below (8rem).
-  const PEEK = 128;
+  // `max-height` in the CSS below (6rem). At the news-body's 28.8px line box
+  // (text-base × leading-1.8) that's ~3.3 lines: lines 1–2 stay crisp, and line 3
+  // is shown fading so it clearly reads as "more text below."
+  const PEEK = 96;
 
   // Jump-free open/close. The bottom section is one persistent element; CSS
   // clamps it to PEEK when closed. On toggle we animate `max-height` from the
@@ -54,6 +56,18 @@
       },
       destroy: () => anim?.cancel(),
     };
+  };
+
+  // Split the rendered summary HTML after its first paragraph, so the mobile
+  // layout can tuck the trend chart in right there (desktop keeps it in the side
+  // rail). Returns [firstBlock, rest]; if there's no </p> (shouldn't happen), the
+  // whole thing is the first block and rest is empty.
+  const splitFirstPara = (html: string | undefined): [string, string] => {
+    if (!html) return ["", ""];
+    const end = html.indexOf("</p>");
+    if (end === -1) return [html, ""];
+    const cut = end + "</p>".length;
+    return [html.slice(0, cut), html.slice(cut)];
   };
 
   export let data: PageData;
@@ -218,15 +232,36 @@
                fully rendered in both states — the collapse just clamps it — so
                the open/close animation has no content popping in or out. -->
           {#snippet bottomInner()}
+            {@const [firstPara, restHtml] = splitFirstPara(row.news?.body_html)}
             {#if row.news?.body_html}
               <div class="min-w-0 {hasRail ? 'sm:col-start-1 sm:row-start-1' : ''}">
-                <div class="news-prose news-body max-w-prose">{@html row.news.body_html}</div>
+                <div class="news-prose news-body max-w-prose">
+                  {@html firstPara}
+                  {#if row.spark}
+                    <!-- Mobile only: the trend chart sits right after the first
+                         paragraph. On desktop it lives in the side rail below, so
+                         this copy is hidden there (sm:hidden). -->
+                    <div class="mb-5 aspect-[2/1] w-full sm:hidden">
+                      <StateTrendMini
+                        series={row.spark}
+                        startLabel={trendStart}
+                        endLabel={trendEnd}
+                        label={m.states_index_spark_aria({ state: row.stateName })}
+                      />
+                    </div>
+                  {/if}
+                  {@html restHtml}
+                </div>
               </div>
             {/if}
             {#if hasRail}
-              <div class="mt-4 sm:col-start-2 sm:row-start-1 sm:mt-0">
+              <!-- On mobile the chart has moved inline (above), so this rail only
+                   carries the agencies there; drop its top margin when it has no
+                   mobile content to avoid a stray gap. -->
+              <div class="sm:col-start-2 sm:row-start-1 sm:mt-0 {row.topAgencies.length ? 'mt-4' : ''}">
                 {#if row.spark}
-                  <div class="aspect-[2/1] w-full">
+                  <!-- Desktop rail chart (hidden on mobile — shown inline above). -->
+                  <div class="hidden aspect-[2/1] w-full sm:block">
                     <StateTrendMini
                       series={row.spark}
                       startLabel={trendStart}
@@ -318,7 +353,9 @@
      fade and never disturbs the height measurement. */
   .states-collapsible {
     position: relative;
-    max-height: 8rem;
+    /* ~3.3 lines of news-body (28.8px line box): lines 1–2 crisp, line 3 shown
+       fading — enough of it visible to read as text and signal "more below." */
+    max-height: 6rem;
     overflow: hidden;
   }
   .states-collapsible::after {
@@ -326,7 +363,9 @@
     position: absolute;
     inset-inline: 0;
     bottom: 0;
-    height: 3.5rem;
+    /* Transparent edge sits at the start of line 3 (6rem − 2.4rem = 3.6rem ≈ 2
+       lines), so lines 1–2 read clean and only line 3 fades out. */
+    height: 2.4rem;
     background: linear-gradient(to bottom, transparent, #fff);
     pointer-events: none;
     opacity: 1;
