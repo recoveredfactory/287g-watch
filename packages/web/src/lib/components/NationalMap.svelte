@@ -46,6 +46,12 @@
   // lower-48 framing — the map is the data, not the basemap.
   export let dotScale = 1;
 
+  // Optional readiness callback, fired once the map settles (first idle past the
+  // initial render). The video composite (#213) renders two maps — the running
+  // map and the faint title-card backdrop — and waits for both before baking, so
+  // it can't lean on the single `window.__mapReady` global alone.
+  export let onReady: (() => void) | null = null;
+
   // State-page "focus" mode: highlight the selected state(s) with a brighter
   // fill + accent border and dim every agency dot outside the selection. Lets a
   // state page show the whole national footprint while keeping its own state
@@ -846,6 +852,7 @@
       // waits for tiles + dots to settle before capturing.
       map.once("idle", () => {
         (window as any).__mapReady = true;
+        onReady?.();
       });
 
     });

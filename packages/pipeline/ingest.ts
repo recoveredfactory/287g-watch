@@ -164,6 +164,32 @@ export interface AgreementMetadata {
   agency_type: string | null
 }
 
+// One 287(g) agreement on file (one per model: JEM/TFM/WSO). An agency can hold
+// several; their ICE signer / date / public-affairs POC sometimes diverge.
+// Sourced from extract-moa-signers.ts via data/moa_extracts.json (#1/#2).
+export interface Agreement {
+  model: string | null // full model name ("Jail Enforcement Model") or null if untagged
+  pdf_url: string | null
+  date_signed: string | null // as written in the document (may be null)
+  date_filename: string | null // ISO date parsed from the PDF filename (fallback)
+  ice_signer_name: string | null
+  ice_signer_title: string | null
+  ice_field_office: string | null
+  lea_signer_name: string | null
+  moa_poc_name: string | null
+  moa_poc_email: string | null
+  moa_poc_phone: string | null
+  moa_poc_address: string | null
+  addendum_date: string | null
+  addendum_signer: string | null
+}
+
+// "N of M models on file" — onFile = roster models with a PDF, modelsListed = M.
+export interface AgreementCoverage {
+  onFile: number
+  modelsListed: number
+}
+
 export interface AgencyNote {
   kind: string
   related_slug?: string
@@ -200,6 +226,13 @@ interface Agency {
   moa_poc_name: string | null
   moa_poc_email: string | null
   moa_poc_phone: string | null
+  moa_poc_address: string | null
+  moa_addendum_date: string | null
+  moa_addendum_signer: string | null
+  // Per-agreement breakdown (#3): every model-agreement on file. The flat
+  // moa_* / ice_* fields above mirror the "primary" agreement for back-compat.
+  agreements?: Agreement[]
+  agreement_coverage?: AgreementCoverage
   history: HistoryEvent[]
   lee: LeeData | null
   agreement: AgreementMetadata | null
@@ -1068,6 +1101,9 @@ for (const row of grouped) {
     moa_poc_name: null,
     moa_poc_email: null,
     moa_poc_phone: null,
+    moa_poc_address: null,
+    moa_addendum_date: null,
+    moa_addendum_signer: null,
     history: buildHistory(aliasGroupOf(hKey)),
     lee: null,
     agreement: null,
@@ -1125,6 +1161,9 @@ for (const key of terminationKeys) {
     moa_poc_name: null,
     moa_poc_email: null,
     moa_poc_phone: null,
+    moa_poc_address: null,
+    moa_addendum_date: null,
+    moa_addendum_signer: null,
     history: buildHistory(aliasGroupOf(key)),
     lee: null,
     agreement: null,
@@ -1655,7 +1694,11 @@ if (existsSync(MOA_INDEX_PATH)) {
 
 const MOA_EXTRACTS_PATH = resolve(__dirname, 'data/moa_extracts.json')
 if (existsSync(MOA_EXTRACTS_PATH)) {
-  type MoaExtract = {
+  // One PDF's parsed fields + its index metadata (see extract-moa-signers.ts).
+  type AgreementExtract = {
+    model?: string | null // tag: JEM | TFM | WSO | null
+    pdf_url?: string | null
+    date_filename?: string | null // raw MMDDYY / MMDDYYYY from filename
     ice_field_office?: string | null
     ice_signer_name?: string | null
     ice_signer_title?: string | null
@@ -1664,15 +1707,78 @@ if (existsSync(MOA_EXTRACTS_PATH)) {
     lea_poc_name?: string | null
     lea_poc_email?: string | null
     lea_poc_phone?: string | null
+    lea_poc_address?: string | null
+    addendum_date?: string | null
+    addendum_signer?: string | null
+    error?: string
+  }
+  type MoaExtract = AgreementExtract & {
+    agreements?: AgreementExtract[]
     error?: string
   }
   const extracts = JSON.parse(readFileSync(MOA_EXTRACTS_PATH, 'utf8')) as Record<string, MoaExtract>
 
+  // Model tag (JEM/TFM/WSO) → full model name used in agency.models.
+  const MODEL_FULL: Record<string, string> = {
+    JEM: 'Jail Enforcement Model',
+    TFM: 'Task Force Model',
+    WSO: 'Warrant Service Officer',
+  }
+
+  // Raw filename date (MMDDYY or MMDDYYYY) → ISO "YYYY-MM-DD", else null.
+  function isoFromFilenameDate(raw: string | null | undefined): string | null {
+    if (!raw) return null
+    let mm: number, dd: number, yyyy: number
+    if (raw.length === 8) {
+      mm = +raw.slice(0, 2); dd = +raw.slice(2, 4); yyyy = +raw.slice(4, 8)
+    } else if (raw.length === 6) {
+      mm = +raw.slice(0, 2); dd = +raw.slice(2, 4); yyyy = 2000 + +raw.slice(4, 6)
+    } else return null
+    if (mm < 1 || mm > 12 || dd < 1 || dd > 31 || yyyy < 2017 || yyyy > 2100) return null
+    return `${yyyy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`
+  }
+
+  function toAgreement(ex: AgreementExtract): Agreement {
+    return {
+      model: ex.model ? (MODEL_FULL[ex.model] ?? ex.model) : null,
+      pdf_url: ex.pdf_url ?? null,
+      date_signed: ex.date_signed ?? null,
+      date_filename: isoFromFilenameDate(ex.date_filename),
+      ice_signer_name: ex.ice_signer_name ?? null,
+      ice_signer_title: ex.ice_signer_title ?? null,
+      ice_field_office: ex.ice_field_office ?? null,
+      lea_signer_name: ex.lea_signer_name ?? null,
+      moa_poc_name: ex.lea_poc_name ?? null,
+      moa_poc_email: ex.lea_poc_email ?? null,
+      moa_poc_phone: ex.lea_poc_phone ?? null,
+      moa_poc_address: ex.lea_poc_address ?? null,
+      addendum_date: ex.addendum_date ?? null,
+      addendum_signer: ex.addendum_signer ?? null,
+    }
+  }
+
   let moaEnriched = 0
+  let agreementsAttached = 0
   for (const a of [...agencies, ...terminatedAgencies]) {
     const key = `${a.state}|${moaNorm(a.name)}`
     const ex = extracts[key]
-    if (!ex || ex.error) continue
+    if (!ex) continue
+
+    // Per-agreement breakdown (#3): every PDF on file, grouped/sorted in the
+    // index already (JEM, TFM, WSO, then newest). Attached even when the flat
+    // primary fields are sparse, so the UI can still show "agreements on file".
+    if (ex.agreements && ex.agreements.length > 0) {
+      a.agreements = ex.agreements.map(toAgreement)
+      const onFileModels = new Set(a.agreements.map((g) => g.model).filter(Boolean) as string[])
+      a.agreement_coverage = {
+        onFile: a.models.filter((m) => onFileModels.has(m)).length,
+        modelsListed: a.models.length,
+      }
+      agreementsAttached++
+    }
+
+    // Flat primary fields for back-compat (map/OG/state/model pages read these).
+    if (ex.error) continue
     if (ex.ice_field_office) a.ice_field_office = ex.ice_field_office
     if (ex.ice_signer_name) a.ice_signer_name = ex.ice_signer_name
     if (ex.ice_signer_title) a.ice_signer_title = ex.ice_signer_title
@@ -1681,9 +1787,15 @@ if (existsSync(MOA_EXTRACTS_PATH)) {
     if (ex.lea_poc_name) a.moa_poc_name = ex.lea_poc_name
     if (ex.lea_poc_email) a.moa_poc_email = ex.lea_poc_email
     if (ex.lea_poc_phone) a.moa_poc_phone = ex.lea_poc_phone
+    if (ex.lea_poc_address) a.moa_poc_address = ex.lea_poc_address
+    if (ex.addendum_date) a.moa_addendum_date = ex.addendum_date
+    if (ex.addendum_signer) a.moa_addendum_signer = ex.addendum_signer
     moaEnriched++
   }
-  console.log(`\nMOA extracts: enriched ${moaEnriched} agencies with signer / field-office data`)
+  console.log(
+    `\nMOA extracts: enriched ${moaEnriched} agencies (signer / field-office), ` +
+      `attached agreements[] to ${agreementsAttached}`,
+  )
 } else {
   console.log('\nMOA extracts not found — run `pnpm extract:moa-signers` to generate it')
 }
