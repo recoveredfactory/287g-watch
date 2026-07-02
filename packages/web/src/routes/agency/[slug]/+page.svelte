@@ -75,8 +75,34 @@
   });
 
   const intFmt = new Intl.NumberFormat();
-  const dateFmt = (d?: string | null) => {
+
+  // MOA dates (date_signed, date_filename) are free text exactly as written in
+  // the document — "9/22/2025", "1/26/26", "March 17, 2025" — or a MMDDYY
+  // filename stub like "042925". Normalize to ISO YYYY-MM-DD so Date parsing is
+  // timezone-stable: a non-ISO string is parsed as *local* time, which shifts
+  // the calendar day by one for viewers east of UTC and desyncs the SSR (UTC)
+  // and client renders. Returns the input unchanged when we can't parse it.
+  const MONTHS: Record<string, number> = {
+    january: 1, february: 2, march: 3, april: 4, may: 5, june: 6,
+    july: 7, august: 8, september: 9, october: 10, november: 11, december: 12,
+  };
+  const toIsoDate = (d?: string | null): string | null => {
     if (!d) return null;
+    const s = d.trim();
+    const pad = (n: string | number) => String(n).padStart(2, "0");
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s; // already ISO
+    let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})$/); // M/D/YYYY or M/D/YY
+    if (m) return `${m[3].length === 2 ? "20" + m[3] : m[3]}-${pad(m[1])}-${pad(m[2])}`;
+    m = s.match(/^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4}|\d{2})$/); // "Month D, YYYY"
+    const mo = m ? MONTHS[m[1].toLowerCase()] : undefined;
+    if (m && mo) return `${m[3].length === 2 ? "20" + m[3] : m[3]}-${pad(mo)}-${pad(m[2])}`;
+    m = s.match(/^(\d{2})(\d{2})(\d{2})$/); // MMDDYY filename stub → 20YY-MM-DD
+    if (m) return `20${m[3]}-${m[1]}-${m[2]}`;
+    return s;
+  };
+  const dateFmt = (d?: string | null) => {
+    const iso = toIsoDate(d);
+    if (!iso) return null;
     try {
       const localeTag = getLocale() === "es" ? "es-MX" : "en-US";
       return new Intl.DateTimeFormat(localeTag, {
@@ -84,9 +110,9 @@
         month: "long",
         day: "numeric",
         timeZone: "UTC",
-      }).format(new Date(d));
+      }).format(new Date(iso));
     } catch {
-      return d;
+      return d ?? null;
     }
   };
 
@@ -157,7 +183,7 @@
   type HistoryRow = {
     date: string;          // effective date shown (signed if known, else detected)
     detectionDate: string; // when the model first appeared in ICE's roster
-    flagFirstSeen: boolean; // show the "first seen" note (detection lagged >1 week)
+    flagFirstSeen: boolean; // show the "first seen" note (detection lagged > 2 weeks)
     added: string[];
     removed: string[];
   };
@@ -165,7 +191,7 @@
   function buildSignedMap(ags: Agreement[]): Map<string, string[]> {
     const map = new Map<string, string[]>();
     for (const a of ags) {
-      const d = a.date_signed ?? a.date_filename;
+      const d = toIsoDate(a.date_signed ?? a.date_filename);
       if (!a.model || !d) continue;
       const list = map.get(a.model);
       if (list) list.push(d);
@@ -175,25 +201,35 @@
     return map;
   }
   // A model can be signed, dropped, and re-signed (e.g. a TFM signed twice). Match
-  // an addition detected at `detected` to the most recent signing on or before it
-  // — a model can't enter the roster before it's signed — so each appearance keeps
-  // its own signing date instead of collapsing to one. Falls back to the earliest.
-  function pickSignedDate(dates: string[] | undefined, detected: string): string | null {
+  // an addition detected at `detected` to the most recent *unconsumed* signing on
+  // or before it — a model can't enter the roster before it's signed — then
+  // consume it so a later re-add can't reuse the same signing. A model signed once
+  // but dropped and re-added therefore dates its re-add by detection (there's no
+  // second signing to claim) instead of duplicating the first signing's row. Falls
+  // back to the earliest remaining signing, else null (→ date by detection).
+  function takeSignedDate(dates: string[] | undefined, detected: string): string | null {
     if (!dates || dates.length === 0) return null;
     const dt = +new Date(detected);
-    let best: string | null = null;
-    for (const d of dates) if (+new Date(d) <= dt) best = d; // sorted asc → last ≤ dt wins
-    return best ?? dates[0];
+    let idx = -1;
+    for (let i = 0; i < dates.length; i++) if (+new Date(dates[i]) <= dt) idx = i; // last ≤ dt wins
+    if (idx === -1) idx = 0; // none on/before detection → earliest remaining
+    return dates.splice(idx, 1)[0];
   }
   $: historyRows = buildHistoryRows(agency.history ?? [], signedDatesByModel);
   function buildHistoryRows(history: HistoryEvent[], signed: Map<string, string[]>): HistoryRow[] {
     const rows: HistoryRow[] = [];
-    for (const ev of history) {
+    // Copy each model's signings so takeSignedDate can consume them without
+    // mutating the shared map, and walk events oldest→newest so earlier adds
+    // claim earlier signings.
+    const remaining = new Map<string, string[]>();
+    for (const [model, list] of signed) remaining.set(model, [...list]);
+    const events = [...history].sort((a, b) => +new Date(a.date) - +new Date(b.date));
+    for (const ev of events) {
       // Group this event's added models by their effective (signing) date, so a
       // same-snapshot batch signed on different days splits into separate rows.
       const groups = new Map<string, HistoryRow>();
       for (const model of ev.added) {
-        const s = pickSignedDate(signed.get(model), ev.date);
+        const s = takeSignedDate(remaining.get(model), ev.date);
         const date = s ?? ev.date;
         const key = `${date}|${s ? "s" : "d"}`;
         let g = groups.get(key);
