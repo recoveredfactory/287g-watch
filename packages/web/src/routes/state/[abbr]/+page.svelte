@@ -10,6 +10,7 @@
   import ModelLink from "$lib/components/ModelLink.svelte";
   import NewsAiWarning from "$lib/components/NewsAiWarning.svelte";
   import LegislationBadge from "$lib/components/LegislationBadge.svelte";
+  import { SHOW_LEGISLATION_STANCE } from "$lib/features";
 
   export let data: PageData;
 
@@ -159,7 +160,7 @@
       {stateName}
     </h1>
     <div class="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-slate-600">
-      {#if data.news?.legislation}
+      {#if SHOW_LEGISLATION_STANCE && data.news?.legislation}
         <LegislationBadge legislation={data.news.legislation} />
       {/if}
       <span>

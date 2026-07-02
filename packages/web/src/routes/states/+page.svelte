@@ -9,6 +9,7 @@
   import StateTopAgencies from "$lib/components/StateTopAgencies.svelte";
   import NewsAiWarning from "$lib/components/NewsAiWarning.svelte";
   import LegislationBadge from "$lib/components/LegislationBadge.svelte";
+  import { SHOW_LEGISLATION_STANCE } from "$lib/features";
 
   // Honor the OS reduced-motion setting for the unfurl (a 0ms animation = an
   // instant open, no growth).
@@ -152,7 +153,7 @@
             >{row.stateName}</a>
           </h2>
           <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-600">
-            {#if row.news?.legislation}
+            {#if SHOW_LEGISLATION_STANCE && row.news?.legislation}
               <LegislationBadge legislation={row.news.legislation} />
             {/if}
             <span>
