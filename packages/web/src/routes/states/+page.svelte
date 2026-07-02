@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { PageData } from "./$types";
+  import { onMount } from "svelte";
   import { browser } from "$app/environment";
+  import { getCachedGeo } from "$lib/geo";
   import { MODEL_ORDER, MODEL_COLORS, MODEL_SHORT } from "$lib/colors";
   import { localizeHref, getLocale } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
@@ -114,6 +116,43 @@
   };
   const collapseAll = () => (expanded = new Set());
   $: allExpanded = expandable.length > 0 && expandable.every((r) => expanded.has(r.abbr));
+
+  // ── "Jump to your state" ────────────────────────────────────────────────────
+  // Client-side geo (same lookup as the homepage hero) resolves the viewer's
+  // state; if it's one of the cards below, offer a one-tap jump. Every navigable
+  // state has a row, so a detected US state always resolves to a card.
+  let detectedState: string | null = null;
+  let bannerDismissed = false;
+  let justJumped: string | null = null; // brief highlight on the jumped-to card
+  $: detectedRow = detectedState ? rows.find((r) => r.abbr === detectedState) ?? null : null;
+
+  onMount(async () => {
+    const geo = await getCachedGeo();
+    if (geo.state && rows.some((r) => r.abbr === geo.state)) detectedState = geo.state;
+  });
+
+  const jumpToDetected = () => {
+    const abbr = detectedState;
+    if (!abbr) return;
+    track("states_index_jump_detected", { state: abbr });
+    // Open the card so its summary is visible on arrival. Its top anchor doesn't
+    // move as it expands (growth is downward), so we can scroll right away.
+    if (canExpandRow(abbr)) expanded = new Set(expanded).add(abbr);
+    const scroll = () => {
+      document
+        .getElementById(`state-${abbr}`)
+        ?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+      justJumped = abbr;
+      setTimeout(() => justJumped === abbr && (justJumped = null), 1800);
+    };
+    // One frame so the just-opened card is laid out before we scroll to it.
+    requestAnimationFrame(scroll);
+  };
+
+  const canExpandRow = (abbr: string) => {
+    const r = rows.find((row) => row.abbr === abbr);
+    return Boolean(r?.news?.body_html) || (r?.topAgencies.length ?? 0) > 0;
+  };
 </script>
 
 <svelte:head>
@@ -143,6 +182,42 @@
       </button>
     </div>
 
+    <!-- Geo "jump to your state" banner — shows once client-side geo resolves to
+         one of the cards below. Dismissible; self-heals per session via the
+         shared geo cache. -->
+    {#if detectedRow && !bannerDismissed}
+      <div
+        class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5"
+      >
+        <p class="flex items-center gap-2 text-sm text-slate-700">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-4 w-4 shrink-0 text-amber-600" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+          </svg>
+          {m.states_index_detected_lead({ state: detectedRow.stateName })}
+        </p>
+        <div class="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            on:click={jumpToDetected}
+            class="whitespace-nowrap rounded-full bg-slate-900 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-slate-700"
+          >
+            {m.states_index_detected_jump()}
+          </button>
+          <button
+            type="button"
+            on:click={() => (bannerDismissed = true)}
+            aria-label={m.states_index_detected_dismiss()}
+            class="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-amber-100 hover:text-slate-600"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-4 w-4" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    {/if}
+
     <!-- Always-on hallucination caution, at the top of the index above every
          AI-written summary in the cards below. Per-card last-built dates ride
          with each state, so there's no global "updated" line here. -->
@@ -156,7 +231,13 @@
     {#each rows as row (row.abbr)}
       {@const isExp = expanded.has(row.abbr)}
       {@const canExpand = Boolean(row.news?.body_html) || row.topAgencies.length > 0}
-      <article class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+      <article
+        id={`state-${row.abbr}`}
+        class="scroll-mt-24 rounded-lg border bg-white p-5 shadow-sm transition duration-300 sm:p-6 {justJumped ===
+        row.abbr
+          ? 'border-amber-400 ring-2 ring-amber-300'
+          : 'border-slate-200'}"
+      >
         <!-- Topline header: state name + dead-simple figures -->
         <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <h2 class="font-serif text-lg font-bold sm:text-xl">

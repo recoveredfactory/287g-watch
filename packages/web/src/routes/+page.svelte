@@ -15,6 +15,7 @@
   import { m } from "$lib/paraglide/messages.js";
   import Gloss from "$lib/components/Gloss.svelte";
   import { ogImage } from "$lib/ogImage";
+  import { getCachedGeo } from "$lib/geo";
   import { VirtualList } from "svelte-virtuallists";
 
   export let data: PageData;
@@ -140,37 +141,6 @@
       pop_pct: popPct,
     });
   })();
-
-  // Per-session geo cache — dedupes /api/geo across a browsing session but
-  // re-checks on the next visit, so a wrong/stale geo lookup self-heals
-  // instead of being pinned for days. sessionStorage clears when the tab
-  // closes (also makes VPN/location testing trivial: new tab = fresh lookup).
-  const GEO_KEY = "rf-geo-v1";
-
-  async function getCachedGeo(): Promise<{ country: string | null; state: string | null }> {
-    try {
-      const raw = sessionStorage.getItem(GEO_KEY);
-      if (raw) {
-        const cached = JSON.parse(raw);
-        return { country: cached.c ?? null, state: cached.s ?? null };
-      }
-    } catch {}
-    try {
-      const res = await fetch("/api/geo", { cache: "no-store" });
-      if (res.ok) {
-        const data = await res.json();
-        // Only cache a definitive answer; don't pin a transient null for the
-        // whole session.
-        if (data.country) {
-          try {
-            sessionStorage.setItem(GEO_KEY, JSON.stringify({ c: data.country, s: data.state }));
-          } catch {}
-        }
-        return data;
-      }
-    } catch {}
-    return { country: null, state: null };
-  }
 
   function scheduleUrlSync() {
     if (!browser) return;
