@@ -49,10 +49,22 @@ export type NewsArticle = {
   agencies: NewsAgencyRef[];
   counties: string;
 };
+// Statewide legislative posture toward 287(g): pro (a statute backs/mandates
+// participation), anti (a statute limits/bars it), or none. `active` flags a
+// currently-live bill; `description` is the program's English-only rationale,
+// carried through for a later bilingual pass but not rendered yet.
+export type NewsLegislation = {
+  stance: "pro" | "anti" | "none";
+  active: boolean;
+  description: string;
+};
 export type StateNews = {
   tldr_html: string;
   body_html: string;
-  generated_at: string;
+  // `built_at` is the program's own last-built time (the real "generated" signal);
+  // `generated_at` is our local pipeline write stamp, kept as a fallback.
+  built_at: string;
+  legislation: NewsLegislation | null;
   articles: NewsArticle[];
 };
 
@@ -60,6 +72,8 @@ type RawArticle = Record<string, unknown>;
 type NewsLangBlock = { tldr_html?: string; summary_html?: string };
 type NewsFile = {
   generated_at?: string;
+  built_at?: string;
+  legislation?: NewsLegislation | null;
   en?: NewsLangBlock;
   es?: NewsLangBlock;
   internal?: { relevant_articles?: RawArticle[] };
@@ -134,7 +148,8 @@ const pickNews = (
   return {
     tldr_html: block.tldr_html ?? "",
     body_html: block.summary_html ?? "",
-    generated_at: raw.generated_at ?? "",
+    built_at: raw.built_at ?? raw.generated_at ?? "",
+    legislation: raw.legislation ?? null,
     articles: shapeArticles(raw.internal?.relevant_articles ?? [], roster),
   };
 };

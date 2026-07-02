@@ -8,6 +8,8 @@
   import NationalMap from "$lib/components/NationalMap.svelte";
   import TrendCharts from "$lib/components/TrendCharts.svelte";
   import ModelLink from "$lib/components/ModelLink.svelte";
+  import NewsAiWarning from "$lib/components/NewsAiWarning.svelte";
+  import LegislationBadge from "$lib/components/LegislationBadge.svelte";
 
   export let data: PageData;
 
@@ -18,7 +20,9 @@
   const popFmt = new Intl.NumberFormat(localeTag, { notation: "compact", maximumFractionDigits: 1 });
   const dateFmt = new Intl.DateTimeFormat(localeTag, { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
 
-  $: newsUpdatedDate = data.news ? dateFmt.format(new Date(data.news.generated_at)) : "";
+  // The real last-built time from the program (built_at); server already falls it
+  // back to the local write stamp when an older cached response lacks it.
+  $: newsUpdatedDate = data.news ? dateFmt.format(new Date(data.news.built_at)) : "";
 
   // The TL;DR is always shown; one "show more" toggle unfurls BOTH the full
   // narrative body and the source-article table, and a single "show less" at the
@@ -214,9 +218,22 @@
       <h2 class="font-serif text-lg font-bold text-slate-900 sm:text-xl">
         {m.news_heading({ state: stateName })}
       </h2>
-      <p class="mt-1 text-xs italic text-slate-400">
-        {m.news_updated({ date: newsUpdatedDate })}
-      </p>
+
+      <!-- Meta line, ahead of the summary: the real last-built date and the
+           statewide legislative-stance pill, both riding with this state. -->
+      <div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <p class="text-xs italic text-slate-400">
+          {m.news_updated({ date: newsUpdatedDate })}
+        </p>
+        {#if data.news.legislation}
+          <LegislationBadge legislation={data.news.legislation} />
+        {/if}
+      </div>
+
+      <!-- Small hallucination caution, directly above the AI-written summary. -->
+      <div class="mt-4 max-w-prose">
+        <NewsAiWarning />
+      </div>
 
       <!-- TL;DR lead — a narrow reading measure (max-w-prose), set apart from the
            full-width map/chart above it. -->

@@ -138,6 +138,25 @@ function artifact(result: ProgramResult, name: string): Artifact | undefined {
   return result.artifacts.find((a) => a.name === name)
 }
 
+// First (only) row of a single-row table artifact, or undefined.
+function firstRow(result: ProgramResult, name: string): Record<string, unknown> | undefined {
+  const data = artifact(result, name)?.data
+  return Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined
+}
+
+// The program now reports a statewide legislative posture toward 287(g):
+//   pro  — a statute backs/mandates local participation (e.g. FL SB 168)
+//   anti — a statute limits or bars it (e.g. sanctuary-style laws)
+//   none — no enacted statewide statute either way; participation is local
+// `con` is tolerated as a synonym for `anti`. Anything else falls to none.
+type LegStance = 'pro' | 'anti' | 'none'
+const normStance = (s: unknown): LegStance => {
+  const v = String(s ?? '').toLowerCase().trim()
+  if (v === 'pro') return 'pro'
+  if (v === 'anti' || v === 'con') return 'anti'
+  return 'none'
+}
+
 // ── Google News link resolution ──────────────────────────────────────────────
 const gnewsCache: Record<string, string> = existsSync(GNEWS_CACHE)
   ? JSON.parse(readFileSync(GNEWS_CACHE, 'utf8'))
@@ -363,11 +382,36 @@ async function buildState(abbr: string, name: string) {
     typeof r.Link === 'string' && gnewsCache[r.Link] ? { ...r, Link: gnewsCache[r.Link] } : r,
   )
 
+  // The real "last built" timestamp is the program's own run_meta.generated_at —
+  // when the summary content was produced upstream — not our local pipeline clock
+  // (that stays `generated_at`, below, as the file-write stamp). Falls back to the
+  // write stamp if an older cached response predates the run_meta artifact.
+  const runMeta = firstRow(result, 'run_meta')
+  const builtAt =
+    typeof runMeta?.generated_at === 'string' ? runMeta.generated_at : new Date().toISOString()
+
+  // Statewide legislative posture (pro/anti/none) plus whether a bill is currently
+  // live and the program's one-paragraph rationale. The description is English-only
+  // upstream for now, so the site renders `stance` as a localized badge and holds
+  // the prose here for a later bilingual pass. Null when the program omits it
+  // (older cached responses).
+  const legRow = firstRow(result, 'legislation')
+  const legislation = legRow
+    ? {
+        stance: normStance(legRow.legislation_stance),
+        active: String(legRow.legislation_active ?? '').toLowerCase() === 'yes',
+        description:
+          typeof legRow.legislation_description === 'string' ? legRow.legislation_description : '',
+      }
+    : null
+
   const out = {
     abbr,
     state: name,
     after: AFTER,
     generated_at: new Date().toISOString(),
+    built_at: builtAt,
+    legislation,
     en: {
       tldr_html: mdToHtml(prose.en.tldr, links),
       summary_html: mdToHtml(prose.en.summary, links),
@@ -382,6 +426,7 @@ async function buildState(abbr: string, name: string) {
       publications: artifact(result, 'publications')?.data ?? [],
       roster_grounding: artifact(result, 'roster_grounding')?.data ?? [],
       cost_ledger: artifact(result, 'cost_ledger')?.data ?? [],
+      run_meta: runMeta ?? null,
     },
   }
 

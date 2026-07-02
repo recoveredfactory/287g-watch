@@ -11,10 +11,19 @@ import { buildTimeline } from "$lib/timeline";
 // (TL;DR always shown, full body behind a per-row expand). Lets us eyeball all
 // the generated summaries in one place before the real index lands.
 
+// Statewide 287(g) legislative posture (see the per-state page's NewsLegislation).
+export type StateIndexLegislation = {
+  stance: "pro" | "anti" | "none";
+  active: boolean;
+  description: string;
+};
 export type StateIndexNews = {
   tldr_html: string;
   body_html: string;
-  generated_at: string;
+  // Program's own last-built time (real "generated" signal); local write stamp is
+  // the fallback. Rendered per-card so each state carries its own freshness.
+  built_at: string;
+  legislation: StateIndexLegislation | null;
 };
 
 // Compact SVG mini-map: state outline + a hint of highways, both pre-projected
@@ -59,9 +68,15 @@ export type StatesIndexData = {
 };
 
 type NewsLangBlock = { tldr_html?: string; summary_html?: string };
-type NewsFile = { generated_at?: string; en?: NewsLangBlock; es?: NewsLangBlock };
+type NewsFile = {
+  generated_at?: string;
+  built_at?: string;
+  legislation?: StateIndexLegislation | null;
+  en?: NewsLangBlock;
+  es?: NewsLangBlock;
+};
 
-// Resolve the active locale's block (falling back to EN) and keep only the two
+// Resolve the active locale's block (falling back to EN) and keep only the
 // fields this page renders. Mirrors the per-state page's pickNews, minus the
 // article-table shaping the index doesn't show.
 const pickNews = (raw: NewsFile | null): StateIndexNews | null => {
@@ -71,7 +86,8 @@ const pickNews = (raw: NewsFile | null): StateIndexNews | null => {
   return {
     tldr_html: block.tldr_html ?? "",
     body_html: block.summary_html ?? "",
-    generated_at: raw.generated_at ?? "",
+    built_at: raw.built_at ?? raw.generated_at ?? "",
+    legislation: raw.legislation ?? null,
   };
 };
 
@@ -236,10 +252,11 @@ export const load = async ({ fetch }): Promise<StatesIndexData> => {
       a.stateName.localeCompare(b.stateName),
   );
 
-  // Newest summary timestamp across the set, for the page's "updated" line.
+  // Newest last-built timestamp across the set (kept for reference; per-card
+  // freshness now rides with each state rather than a single header line).
   const generatedAt =
     rows
-      .map((r) => r.news?.generated_at)
+      .map((r) => r.news?.built_at)
       .filter((v): v is string => Boolean(v))
       .sort()
       .at(-1) ?? null;

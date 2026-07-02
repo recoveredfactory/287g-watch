@@ -7,6 +7,8 @@
   import StateMiniMap from "$lib/components/StateMiniMap.svelte";
   import StateTrendMini from "$lib/components/StateTrendMini.svelte";
   import StateTopAgencies from "$lib/components/StateTopAgencies.svelte";
+  import NewsAiWarning from "$lib/components/NewsAiWarning.svelte";
+  import LegislationBadge from "$lib/components/LegislationBadge.svelte";
 
   // Honor the OS reduced-motion setting for the unfurl (a 0ms animation = an
   // instant open, no growth).
@@ -54,7 +56,7 @@
   };
 
   export let data: PageData;
-  $: ({ rows, generatedAt, trendMonths } = data);
+  $: ({ rows, trendMonths } = data);
 
   const localeTag = getLocale() === "es" ? "es-MX" : "en-US";
   const intFmt = new Intl.NumberFormat(localeTag);
@@ -63,7 +65,9 @@
   const monthFmt = new Intl.DateTimeFormat(localeTag, { month: "short", year: "2-digit", timeZone: "UTC" });
   const monthLabel = (ym: string | undefined) => (ym ? monthFmt.format(new Date(`${ym}-01`)) : "");
 
-  $: updatedDate = generatedAt ? dateFmt.format(new Date(generatedAt)) : "";
+  // Per-card last-built date (the real built_at from the program), formatted in
+  // the active locale. Each state carries its own freshness now.
+  const builtDate = (built: string) => (built ? dateFmt.format(new Date(built)) : "");
   $: trendStart = monthLabel(trendMonths?.[0]);
   $: trendEnd = monthLabel(trendMonths?.at(-1));
 
@@ -122,9 +126,13 @@
       >
         {allExpanded ? m.states_index_collapse_all() : m.states_index_expand_all()}
       </button>
-      {#if updatedDate}
-        <span class="text-xs italic text-slate-400">{m.news_updated({ date: updatedDate })}</span>
-      {/if}
+    </div>
+
+    <!-- Always-on hallucination caution, at the top of the index above every
+         AI-written summary in the cards below. Per-card last-built dates ride
+         with each state, so there's no global "updated" line here. -->
+    <div class="mt-4 max-w-prose">
+      <NewsAiWarning />
     </div>
   </header>
 
@@ -171,6 +179,16 @@
         <div class="mt-4 sm:grid sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] sm:items-start sm:gap-10">
           <div class="min-w-0">
             {#if row.news}
+              <!-- Meta line ahead of the summary: this state's own last-built
+                   date and its legislative-stance pill. -->
+              <div class="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span class="text-xs italic text-slate-400">
+                  {m.news_updated({ date: builtDate(row.news.built_at) })}
+                </span>
+                {#if row.news.legislation}
+                  <LegislationBadge legislation={row.news.legislation} />
+                {/if}
+              </div>
               <div class="news-prose news-tldr max-w-prose">{@html row.news.tldr_html}</div>
             {:else}
               <p class="text-sm italic text-slate-400">{m.states_index_no_summary()}</p>
