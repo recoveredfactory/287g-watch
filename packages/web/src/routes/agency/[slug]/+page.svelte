@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { PageData } from "./$types";
-  import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_SHORT, MODEL_SLUG } from "$lib/colors";
+  import type { Agreement, HistoryEvent } from "$lib/homeData.types";
+  import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_DARK_COLORS, MODEL_SHORT, MODEL_SLUG } from "$lib/colors";
   import { STATE_NAMES } from "$lib/states";
   import { localizeHref, getLocale } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
@@ -93,12 +94,124 @@
   // signing date. Since signed_date is now ICE's earliest reported date (#118),
   // the two land within days for most agencies — the tile only earns its space
   // for the cases where they genuinely differ (e.g. long-standing agreements
-  // first tracked in 2025). Threshold: more than two weeks apart.
+  // first tracked in 2025). Threshold: more than two weeks apart (empirically
+  // chosen). Shared by the key-facts tile and the history "first seen" note so
+  // the two can't drift apart.
   const DAY_MS = 86_400_000;
+  const FIRST_SEEN_LAG_MS = 14 * DAY_MS;
   $: showFirstSeen =
     !!agency.first_seen_date &&
     (!agency.signed_date ||
-      Math.abs(+new Date(agency.first_seen_date) - +new Date(agency.signed_date)) > 14 * DAY_MS);
+      Math.abs(+new Date(agency.first_seen_date) - +new Date(agency.signed_date)) > FIRST_SEEN_LAG_MS);
+
+  // Per-agreement display (#3). An agency can hold several agreements (JEM/TFM/WSO)
+  // whose ICE signer / date / public-affairs POC sometimes diverge. We show the
+  // grouped "Agreements on file" section when there's more than one agreement, or
+  // when the roster lists a model we have no PDF for (partial coverage) — that's
+  // when the single-tile view would either hide a divergent POC or imply the
+  // archive is complete. A lone, fully-covered agreement still renders "as today".
+  $: coverage = agency.agreement_coverage;
+  $: isPartial = !!coverage && coverage.onFile < coverage.modelsListed;
+  $: showAgreements =
+    !!agency.agreements && agency.agreements.length > 0 &&
+    (agency.agreements.length > 1 || isPartial);
+
+  // The single-agreement view now renders the same card as the multi view. Prefer
+  // the real per-agreement record when we have one; otherwise synthesize an
+  // Agreement from the flat primary fields so older/PDF-less agencies still show a
+  // card. Null when there's nothing agreement-specific worth carding.
+  $: singleAgreement = deriveSingleAgreement(agency);
+  function deriveSingleAgreement(a: typeof agency): Agreement | null {
+    if (a.agreements && a.agreements.length >= 1) return a.agreements[0];
+    const hasContent =
+      a.ice_signer_name || a.lea_signer_name || a.ice_field_office ||
+      a.moa_poc_name || a.moa_poc_address || a.moa_poc_phone || a.moa_poc_email || a.moa_url;
+    if (!hasContent) return null;
+    return {
+      model: a.primary_model ?? null,
+      pdf_url: a.moa_url ?? null,
+      date_signed: a.signed_date ?? null,
+      date_filename: null,
+      ice_signer_name: a.ice_signer_name ?? null,
+      ice_signer_title: a.ice_signer_title ?? null,
+      ice_field_office: a.ice_field_office ?? null,
+      lea_signer_name: a.lea_signer_name ?? null,
+      moa_poc_name: a.moa_poc_name ?? null,
+      moa_poc_email: a.moa_poc_email ?? null,
+      moa_poc_phone: a.moa_poc_phone ?? null,
+      moa_poc_address: a.moa_poc_address ?? null,
+      addendum_date: null,
+      addendum_signer: null,
+    };
+  }
+
+  // Agreement history, re-keyed on signing dates. ICE's roster snapshots tell us
+  // when a model was first *detected* (event.date); the signed MOAs tell us when
+  // it was actually *signed*. We show the signing date as the primary date on the
+  // timeline — falling back to the detection date when no signed PDF exists.
+  //
+  // The "first seen in ICE data" note is only worth showing when detection lagged
+  // signing past FIRST_SEEN_LAG_MS: ICE publishes 2–3 roster updates a week, so a
+  // few days' gap is normal publishing lag, not signal. A longer gap is a real
+  // oddity (same threshold as the key-facts tile above).
+  type HistoryRow = {
+    date: string;          // effective date shown (signed if known, else detected)
+    detectionDate: string; // when the model first appeared in ICE's roster
+    flagFirstSeen: boolean; // show the "first seen" note (detection lagged >1 week)
+    added: string[];
+    removed: string[];
+  };
+  $: signedDatesByModel = buildSignedMap(agency.agreements ?? []);
+  function buildSignedMap(ags: Agreement[]): Map<string, string[]> {
+    const map = new Map<string, string[]>();
+    for (const a of ags) {
+      const d = a.date_signed ?? a.date_filename;
+      if (!a.model || !d) continue;
+      const list = map.get(a.model);
+      if (list) list.push(d);
+      else map.set(a.model, [d]);
+    }
+    for (const list of map.values()) list.sort((x, y) => +new Date(x) - +new Date(y));
+    return map;
+  }
+  // A model can be signed, dropped, and re-signed (e.g. a TFM signed twice). Match
+  // an addition detected at `detected` to the most recent signing on or before it
+  // — a model can't enter the roster before it's signed — so each appearance keeps
+  // its own signing date instead of collapsing to one. Falls back to the earliest.
+  function pickSignedDate(dates: string[] | undefined, detected: string): string | null {
+    if (!dates || dates.length === 0) return null;
+    const dt = +new Date(detected);
+    let best: string | null = null;
+    for (const d of dates) if (+new Date(d) <= dt) best = d; // sorted asc → last ≤ dt wins
+    return best ?? dates[0];
+  }
+  $: historyRows = buildHistoryRows(agency.history ?? [], signedDatesByModel);
+  function buildHistoryRows(history: HistoryEvent[], signed: Map<string, string[]>): HistoryRow[] {
+    const rows: HistoryRow[] = [];
+    for (const ev of history) {
+      // Group this event's added models by their effective (signing) date, so a
+      // same-snapshot batch signed on different days splits into separate rows.
+      const groups = new Map<string, HistoryRow>();
+      for (const model of ev.added) {
+        const s = pickSignedDate(signed.get(model), ev.date);
+        const date = s ?? ev.date;
+        const key = `${date}|${s ? "s" : "d"}`;
+        let g = groups.get(key);
+        if (!g) {
+          const lag = +new Date(ev.date) - +new Date(date);
+          g = { date, detectionDate: ev.date, flagFirstSeen: !!s && lag > FIRST_SEEN_LAG_MS, added: [], removed: [] };
+          groups.set(key, g);
+        }
+        g.added.push(model);
+      }
+      rows.push(...groups.values());
+      if (ev.removed.length > 0) {
+        rows.push({ date: ev.date, detectionDate: ev.date, flagFirstSeen: false, added: [], removed: ev.removed });
+      }
+    }
+    rows.sort((a, b) => +new Date(a.date) - +new Date(b.date));
+    return rows;
+  }
 </script>
 
 <svelte:head>
@@ -254,6 +367,92 @@
     </div>
   {/if}
 
+  <!-- One agreement, rendered identically for the single- and multi-agreement
+       views. Three labeled blocks — the agency signatory, the ICE signatory (+
+       field office), and the public-affairs contact — each collapsing when its
+       data is missing. -->
+  {#snippet agreementCard(ag: Agreement)}
+    {@const agDate = dateFmt(ag.date_signed ?? ag.date_filename)}
+    <article class="rounded-xl border border-slate-200 bg-slate-50 p-5 sm:p-6">
+      <!-- Model + signed date, with a link straight to the agreement PDF. -->
+      <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <div>
+          <h3
+            class="font-serif text-lg font-bold leading-tight"
+            style="color: {MODEL_DARK_COLORS[ag.model ?? ''] ?? '#0f172a'};"
+          >{MODEL_SHORT[ag.model ?? ''] ?? ag.model ?? m.agency_agreements_other_model()}</h3>
+          {#if agDate}
+            <p class="mt-0.5 text-sm text-slate-500">{m.agency_agreements_signed({ date: agDate })}</p>
+          {/if}
+        </div>
+        {#if ag.pdf_url}
+          <a
+            href={ag.pdf_url}
+            target="_blank"
+            rel="noreferrer"
+            class="shrink-0 text-sm font-semibold text-slate-500 no-underline hover:text-slate-800 hover:underline"
+          >{m.agency_moa_view_pdf()}</a>
+        {/if}
+      </div>
+
+      <!-- Signed by (agency): the local-agency signatory -->
+      {#if ag.lea_signer_name}
+        <div class="mt-4 border-t border-slate-200 pt-4">
+          <p class="text-sm font-semibold text-slate-800">{m.agency_signed_by_party({ party: agency.name })}</p>
+          <dl class="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+            <dt class="whitespace-nowrap text-slate-500">{m.agency_contact_name()}</dt>
+            <dd class="min-w-0 font-medium text-slate-900">{ag.lea_signer_name}</dd>
+          </dl>
+        </div>
+      {/if}
+
+      <!-- Signed by (ICE): the ICE signatory + the field office they signed for -->
+      {#if ag.ice_signer_name || ag.ice_field_office}
+        <div class="mt-4 border-t border-slate-200 pt-4">
+          <p class="text-sm font-semibold text-slate-800">{m.agency_signed_by_party({ party: "ICE" })}</p>
+          <dl class="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+            {#if ag.ice_signer_name}
+              <dt class="whitespace-nowrap text-slate-500">{m.agency_contact_name()}</dt>
+              <dd class="min-w-0">
+                <span class="font-medium text-slate-900">{ag.ice_signer_name}</span>
+                {#if ag.ice_signer_title}<span class="block text-slate-500">{ag.ice_signer_title}</span>{/if}
+              </dd>
+            {/if}
+            {#if ag.ice_field_office}
+              <dt class="whitespace-nowrap text-slate-500">{m.agency_field_office()}</dt>
+              <dd class="min-w-0 text-slate-700">{ag.ice_field_office}</dd>
+            {/if}
+          </dl>
+        </div>
+      {/if}
+
+      <!-- Public-affairs contact: named in the MOA, distinct from the signatory -->
+      {#if ag.moa_poc_name || ag.moa_poc_address || ag.moa_poc_phone || ag.moa_poc_email}
+        <div class="mt-4 border-t border-slate-200 pt-4">
+          <p class="text-sm font-semibold text-slate-800">{m.agency_agreements_pa_contact()}</p>
+          <dl class="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+            {#if ag.moa_poc_name}
+              <dt class="whitespace-nowrap text-slate-500">{m.agency_contact_name()}</dt>
+              <dd class="min-w-0 font-medium text-slate-900">{ag.moa_poc_name}</dd>
+            {/if}
+            {#if ag.moa_poc_address}
+              <dt class="whitespace-nowrap text-slate-500">{m.agency_contact_address()}</dt>
+              <dd class="min-w-0 text-slate-700">{ag.moa_poc_address}</dd>
+            {/if}
+            {#if ag.moa_poc_phone}
+              <dt class="whitespace-nowrap text-slate-500">{m.agency_contact_phone()}</dt>
+              <dd class="min-w-0"><a href="tel:{ag.moa_poc_phone}" class="text-slate-700 hover:underline">{ag.moa_poc_phone}</a></dd>
+            {/if}
+            {#if ag.moa_poc_email}
+              <dt class="whitespace-nowrap text-slate-500">{m.agency_contact_email()}</dt>
+              <dd class="min-w-0"><a href="mailto:{ag.moa_poc_email}" class="break-words text-slate-700 hover:underline">{ag.moa_poc_email}</a></dd>
+            {/if}
+          </dl>
+        </div>
+      {/if}
+    </article>
+  {/snippet}
+
   <!-- Key facts -->
   <dl class="mt-8 grid gap-6 border-y border-slate-200 py-8 sm:grid-cols-3">
     {#if agency.signed_date}
@@ -268,29 +467,8 @@
         <dd class="mt-1 text-xl font-bold text-slate-900">{dateFmt(agency.first_seen_date)}</dd>
       </div>
     {/if}
-    {#if agency.ice_field_office}
-      <div>
-        <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">ICE Field Office</dt>
-        <dd class="mt-1 text-xl font-bold text-slate-900">{agency.ice_field_office}</dd>
-      </div>
-    {/if}
-    {#if agency.ice_signer_name}
-      <div>
-        <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">Signed by (ICE)</dt>
-        <dd class="mt-1 text-xl font-bold text-slate-900">{agency.ice_signer_name}</dd>
-        {#if agency.ice_signer_title}
-          <dd class="mt-0.5 text-xs text-slate-400">{agency.ice_signer_title}</dd>
-        {/if}
-        <dd class="mt-0.5 text-xs italic text-slate-400">From signed MOA</dd>
-      </div>
-    {/if}
-    {#if agency.lea_signer_name}
-      <div>
-        <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">Signed by (LEA)</dt>
-        <dd class="mt-1 text-xl font-bold text-slate-900">{agency.lea_signer_name}</dd>
-        <dd class="mt-0.5 text-xs italic text-slate-400">From signed MOA</dd>
-      </div>
-    {/if}
+    <!-- ICE field office / signer / public-affairs contact now live in the
+         agreement card below (single- and multi-agreement views alike). -->
     {#if agency.lee?.population != null}
       <div>
         <dt class="text-xs font-semibold uppercase tracking-widest text-slate-500">{m.agency_population()}</dt>
@@ -357,8 +535,9 @@
     {/if}
   </dl>
 
-  <!-- Agreement -->
-  {#if agency.moa_url}
+  <!-- Agreement intro (multi-agreement view only: it sits above the per-model
+       cards. The single-agreement view renders its own heading + card below). -->
+  {#if showAgreements && agency.moa_url}
     <section class="mt-10">
       <h2 class="font-serif text-xl font-bold text-slate-900">{m.agency_moa_heading()}</h2>
       <p class="mt-2 text-slate-600">
@@ -375,7 +554,49 @@
     </section>
   {/if}
 
-  <!-- Contact -->
+  <!-- Single-agreement view: the same card the multi-agreement view uses, under
+       the MOA heading. The signatory / ICE / public-affairs contact that used to
+       be scattered across key-facts tiles + a separate section now live here. -->
+  {#if !showAgreements && singleAgreement}
+    <section class="mt-10">
+      <h2 class="font-serif text-xl font-bold text-slate-900">{m.agency_moa_heading()}</h2>
+      {#if agency.moa_url}
+        <p class="mt-2 text-slate-600">
+          <Gloss text={m.agency_moa_body({ agency_name: agency.name })} {seen} />
+        </p>
+      {/if}
+      <div class="mt-5">
+        {@render agreementCard(singleAgreement)}
+      </div>
+      <p class="mt-3 text-xs italic text-slate-400">{m.agency_pa_contact_note()}</p>
+    </section>
+  {/if}
+
+  <!-- Agreements on file (#3): one block per model-agreement (JEM/TFM/WSO). Their
+       ICE signer / date / public-affairs POC sometimes diverge, so each is shown
+       and attributed separately. Framed as "on file" — the archive is incomplete. -->
+  {#if showAgreements && agency.agreements}
+    <section class="mt-10">
+      <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h2 class="font-serif text-xl font-bold text-slate-900">{m.agency_agreements_heading()}</h2>
+        {#if coverage && coverage.modelsListed > 1}
+          <p class="text-xs font-semibold uppercase tracking-wider {isPartial ? 'text-amber-700' : 'text-slate-500'}">
+            {m.agency_agreements_coverage({ onFile: coverage.onFile, total: coverage.modelsListed })}
+          </p>
+        {/if}
+      </div>
+      <p class="mt-1 text-sm text-slate-500">{m.agency_agreements_caption()}</p>
+
+      <div class="mt-5 space-y-4">
+        {#each agency.agreements as ag}
+          {@render agreementCard(ag)}
+        {/each}
+      </div>
+      <p class="mt-3 text-xs italic text-slate-400">{m.agency_pa_contact_note()}</p>
+    </section>
+  {/if}
+
+  <!-- Contact (the agency's own public contact info, sourced separately) -->
   <section class="mt-10">
     <h2 class="font-serif text-xl font-bold text-slate-900">{m.agency_contact_heading()}</h2>
     {#if agency.contact_address || agency.contact_phone || agency.contact_email || agency.contact_website}
@@ -405,40 +626,19 @@
           </div>
         {/if}
       </dl>
-    {:else if agency.moa_poc_name || agency.moa_poc_email || agency.moa_poc_phone}
-      <dl class="mt-4 space-y-3">
-        {#if agency.moa_poc_name}
-          <div class="flex gap-4">
-            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-500">POC</dt>
-            <dd class="text-slate-700">{agency.moa_poc_name}</dd>
-          </div>
-        {/if}
-        {#if agency.moa_poc_phone}
-          <div class="flex gap-4">
-            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Phone</dt>
-            <dd><a href="tel:{agency.moa_poc_phone}">{agency.moa_poc_phone}</a></dd>
-          </div>
-        {/if}
-        {#if agency.moa_poc_email}
-          <div class="flex gap-4">
-            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Email</dt>
-            <dd><a href="mailto:{agency.moa_poc_email}">{agency.moa_poc_email}</a></dd>
-          </div>
-        {/if}
-        <p class="text-xs italic text-slate-400">Source: signed MOA public affairs contact</p>
-      </dl>
     {:else}
       <p class="mt-3 text-sm italic text-slate-600">{m.agency_contact_none()}</p>
     {/if}
   </section>
 
-  <!-- Agreement history (restored in #118 Phase B-min, now on rename-resolved data) -->
-  {#if agency.history && agency.history.length > 0}
+  <!-- Agreement history (restored in #118 Phase B-min, now on rename-resolved data).
+       Re-keyed on signing dates; the detection date rides along as a "first seen" note. -->
+  {#if historyRows.length > 0}
     <section class="mt-10">
       <h2 class="font-serif text-xl font-bold text-slate-900">{m.agency_history_heading()}</h2>
       <p class="mt-1 text-sm text-slate-600">{m.agency_history_intro()}</p>
       <ol class="mt-5 space-y-0 border-l-2 border-slate-200 pl-5">
-        {#each [...agency.history].reverse() as event}
+        {#each [...historyRows].reverse() as event}
           {@const isRemoved = event.removed.length > 0 && event.added.length === 0}
           {@const isAdded = event.added.length > 0}
           <li class="relative pb-5 last:pb-0">
@@ -450,6 +650,9 @@
             <time class="block text-xs font-semibold uppercase tracking-wider text-slate-500">
               {dateFmt(event.date)}
             </time>
+            {#if event.flagFirstSeen}
+              <p class="mt-0.5 text-xs text-slate-400">{m.agency_first_seen()} · {dateFmt(event.detectionDate)}</p>
+            {/if}
             <ul class="mt-1 space-y-0.5">
               {#each event.added as model}
                 <li class="flex items-center gap-1.5 text-sm text-slate-700">
