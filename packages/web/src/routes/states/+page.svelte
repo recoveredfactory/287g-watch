@@ -67,16 +67,32 @@
   $: trendStart = monthLabel(trendMonths?.[0]);
   $: trendEnd = monthLabel(trendMonths?.at(-1));
 
+  // Umami custom event (mirrors +layout's trackConversion; no-ops in dev where
+  // the script isn't loaded). Passes the state so opens are filterable per state.
+  const track = (event: string, data?: Record<string, unknown>) => {
+    if (typeof window === "undefined") return;
+    const w = window as unknown as {
+      umami?: { track?: (e: string, d?: Record<string, unknown>) => void };
+    };
+    w.umami?.track?.(event, data);
+  };
+
   // Per-row expand state. Expand-all only targets rows that actually have a full
   // body to reveal (the TL;DR is always visible).
   let expanded: Set<string> = new Set();
   const toggle = (abbr: string) => {
     const next = new Set(expanded);
-    next.has(abbr) ? next.delete(abbr) : next.add(abbr);
+    const opening = !next.has(abbr);
+    opening ? next.add(abbr) : next.delete(abbr);
     expanded = next;
+    // Fire only on open — the "read the summary" engagement signal.
+    if (opening) track("states_index_read_summary", { state: abbr });
   };
   $: expandable = rows.filter((r) => r.news?.body_html || r.topAgencies.length);
-  const expandAll = () => (expanded = new Set(expandable.map((r) => r.abbr)));
+  const expandAll = () => {
+    expanded = new Set(expandable.map((r) => r.abbr));
+    track("states_index_expand_all", { count: expandable.length });
+  };
   const collapseAll = () => (expanded = new Set());
   $: allExpanded = expandable.length > 0 && expandable.every((r) => expanded.has(r.abbr));
 </script>
