@@ -144,16 +144,21 @@ function firstRow(result: ProgramResult, name: string): Record<string, unknown> 
   return Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined
 }
 
-// The program now reports a statewide legislative posture toward 287(g):
-//   pro  — a statute backs/mandates local participation (e.g. FL SB 168)
-//   anti — a statute limits or bars it (e.g. sanctuary-style laws)
-//   none — no enacted statewide statute either way; participation is local
-// `con` is tolerated as a synonym for `anti`. Anything else falls to none.
+// The program reports a statewide legislative posture toward 287(g). Its own
+// vocabulary is `compels` / `prohibits` / `none`; we normalize to pro/anti/none:
+//   pro  (compels)   — state policy/law mandates or forces local participation
+//                      (e.g. FL's DeSantis/Uthmeier top-down mandate)
+//   anti (prohibits) — state law limits or bars it (e.g. CA's SB 54 sanctuary)
+//   none             — no enacted statewide direction; participation is local
+// Also tolerate the pro/anti/con/mandate/bar family in case the label drifts;
+// anything unrecognized falls to none.
 type LegStance = 'pro' | 'anti' | 'none'
+const PRO_WORDS = new Set(['pro', 'compels', 'compel', 'mandates', 'mandate', 'requires', 'require'])
+const ANTI_WORDS = new Set(['anti', 'con', 'prohibits', 'prohibit', 'bars', 'bar', 'limits', 'limit', 'restricts', 'restrict'])
 const normStance = (s: unknown): LegStance => {
   const v = String(s ?? '').toLowerCase().trim()
-  if (v === 'pro') return 'pro'
-  if (v === 'anti' || v === 'con') return 'anti'
+  if (PRO_WORDS.has(v)) return 'pro'
+  if (ANTI_WORDS.has(v)) return 'anti'
   return 'none'
 }
 

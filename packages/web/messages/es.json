@@ -25,7 +25,6 @@
   "lang_en": "EN",
   "lang_es": "ES",
   "source_material_notice": "Los datos y documentos de origen (nombres de agencias, acuerdos MOA, registros oficiales) permanecen en inglés tal como se publicaron originalmente.",
-
   "news_heading": "Cobertura de prensa sobre el programa 287(g) de ICE en {state}",
   "news_updated": "Actualizado el {date} · Generado con PromptQL",
   "news_show_more": "Mostrar más",
@@ -41,8 +40,6 @@
   "news_legislation_pro": "Ley estatal respalda la 287(g)",
   "news_legislation_anti": "Ley estatal limita la 287(g)",
   "news_legislation_none": "Sin ley estatal sobre la 287(g)",
-  "news_legislation_active": "proyecto de ley pendiente",
-
   "states_index_eyebrow": "Prototipo",
   "states_index_title": "Índice de estados",
   "states_index_subtitle": "Resúmenes de noticias y cifras destacadas de los {count} estados y territorios. Expanda cualquier estado para leer su resumen completo.",
@@ -57,7 +54,6 @@
   "states_index_spark_aria": "Crecimiento de agencias en {state} desde diciembre de 2024",
   "states_index_top_agencies": "Agencias más grandes",
   "states_index_officers": "agentes jurados",
-
   "state_meta_title": "Agencias 287(g) de {state}",
   "state_meta_description": "{count} agencias en {state} que participan en el programa de control migratorio 287(g).",
   "state_eyebrow": "Programa 287(g)",
@@ -82,11 +78,9 @@
   "state_th_signed": "Firmado",
   "state_th_population": "Población",
   "state_th_moa": "MOA",
-
   "home_meta_title": "287(g) Watch — Alianzas locales de cumplimiento de ICE",
   "home_meta_description_with_count": "{count} agencias locales de seguridad pública han firmado acuerdos 287(g) con ICE que autorizan a sus oficiales a hacer cumplir la ley federal de inmigración. Las rastreamos todas.",
   "home_meta_description_no_data": "Rastreo de agencias locales de seguridad pública con acuerdos 287(g) que autorizan a sus oficiales a hacer cumplir la ley federal de inmigración.",
-
   "home_hero_eyebrow": "287(g) Watch",
   "home_hero_headline_line1": "Cada acuerdo 287(g) activo",
   "home_hero_headline_line2": "entre la policía local e ICE",
@@ -95,12 +89,9 @@
   "home_stat_states": "estados y territorios",
   "home_stat_population": "residentes de jurisdicciones participantes",
   "home_stat_agencies_footnote": "*Identificadores FBI únicos; algunos identificadores agrupan varios nombres de agencia.",
-
   "home_hero_state_callout_standard": "En {state}, {agency_pct}% de las agencias participan, cubriendo {pop_pct}% de la población del estado.",
   "home_hero_state_callout_fl": "En {state}, {agency_pct}% de las agencias participan, cubriendo {pop_pct}% de la población del estado. Florida exige la cooperación 287(g) bajo SB 168 (2019).",
   "home_hero_state_callout_none": "Ninguna agencia en {state} participa actualmente en 287(g).",
-
-
   "home_map_heading": "Agencias 287(g), por modelo del programa",
   "home_map_subhead": "Haz clic en cualquier punto para ver el acuerdo y los registros de la agencia.",
   "home_map_size_note": "El tamaño del punto escala con el número de agentes jurados (FBI LEE).",
@@ -111,19 +102,16 @@
   "home_map_boundaries_note": "Los puntos marcan dónde se ubica una agencia, no el área que cubre. Los límites jurisdiccionales están en desarrollo.",
   "home_map_empty_title": "No hay datos cargados",
   "home_map_empty_subtitle": "Ejecuta el pipeline para generar los datos de agencias.",
-
   "home_models_heading": "Los tres tipos de acuerdo",
   "home_models_subhead": "Los tres modelos del programa 287(g) otorgan distintos niveles de autoridad a los oficiales locales.",
   "home_models_glossary_link": "Consulta el glosario",
   "home_models_glossary_suffix": "para ver las definiciones clave.",
-
   "model_jem_short": "Los oficiales evalúan el estatus migratorio de las personas registradas en las cárceles locales.",
   "model_jem_detail": "Los oficiales participantes pueden emitir detenciones civiles — solicitudes para que las cárceles retengan a personas más allá de su fecha de liberación programada para que ICE las tome bajo custodia. JEM opera únicamente dentro de centros de detención, no en la comunidad. Es el modelo 287(g) más antiguo y común.",
   "model_tfm_short": "Los oficiales trabajan junto a agentes de ICE en la comunidad para realizar arrestos migratorios.",
   "model_tfm_detail": "TFM otorga la autoridad más amplia de los tres modelos. Los oficiales participantes pueden detener, interrogar y arrestar a personas en la comunidad — no solo a quienes ya están bajo custodia. Operan conjuntamente con agentes de campo de ICE en operativos de cumplimiento dirigidos.",
   "model_wso_short": "Los oficiales están autorizados para entregar órdenes administrativas a personas que ICE ya ha identificado.",
   "model_wso_detail": "Introducido alrededor de 2020, el modelo WSO es más limitado que JEM o TFM. Los oficiales solo pueden entregar órdenes administrativas a personas específicas que ICE ya identificó para deportación. No pueden iniciar acciones independientes de cumplimiento ni realizar operativos comunitarios.",
-
   "home_search_heading": "Buscar agencias",
   "home_search_placeholder": "Nombre de agencia, ciudad o condado…",
   "home_search_all_states": "Todos los estados",
@@ -134,11 +122,9 @@
   "home_search_use_detected_state": "Usar mi estado ({state})",
   "home_view_state_page": "Ver la página de {state}",
   "home_search_year_signed": "Año de firma",
-
   "home_pagination_previous": "Anterior",
   "home_pagination_next": "Siguiente",
   "home_pagination_range": "{start}–{end} de {total}",
-
   "trend_heading": "Cómo ha crecido la participación",
   "trend_scope_label": "Mostrar",
   "trend_scope_national": "Estados Unidos ({count})",
@@ -153,7 +139,6 @@
   "trend_summary_plain": "{agreements}.",
   "trend_aria_label": "Acuerdos 287(g) activos por modelo desde diciembre de 2024",
   "trend_experimental_note": "Experimental (#162). Cada línea cuenta los acuerdos activos agencia–modelo, así que una agencia con dos modelos se cuenta una vez por modelo. Los cambios se fechan según cuándo aparecen en la lista publicada por ICE; el nivel de diciembre de 2024 incluye todo lo firmado antes de esa fecha, y el archivo no tiene instantáneas entre mediados de diciembre de 2024 y principios de marzo de 2025, por lo que las líneas se mantienen planas en ese tramo.",
-
   "about_meta_title": "Acerca de — 287(g) Watch",
   "about_meta_description": "Acerca de este proyecto y cómo participar.",
   "about_heading": "Acerca de este proyecto",
@@ -168,7 +153,6 @@
   "about_involve_methodology_prefix": "Consulta",
   "about_involve_methodology_link": "nuestra metodología",
   "about_involve_methodology_suffix": "para fuentes de datos y limitaciones",
-
   "methodology_meta_title": "Metodología — 287(g) Watch",
   "methodology_meta_description": "Fuentes de datos, limitaciones y métodos utilizados en este proyecto.",
   "methodology_heading": "Metodología",
@@ -195,7 +179,6 @@
   "methodology_ai_heading": "Resúmenes automáticos y extracción de datos",
   "methodology_ai_body_1": "Dos elementos de este sitio se elaboran con ayuda de un modelo de lenguaje grande. Los resúmenes de noticias por estado se generan a partir de la cobertura publicada y de los acuerdos firmados por las agencias mediante PromptQL, con enlaces a las fuentes originales. Además, algunos detalles de los acuerdos que se muestran en las páginas de las agencias —nombres y cargos de los firmantes, puntos de contacto y cifras de presupuesto o población— se extraen automáticamente de los PDF escaneados de los acuerdos.",
   "methodology_ai_body_2": "La extracción y el resumen automáticos pueden equivocarse. Un modelo puede malinterpretar un documento escaneado, atribuir una cifra al campo equivocado o afirmar con seguridad algo que la fuente no respalda. Considere cada cifra y resumen automático como una pista por verificar, no como un hecho establecido: contrástelo siempre con el acuerdo original o el artículo de noticias enlazado antes de utilizarlo o volver a publicarlo. Si detecta un error, avísenos.",
-
   "methodology_updates_heading": "Actualizaciones",
   "methodology_updates_body": "El pipeline se ejecuta con regularidad para capturar nuevos anuncios de ICE. La fecha de la instantánea de datos se muestra en cada página.",
   "methodology_license_heading": "Licencia y cita",
@@ -204,14 +187,12 @@
   "attribution_body": "287(g) Watch es un proyecto de Recovered Factory, desarrollado por Tory Lysik y David Eads.",
   "contact_heading": "Contacto",
   "contact_body": "Preguntas, pistas, correcciones o colaboración:",
-
   "glossary_meta_title": "Glosario — 287(g) Watch",
   "glossary_meta_description": "Definiciones de términos clave usados en el reporteo sobre cumplimiento migratorio 287(g).",
   "glossary_heading": "Glosario",
   "glossary_subtitle": "Términos clave usados en el reporteo sobre el programa 287(g) y el cumplimiento migratorio.",
   "glossary_jump_to_letter": "Saltar a la letra",
   "glossary_see_also": "Ver también:",
-
   "agency_meta_title": "{agency_name} — Acuerdo 287(g)",
   "agency_meta_description_base": "{agency_name} en {state} tiene un acuerdo 287(g) con ICE.",
   "agency_meta_description_model": "Bajo el modelo {model}.",
@@ -241,7 +222,6 @@
   "agency_contact_phone": "Teléfono",
   "agency_contact_email": "Correo electrónico",
   "agency_contact_website": "Sitio web",
-
   "agency_records_heading": "Profundizar",
   "agency_records_intro": "Los datos de participación en 287(g) no nos dicen nada sobre lo que sucedió después de que se firmó el acuerdo. Para saber más, el público necesita preguntar o solicitar información formalmente. MuckRock está organizando solicitudes públicas de registros sobre el cumplimiento de inmigración en todo el país:",
   "agency_records_matched_intro": "Ya se ha presentado una solicitud pública de registros sobre esta agencia:",
@@ -254,9 +234,7 @@
   "agency_records_view_on_muckrock": "Ver solicitud en MuckRock →",
   "agency_records_guide_label": "Cómo seguir el rastro documental del cumplimiento local de inmigración de ICE",
   "agency_records_diy_cta": "Regístrate con MuckRock para presentar tu propia solicitud",
-
   "home_map_use_cta": "Descarga nuestros videos e imágenes gratuitos →",
-
   "usemap_meta_title": "Usa nuestro mapa de 287(g) — libre para compartir | 287(g) Watch",
   "usemap_meta_description": "Descarga el mapa de 287(g) Watch con todos los acuerdos 287(g) activos como video, GIF o imagen fija y úsalo gratis bajo una licencia Creative Commons.",
   "usemap_heading": "Usa nuestro mapa gratis",
