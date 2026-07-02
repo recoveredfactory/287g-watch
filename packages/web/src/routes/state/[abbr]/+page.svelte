@@ -158,7 +158,10 @@
     <h1 class="mt-1 text-2xl font-black text-slate-900 sm:text-3xl">
       {stateName}
     </h1>
-    <div class="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-600">
+    <div class="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-slate-600">
+      {#if data.news?.legislation}
+        <LegislationBadge legislation={data.news.legislation} />
+      {/if}
       <span>
         <span class="font-semibold text-slate-900">{intFmt.format(agencies.length)}</span>
         {agencies.length === 1 ? m.state_agency_one() : m.state_agency_other()}
@@ -219,16 +222,11 @@
         {m.news_heading({ state: stateName })}
       </h2>
 
-      <!-- Meta line, ahead of the summary: the real last-built date and the
-           statewide legislative-stance pill, both riding with this state. -->
-      <div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <p class="text-xs italic text-slate-400">
-          {m.news_updated({ date: newsUpdatedDate })}
-        </p>
-        {#if data.news.legislation}
-          <LegislationBadge legislation={data.news.legislation} />
-        {/if}
-      </div>
+      <!-- Real last-built date, ahead of the summary (the stance pill rides up in
+           the header's topline figures). -->
+      <p class="mt-1.5 text-xs italic text-slate-400">
+        {m.news_updated({ date: newsUpdatedDate })}
+      </p>
 
       <!-- Small hallucination caution, directly above the AI-written summary. -->
       <div class="mt-4 max-w-prose">

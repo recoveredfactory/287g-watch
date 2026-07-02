@@ -152,6 +152,9 @@
             >{row.stateName}</a>
           </h2>
           <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-600">
+            {#if row.news?.legislation}
+              <LegislationBadge legislation={row.news.legislation} />
+            {/if}
             <span>
               <span class="font-semibold text-slate-900">{intFmt.format(row.agencyCount)}</span>
               {row.agencyCount === 1 ? m.state_agency_one() : m.state_agency_other()}
@@ -179,16 +182,11 @@
         <div class="mt-4 sm:grid sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] sm:items-start sm:gap-10">
           <div class="min-w-0">
             {#if row.news}
-              <!-- Meta line ahead of the summary: this state's own last-built
-                   date and its legislative-stance pill. -->
-              <div class="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span class="text-xs italic text-slate-400">
-                  {m.news_updated({ date: builtDate(row.news.built_at) })}
-                </span>
-                {#if row.news.legislation}
-                  <LegislationBadge legislation={row.news.legislation} />
-                {/if}
-              </div>
+              <!-- This state's own last-built date, ahead of the summary (the
+                   stance pill rides up in the card's topline figures). -->
+              <p class="mb-2 text-xs italic text-slate-400">
+                {m.news_updated({ date: builtDate(row.news.built_at) })}
+              </p>
               <div class="news-prose news-tldr max-w-prose">{@html row.news.tldr_html}</div>
             {:else}
               <p class="text-sm italic text-slate-400">{m.states_index_no_summary()}</p>

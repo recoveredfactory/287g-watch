@@ -26,7 +26,7 @@
   "lang_es": "ES",
   "source_material_notice": "Los datos y documentos de origen (nombres de agencias, acuerdos MOA, registros oficiales) permanecen en inglés tal como se publicaron originalmente.",
 
-  "news_heading": "{state} en las noticias",
+  "news_heading": "Cobertura de prensa sobre el programa 287(g) de ICE en {state}",
   "news_updated": "Actualizado el {date} · Generado con PromptQL",
   "news_show_more": "Mostrar más",
   "news_show_less": "Mostrar menos",
