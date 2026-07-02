@@ -26,6 +26,32 @@ export type AgreementMetadata = {
   agency_type: string | null;
 };
 
+// One 287(g) agreement on file (one per model: JEM/TFM/WSO). An agency can hold
+// several; their ICE signer / date / public-affairs POC sometimes diverge. The
+// agency page loops these grouped by model. Sourced from extract-moa-signers.ts.
+export type Agreement = {
+  model: string | null; // full model name ("Jail Enforcement Model") or null
+  pdf_url: string | null;
+  date_signed: string | null; // as written in the document (may be null)
+  date_filename: string | null; // ISO date parsed from the PDF filename (fallback)
+  ice_signer_name: string | null;
+  ice_signer_title: string | null;
+  ice_field_office: string | null;
+  lea_signer_name: string | null;
+  moa_poc_name: string | null;
+  moa_poc_email: string | null;
+  moa_poc_phone: string | null;
+  moa_poc_address: string | null;
+  addendum_date: string | null;
+  addendum_signer: string | null;
+};
+
+// "N of M models on file": onFile = roster models that have a PDF, modelsListed = M.
+export type AgreementCoverage = {
+  onFile: number;
+  modelsListed: number;
+};
+
 export type AgencyNote = {
   kind: string;
   related_slug?: string;
@@ -62,6 +88,13 @@ export type Agency = {
   moa_poc_name?: string | null;
   moa_poc_email?: string | null;
   moa_poc_phone?: string | null;
+  moa_poc_address?: string | null;
+  moa_addendum_date?: string | null;
+  moa_addendum_signer?: string | null;
+  // Per-agreement breakdown (#3). The flat moa_*/ice_* fields above mirror the
+  // "primary" agreement; agreements[] holds every model-agreement on file.
+  agreements?: Agreement[];
+  agreement_coverage?: AgreementCoverage;
   history?: HistoryEvent[];
   lee?: LeeData | null;
   agreement?: AgreementMetadata | null;
