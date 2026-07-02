@@ -17,7 +17,7 @@
 
   const W = 150;
   const H = 75;
-  const PAD = { t: 9, r: 32, b: 13, l: 8 };
+  const PAD = { t: 10, r: 38, b: 15, l: 8 };
   const plotW = W - PAD.l - PAD.r;
   const plotH = H - PAD.t - PAD.b;
 
@@ -46,7 +46,7 @@
       .filter((l) => l.has)
       .map((l) => ({ text: l.text, code: l.code, final: l.final, y: l.fy }));
     items.sort((a, b) => a.y - b.y);
-    const GAP = 7.5;
+    const GAP = 9;
     for (let i = 1; i < items.length; i++)
       if (items[i].y - items[i - 1].y < GAP) items[i].y = items[i - 1].y + GAP;
     return items;
@@ -54,24 +54,24 @@
 </script>
 
 <svg viewBox="0 0 {W} {H}" class="block h-full w-full" role="img" aria-label={label} preserveAspectRatio="xMidYMid meet">
-  <!-- axes: zero baseline + faint peak gridline -->
-  <line x1={PAD.l} y1={PAD.t + plotH} x2={PAD.l + plotW} y2={PAD.t + plotH} stroke="#cbd5e1" stroke-width="0.6" />
-  <line x1={PAD.l} y1={PAD.t} x2={PAD.l + plotW} y2={PAD.t} stroke="#eef2f6" stroke-width="0.6" />
+  <!-- axes: zero baseline + peak gridline -->
+  <line x1={PAD.l} y1={PAD.t + plotH} x2={PAD.l + plotW} y2={PAD.t + plotH} stroke="#94a3b8" stroke-width="0.9" />
+  <line x1={PAD.l} y1={PAD.t} x2={PAD.l + plotW} y2={PAD.t} stroke="#d7dee7" stroke-width="0.9" />
 
   <!-- labels: y peak + month range -->
-  <text x={PAD.l} y={PAD.t - 2.5} fill="#94a3b8" style="font-size:5px; font-weight:600;">{max}</text>
-  <text x={PAD.l} y={H - 3.5} fill="#94a3b8" style="font-size:5px;">{startLabel}</text>
-  <text x={PAD.l + plotW} y={H - 3.5} text-anchor="end" fill="#94a3b8" style="font-size:5px;">{endLabel}</text>
+  <text x={PAD.l} y={PAD.t - 2.5} fill="#64748b" style="font-size:6.5px; font-weight:600;">{max}</text>
+  <text x={PAD.l} y={H - 3.5} fill="#64748b" style="font-size:6.5px;">{startLabel}</text>
+  <text x={PAD.l + plotW} y={H - 3.5} text-anchor="end" fill="#64748b" style="font-size:6.5px;">{endLabel}</text>
 
   <!-- model trajectories -->
   {#each lines as l}
     {#if l.has}
-      <path d={l.d} fill="none" stroke={l.stroke} stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" />
+      <path d={l.d} fill="none" stroke={l.stroke} stroke-width="2.1" stroke-linejoin="round" stroke-linecap="round" />
     {/if}
   {/each}
 
   <!-- end-of-line labels: model code + final count -->
   {#each endLabels as e}
-    <text x={PAD.l + plotW + 2.5} y={e.y + 1.8} fill={e.text} style="font-size:5px; font-weight:700;">{e.code} {e.final}</text>
+    <text x={PAD.l + plotW + 3} y={e.y + 2.3} fill={e.text} style="font-size:6.5px; font-weight:700;">{e.code} {e.final}</text>
   {/each}
 </svg>

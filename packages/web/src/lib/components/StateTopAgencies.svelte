@@ -15,15 +15,15 @@
     </p>
     <p class="text-[10px] uppercase tracking-wider text-slate-400">{m.states_index_officers()}</p>
   </div>
-  <ul class="mt-1.5 space-y-1.5">
+  <ul class="mt-2 space-y-2.5">
     {#each agencies as a}
-      <li class="flex items-center gap-2 text-sm">
-        <span class="inline-block h-2 w-2 shrink-0 rounded-full" style="background: {MODEL_COLORS[a.model] ?? '#94a3b8'};"></span>
+      <li class="flex items-start gap-2 text-sm">
+        <span class="mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full" style="background: {MODEL_COLORS[a.model] ?? '#94a3b8'};"></span>
         <a
           href={localizeHref(`/agency/${a.slug}`)}
-          class="truncate text-slate-700 no-underline hover:underline"
+          class="text-slate-700 no-underline leading-snug hover:underline"
         >{a.name}</a>
-        <span class="ml-auto shrink-0 tabular-nums text-xs text-slate-400">
+        <span class="ml-auto mt-0.5 shrink-0 tabular-nums text-xs text-slate-400">
           {a.officers ? intFmt.format(a.officers) : "—"}
         </span>
       </li>

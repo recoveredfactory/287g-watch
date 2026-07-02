@@ -1,11 +1,57 @@
 <script lang="ts">
   import type { PageData } from "./$types";
+  import { browser } from "$app/environment";
   import { MODEL_ORDER, MODEL_COLORS, MODEL_SHORT } from "$lib/colors";
   import { localizeHref, getLocale } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
   import StateMiniMap from "$lib/components/StateMiniMap.svelte";
   import StateTrendMini from "$lib/components/StateTrendMini.svelte";
   import StateTopAgencies from "$lib/components/StateTopAgencies.svelte";
+
+  // Honor the OS reduced-motion setting for the unfurl (a 0ms animation = an
+  // instant open, no growth).
+  const reduceMotion = browser && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // Peek clamp height, in px — MUST match the .states-collapsible fallback
+  // `max-height` in the CSS below (8rem).
+  const PEEK = 128;
+
+  // Jump-free open/close. The bottom section is one persistent element; CSS
+  // clamps it to PEEK when closed. On toggle we animate `max-height` from the
+  // element's CURRENT height (so mid-flight toggles stay smooth) to either its
+  // full content height (scrollHeight ignores the clamp) or back to PEEK — never
+  // via 0, which is what a slide/height-from-0 transition does and reads as a
+  // jump. At rest we clear the inline overrides so CSS governs again. The fade
+  // overlay is a separate CSS concern (the .is-open class), so toggling it can't
+  // disturb this height measurement.
+  const collapsible = (node: HTMLElement, open: boolean) => {
+    let prev = open;
+    let anim: Animation | null = null;
+    const rest = (isOpen: boolean) => {
+      anim = null;
+      node.style.maxHeight = isOpen ? "none" : "";
+      node.style.overflow = isOpen ? "visible" : "";
+    };
+    rest(open);
+    return {
+      update(next: boolean) {
+        if (next === prev) return;
+        prev = next;
+        if (reduceMotion) return rest(next);
+        const from = node.getBoundingClientRect().height;
+        const to = next ? node.scrollHeight : PEEK;
+        node.style.overflow = "hidden";
+        node.style.maxHeight = `${from}px`;
+        anim?.cancel();
+        anim = node.animate(
+          [{ maxHeight: `${from}px` }, { maxHeight: `${to}px` }],
+          { duration: 280, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+        );
+        anim.onfinish = () => rest(next);
+      },
+      destroy: () => anim?.cancel(),
+    };
+  };
 
   export let data: PageData;
   $: ({ rows, generatedAt, trendMonths } = data);
@@ -29,7 +75,7 @@
     next.has(abbr) ? next.delete(abbr) : next.add(abbr);
     expanded = next;
   };
-  $: expandable = rows.filter((r) => r.news?.body_html);
+  $: expandable = rows.filter((r) => r.news?.body_html || r.topAgencies.length);
   const expandAll = () => (expanded = new Set(expandable.map((r) => r.abbr)));
   const collapseAll = () => (expanded = new Set());
   $: allExpanded = expandable.length > 0 && expandable.every((r) => expanded.has(r.abbr));
@@ -40,7 +86,7 @@
   <meta name="robots" content="noindex" />
 </svelte:head>
 
-<main id="main-content" class="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
+<main id="main-content" class="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
   <!-- ── Header ──────────────────────────────────────────────────────────────── -->
   <header>
     <p class="text-xs font-semibold uppercase tracking-widest text-amber-600">
@@ -70,7 +116,7 @@
   <div class="mt-8 space-y-4">
     {#each rows as row (row.abbr)}
       {@const isExp = expanded.has(row.abbr)}
-      {@const canExpand = Boolean(row.news?.body_html) || Boolean(row.spark)}
+      {@const canExpand = Boolean(row.news?.body_html) || row.topAgencies.length > 0}
       <article class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <!-- Topline header: state name + dead-simple figures -->
         <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
@@ -104,10 +150,9 @@
           </div>
         </div>
 
-        <!-- Block 1 (always): TL;DR summary | map. Two columns on desktop (text
-             gets the wider ~2/3); the map is a fluid 3:2 box the SVG letterboxes
-             into. Stacks on mobile. -->
-        <div class="mt-4 sm:grid sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] sm:items-start sm:gap-8">
+        <!-- Block A (always): the quick take beside the map — TL;DR on the left
+             (wider ~2/3), state map on the right. Stacks on mobile. -->
+        <div class="mt-4 sm:grid sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] sm:items-start sm:gap-10">
           <div class="min-w-0">
             {#if row.news}
               <div class="news-prose news-tldr max-w-prose">{@html row.news.tldr_html}</div>
@@ -130,71 +175,94 @@
           {/if}
         </div>
 
-        {#if canExpand}
-          <!-- ── read more / less ── centered pill, full-width hairline rules -->
-          <div class="mt-5 flex items-center gap-3">
-            <span class="h-px flex-1 bg-slate-200" aria-hidden="true"></span>
-            <button
-              type="button"
-              class="news-toggle"
-              on:click={() => toggle(row.abbr)}
-              aria-expanded={isExp}
-              aria-controls={`exp-${row.abbr}`}
-            >
-              {isExp ? m.states_index_hide_summary() : m.states_index_read_summary()}
-              <span class="news-chev" class:rotate-180={isExp} aria-hidden="true">▾</span>
-            </button>
-            <span class="h-px flex-1 bg-slate-200" aria-hidden="true"></span>
-          </div>
+        {#if row.spark || canExpand}
+          {@const hasRail = Boolean(row.spark) || row.topAgencies.length > 0}
+          {@const gridCls = hasRail
+            ? "sm:grid sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] sm:items-start sm:gap-10"
+            : ""}
 
-          <!-- Block 2: narrative (wide) | right rail (chart, then agencies). The
-               chart lives in the rail in BOTH states, so it's part of the
-               collapsed fadey preview; only the narrative clips+fades when
-               collapsed, and the agencies list is revealed on expand. DOM order
-               (rail first) makes the chart lead on mobile with agencies right
-               under it, then the narrative; the grid reflows to two columns on
-               desktop. -->
-          <div
-            id={`exp-${row.abbr}`}
-            class="mt-5 {isExp ? 'states-reveal' : ''} {row.spark || row.topAgencies.length ? 'sm:grid sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] sm:items-start sm:gap-x-8' : ''}"
-          >
-            <!-- Right rail: chart + (on expand) largest agencies -->
-            <div class="sm:col-start-2 sm:row-start-1">
-              {#if row.spark}
-                <div class="aspect-[2/1] w-full">
-                  <StateTrendMini
-                    series={row.spark}
-                    startLabel={trendStart}
-                    endLabel={trendEnd}
-                    label={m.states_index_spark_aria({ state: row.stateName })}
-                  />
-                </div>
-              {/if}
-              {#if isExp && row.topAgencies.length}
-                <div class="mt-4">
-                  <StateTopAgencies agencies={row.topAgencies} />
-                </div>
-              {/if}
-            </div>
-
-            <!-- Narrative: full text when expanded; a clipped, faded peek when
-                 collapsed (inert so its citation links stay out of the tab
-                 order). -->
+          <!-- Bottom-section body (narrative left, chart + agencies right). Kept
+               fully rendered in both states — the collapse just clamps it — so
+               the open/close animation has no content popping in or out. -->
+          {#snippet bottomInner()}
             {#if row.news?.body_html}
-              <div
-                class="mt-4 min-w-0 sm:col-start-1 sm:row-start-1 sm:mt-0 {isExp ? '' : 'states-peek'}"
-                inert={!isExp}
-              >
+              <div class="min-w-0 {hasRail ? 'sm:col-start-1 sm:row-start-1' : ''}">
                 <div class="news-prose news-body max-w-prose">{@html row.news.body_html}</div>
               </div>
             {/if}
-          </div>
+            {#if hasRail}
+              <div class="mt-4 sm:col-start-2 sm:row-start-1 sm:mt-0">
+                {#if row.spark}
+                  <div class="aspect-[2/1] w-full">
+                    <StateTrendMini
+                      series={row.spark}
+                      startLabel={trendStart}
+                      endLabel={trendEnd}
+                      label={m.states_index_spark_aria({ state: row.stateName })}
+                    />
+                  </div>
+                {/if}
+                {#if row.topAgencies.length}
+                  <div class="mt-6">
+                    <StateTopAgencies agencies={row.topAgencies} />
+                  </div>
+                {/if}
+              </div>
+            {/if}
+          {/snippet}
 
-          {#if isExp}
-            <!-- Collapse control at the foot of the expanded block -->
+          <!-- Read-more is anchored right after the quick-take row and stays put:
+               the whole bottom section unfurls below it (like the state page's
+               toggle-under-the-lead). Collapsed, that section is a single faded,
+               clipped tease — the chart included — as the inducement to click. -->
+          {#if canExpand}
+            <div class="mt-5 flex items-center gap-3">
+              <span class="h-px flex-1 bg-slate-200" aria-hidden="true"></span>
+              <button
+                type="button"
+                class="news-toggle"
+                on:click={() => toggle(row.abbr)}
+                aria-expanded={isExp}
+                aria-controls={`exp-${row.abbr}`}
+              >
+                {isExp ? m.states_index_hide_summary() : m.states_index_read_summary()}
+                <span class="news-chev" class:rotate-180={isExp} aria-hidden="true">▾</span>
+              </button>
+              <span class="h-px flex-1 bg-slate-200" aria-hidden="true"></span>
+            </div>
+          {/if}
+
+          <!-- Bottom section: chart-only rows (no summary/agencies to open) just
+               show; everything else is one persistent element the `collapsible`
+               action grows/shrinks between the peek clamp and full height, with a
+               fade overlay (`.is-open`) lifting as it opens. `inert` keeps the
+               clamped tease out of the tab order. -->
+          {#if !canExpand}
+            <div class="mt-4 {gridCls}">{@render bottomInner()}</div>
+          {:else}
+            <div
+              id={`exp-${row.abbr}`}
+              class="states-collapsible mt-4 {gridCls}"
+              class:is-open={isExp}
+              use:collapsible={isExp}
+              inert={!isExp}
+            >
+              {@render bottomInner()}
+            </div>
+          {/if}
+
+          {#if isExp && canExpand}
+            <!-- Foot collapse (like the state page) so a long expanded card
+                 doesn't force a scroll back up to close it. -->
             <div class="mt-6 flex items-center gap-3">
               <span class="h-px flex-1 bg-slate-200" aria-hidden="true"></span>
-              <button type="button" class="news-toggle" on:click={() => toggle(row.abbr)}>
+              <button
+                type="button"
+                class="news-toggle"
+                on:click={() => toggle(row.abbr)}
+                aria-expanded={isExp}
+                aria-controls={`exp-${row.abbr}`}
+              >
                 {m.states_index_hide_summary()}
                 <span class="news-chev rotate-180" aria-hidden="true">▾</span>
               </button>
@@ -208,23 +276,35 @@
 </main>
 
 <style>
-  /* Expanded block eases in on reveal. */
-  .states-reveal {
-    animation: states-reveal 240ms ease both;
-  }
-  @keyframes states-reveal {
-    from { opacity: 0; transform: translateY(-4px); }
-    to { opacity: 1; transform: none; }
-  }
-  /* Collapsed peek: show the top of the hidden narrative, clipped and faded to
-     nothing so it reads as a teaser. Height roughly matches the chart beside it. */
-  .states-peek {
-    max-height: 7.5rem;
+  /* Collapsible bottom section. Closed, it's clamped to a short peek of the
+     narrative + chart (this fallback max-height is what the `collapsible` action
+     animates to/from — keep the px in the script's PEEK in sync). A gradient
+     overlay fades the clamped bottom into the card so it reads as a tease; the
+     overlay lifts (opacity → 0) as the section opens. Height is driven entirely
+     by inline styles from the action, so the .is-open class only governs the
+     fade and never disturbs the height measurement. */
+  .states-collapsible {
+    position: relative;
+    max-height: 8rem;
     overflow: hidden;
-    -webkit-mask-image: linear-gradient(to bottom, #000 35%, transparent);
-    mask-image: linear-gradient(to bottom, #000 35%, transparent);
+  }
+  .states-collapsible::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    bottom: 0;
+    height: 3.5rem;
+    background: linear-gradient(to bottom, transparent, #fff);
+    pointer-events: none;
+    opacity: 1;
+    transition: opacity 240ms ease;
+  }
+  .states-collapsible.is-open::after {
+    opacity: 0;
   }
   @media (prefers-reduced-motion: reduce) {
-    .states-reveal { animation: none; }
+    .states-collapsible::after {
+      transition: none;
+    }
   }
 </style>
