@@ -157,7 +157,7 @@
      in the news serif at a comfortable 16px with open leading. */
   .news-tldr {
     font-family: var(--font-news-serif);
-    @apply text-base italic leading-[1.8] text-slate-600;
+    @apply text-lg italic leading-[1.7] text-slate-700;
   }
 
   /* Expanded body: same size as the TL;DR but darker and roman — the main read.

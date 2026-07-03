@@ -16,6 +16,16 @@
 
   $: ({ abbr, stateName, agencies, stateMeta, snapshotDate, modelCounts, agencyTypeCounts, trendMonths, trend } = data);
 
+  // "% of local LE agencies" (FBI LEE County+City; state police excluded both
+  // sides). Rounded whole percent, but a participating state that rounds to 0
+  // shows "<1" so a card never reads "1 agency · 0%". Null when no LEE denom.
+  $: localLePct =
+    stateMeta && stateMeta.local_le_agencies
+      ? stateMeta.participating > 0 && Math.round(stateMeta.pct * 100) === 0
+        ? "<1"
+        : String(Math.round(stateMeta.pct * 100))
+      : null;
+
   const localeTag = getLocale() === "es" ? "es-MX" : "en-US";
   const intFmt = new Intl.NumberFormat(localeTag);
   const popFmt = new Intl.NumberFormat(localeTag, { notation: "compact", maximumFractionDigits: 1 });
@@ -167,6 +177,12 @@
         <span class="font-semibold text-slate-900">{intFmt.format(agencies.length)}</span>
         {agencies.length === 1 ? m.state_agency_one() : m.state_agency_other()}
       </span>
+      {#if localLePct !== null}
+        <span>
+          <span class="font-semibold text-slate-900">{localLePct}%</span>
+          {m.state_local_le_pct()}
+        </span>
+      {/if}
       {#each MODEL_ORDER as model}
         {#if modelCounts[model]}
           <span class="flex items-center gap-1.5">
@@ -229,8 +245,9 @@
         {m.news_updated({ date: newsUpdatedDate })}
       </p>
 
-      <!-- Small hallucination caution, directly above the AI-written summary. -->
-      <div class="mt-4 max-w-prose">
+      <!-- Small hallucination caution, directly above the AI-written summary.
+           Full width of the news section (not clamped to the reading measure). -->
+      <div class="mt-4">
         <NewsAiWarning />
       </div>
 

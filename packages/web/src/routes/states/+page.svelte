@@ -85,6 +85,14 @@
   // Per-card last-built date (the real built_at from the program), formatted in
   // the active locale. Each state carries its own freshness now.
   const builtDate = (built: string) => (built ? dateFmt.format(new Date(built)) : "");
+
+  // "% of local LE agencies" for a card — rounded whole percent, "<1" for
+  // participating states that round to 0, null when there's no LEE denominator.
+  const leePctLabel = (denom: number | null, num: number | null): string | null => {
+    if (!denom || num == null) return null;
+    const p = Math.round((num / denom) * 100);
+    return num > 0 && p === 0 ? "<1" : String(p);
+  };
   $: trendStart = monthLabel(trendMonths?.[0]);
   $: trendEnd = monthLabel(trendMonths?.at(-1));
 
@@ -172,6 +180,14 @@
     <p class="mt-3 max-w-prose text-sm leading-relaxed text-slate-600">
       {m.states_index_subtitle({ count: intFmt.format(rows.length) })}
     </p>
+
+    <!-- Always-on hallucination caution, above the controls and every AI-written
+         summary in the cards below. Full container width. Per-card last-built
+         dates ride with each state, so there's no global "updated" line here. -->
+    <div class="mt-4">
+      <NewsAiWarning />
+    </div>
+
     <div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
       <button
         type="button"
@@ -217,13 +233,6 @@
         </div>
       </div>
     {/if}
-
-    <!-- Always-on hallucination caution, at the top of the index above every
-         AI-written summary in the cards below. Per-card last-built dates ride
-         with each state, so there's no global "updated" line here. -->
-    <div class="mt-4 max-w-prose">
-      <NewsAiWarning />
-    </div>
   </header>
 
   <!-- ── State cards ─────────────────────────────────────────────────────────── -->
@@ -231,6 +240,7 @@
     {#each rows as row (row.abbr)}
       {@const isExp = expanded.has(row.abbr)}
       {@const canExpand = Boolean(row.news?.body_html) || row.topAgencies.length > 0}
+      {@const leePct = leePctLabel(row.localLeAgencies, row.localParticipating)}
       <article
         id={`state-${row.abbr}`}
         class="scroll-mt-24 rounded-lg border bg-white p-5 shadow-sm transition duration-300 sm:p-6 {justJumped ===
@@ -255,6 +265,12 @@
               <span class="font-semibold text-slate-900">{intFmt.format(row.agencyCount)}</span>
               {row.agencyCount === 1 ? m.state_agency_one() : m.state_agency_other()}
             </span>
+            {#if leePct !== null}
+              <span>
+                <span class="font-semibold text-slate-900">{leePct}%</span>
+                {m.states_index_local_le_pct()}
+              </span>
+            {/if}
             {#each MODEL_ORDER as model}
               {#if row.modelCounts[model]}
                 <span class="flex items-center gap-1.5">

@@ -55,6 +55,10 @@ export type StateIndexRow = {
   // through MODEL_ORDER/MODEL_COLORS/MODEL_SHORT for the inline dots.
   modelCounts: Record<string, number>;
   populationServed: number | null;
+  // FBI LEE local (County+City) agency count + how many participate — for the
+  // "% of local LE agencies" figure. Null when the state isn't in state_meta.
+  localLeAgencies: number | null;
+  localParticipating: number | null;
   news: StateIndexNews | null;
   map: StateMapMini | null;
   spark: StateSpark | null;
@@ -235,6 +239,8 @@ export const load = async ({ fetch }): Promise<StatesIndexData> => {
     agencyCount: agencyCount.get(abbr) ?? 0,
     modelCounts: modelCountsByState.get(abbr) ?? {},
     populationServed: metaByState.get(abbr)?.population_served ?? null,
+    localLeAgencies: metaByState.get(abbr)?.local_le_agencies ?? null,
+    localParticipating: metaByState.get(abbr)?.participating ?? null,
     news: newsByState.get(abbr) ?? null,
     map: buildMap(abbr),
     spark: buildSpark(abbr),
