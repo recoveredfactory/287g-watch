@@ -5,7 +5,7 @@ import { NAVIGABLE_STATES } from "$lib/states";
 
 export const prerender = true;
 
-const STATIC_PATHS = ["/", "/about", "/glossary", "/methodology", "/model/jail", "/model/taskforce", "/model/wso"];
+const STATIC_PATHS = ["/", "/states", "/about", "/glossary", "/methodology", "/model/jail", "/model/taskforce", "/model/wso"];
 
 const xmlEscape = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");

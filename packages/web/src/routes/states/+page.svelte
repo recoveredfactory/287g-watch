@@ -12,6 +12,7 @@
   import NewsAiWarning from "$lib/components/NewsAiWarning.svelte";
   import LegislationBadge from "$lib/components/LegislationBadge.svelte";
   import { SHOW_LEGISLATION_STANCE } from "$lib/features";
+  import { ogImage } from "$lib/ogImage";
 
   // Honor the OS reduced-motion setting for the unfurl (a 0ms animation = an
   // instant open, no growth).
@@ -95,6 +96,8 @@
   };
   $: trendStart = monthLabel(trendMonths?.[0]);
   $: trendEnd = monthLabel(trendMonths?.at(-1));
+  $: metaTitle = m.states_index_meta_title();
+  $: metaDescription = m.states_index_meta_description({ count: intFmt.format(rows.length) });
 
   // Umami custom event (mirrors +layout's trackConversion; no-ops in dev where
   // the script isn't loaded). Passes the state so opens are filterable per state.
@@ -164,8 +167,15 @@
 </script>
 
 <svelte:head>
-  <title>{m.states_index_meta_title()}</title>
-  <meta name="robots" content="noindex" />
+  <title>{metaTitle}</title>
+  <meta name="description" content={metaDescription} />
+  <meta property="og:title" content={metaTitle} />
+  <meta property="og:description" content={metaDescription} />
+  <meta property="og:image" content={ogImage("states.png")} />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="twitter:card" content="summary_large_image" />
+  <meta property="twitter:image" content={ogImage("states.png")} />
 </svelte:head>
 
 <main id="main-content" class="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">

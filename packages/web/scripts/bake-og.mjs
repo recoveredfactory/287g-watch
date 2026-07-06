@@ -431,6 +431,7 @@ const STR = {
     about: "Why we built 287(g) Watch.",
     methodology: "How we built this dataset.",
     "use-the-map": "Free videos and images about the growth of 287(g).",
+    states: "State-by-state 287(g) news summaries and data.",
     modelDef: MODEL_DEFINITIONS,
     signed: "Signed",
     also: "Also",
@@ -443,6 +444,7 @@ const STR = {
     about: "Por qué creamos 287(g) Watch.",
     methodology: "Cómo construimos estos datos.",
     "use-the-map": "Videos e imágenes gratuitos sobre el crecimiento de 287(g).",
+    states: "Noticias y datos de 287(g), estado por estado.",
     modelDef: MODEL_DEFINITIONS_ES,
     signed: "Firmado",
     also: "También",
@@ -475,7 +477,7 @@ async function bakeHome(locale) {
 }
 
 async function bakePages(locale) {
-  for (const slug of ["glossary", "about", "methodology", "use-the-map"]) {
+  for (const slug of ["glossary", "about", "methodology", "use-the-map", "states"]) {
     await bakeCard(path.join(OG_DIR, locale, `${slug}.png`), { title: STR[locale][slug] });
     console.log(`✓ ${locale}/${slug}.png`);
   }
