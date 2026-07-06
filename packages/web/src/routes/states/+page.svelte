@@ -291,17 +291,16 @@
 
         <!-- Block A (always): the quick take beside the map — TL;DR on the left
              (wider ~2/3), state map on the right. Stacks on mobile. Tapping
-             anywhere in it opens the card — a convenience layer over the real
-             toggle button below (which keeps the keyboard/AT path). Clicks on
-             links and active text selections pass through; expand-only, so
-             collapsing stays on the explicit buttons. -->
+             anywhere in it toggles the card open/closed — a convenience layer
+             over the real toggle button below (which keeps the keyboard/AT
+             path). Clicks on links and active text selections pass through. -->
         <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
         <div
-          class="mt-4 sm:grid sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] sm:items-start sm:gap-10 {canExpand && !isExp
+          class="mt-4 sm:grid sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] sm:items-start sm:gap-10 {canExpand
             ? 'cursor-pointer'
             : ''}"
           on:click={(e) => {
-            if (!canExpand || isExp) return;
+            if (!canExpand) return;
             if (e.target instanceof Element && e.target.closest("a, button")) return;
             if (window.getSelection()?.toString()) return;
             toggle(row.abbr);

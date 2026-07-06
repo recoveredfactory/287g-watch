@@ -41,6 +41,7 @@
   // running too long). Collapsing from the foot scrolls the section back up.
   let newsExpanded = false;
   let newsSection: HTMLElement;
+  $: newsCanExpand = Boolean(data.news?.body_html || data.news?.articles?.length);
   async function collapseNews() {
     newsExpanded = false;
     await tick();
@@ -253,8 +254,20 @@
       </div>
 
       <!-- TL;DR lead — a narrow reading measure (max-w-prose), set apart from the
-           full-width map/chart above it. -->
-      <div class="news-prose news-tldr mt-5 max-w-prose">
+           full-width map/chart above it. Tapping it toggles the full summary
+           open/closed (same convenience as the states-index cards); the toggle
+           button below stays the keyboard/AT path, and clicks on links and
+           active text selections pass through. -->
+      <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
+      <div
+        class="news-prose news-tldr mt-5 max-w-prose {newsCanExpand ? 'cursor-pointer' : ''}"
+        on:click={(e) => {
+          if (!newsCanExpand) return;
+          if (e.target instanceof Element && e.target.closest("a, button")) return;
+          if (window.getSelection()?.toString()) return;
+          newsExpanded = !newsExpanded;
+        }}
+      >
         {@html data.news.tldr_html}
       </div>
 
