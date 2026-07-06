@@ -443,14 +443,29 @@
           {#if !canExpand}
             <div class="mt-4 {gridCls}">{@render bottomInner()}</div>
           {:else}
+            <!-- Tapping the clamped tease opens the card (open-only — closing
+                 stays on the buttons and Block A). The handler sits on this
+                 wrapper because `inert` removes the collapsible itself from
+                 hit-testing while closed; clicks fall through to here. -->
+            <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
             <div
-              id={`exp-${row.abbr}`}
-              class="states-collapsible mt-4 {gridCls}"
-              class:is-open={isExp}
-              use:collapsible={isExp}
-              inert={!isExp}
+              class={isExp ? "" : "cursor-pointer"}
+              on:click={(e) => {
+                if (isExp) return;
+                if (e.target instanceof Element && e.target.closest("a, button")) return;
+                if (window.getSelection()?.toString()) return;
+                toggle(row.abbr);
+              }}
             >
-              {@render bottomInner()}
+              <div
+                id={`exp-${row.abbr}`}
+                class="states-collapsible mt-4 {gridCls}"
+                class:is-open={isExp}
+                use:collapsible={isExp}
+                inert={!isExp}
+              >
+                {@render bottomInner()}
+              </div>
             </div>
           {/if}
 
