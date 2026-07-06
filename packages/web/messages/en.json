@@ -36,7 +36,6 @@
   "news_col_date": "Date",
   "news_col_agencies": "Agencies",
   "news_col_counties": "Counties",
-  "news_source_note": "This summary is compiled using a large language model from published news coverage and the agencies' signed agreements, with links to the original sources. Verify against those sources before republishing.",
   "news_ai_written_by": "Summaries written by",
   "news_ai_promptql": "PromptQL",
   "news_ai_warning": "AI-generated text and the original sources it uses may contain inaccuracies. Double-check cited sources.",

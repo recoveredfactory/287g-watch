@@ -337,9 +337,6 @@
         {/if}
       {/if}
 
-      <p class="mt-6 max-w-prose border-t border-slate-100 pt-4 text-xs leading-relaxed text-slate-500">
-        {m.news_source_note()}
-      </p>
     </section>
   {/if}
 

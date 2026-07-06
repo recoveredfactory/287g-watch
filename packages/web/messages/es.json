@@ -36,7 +36,6 @@
   "news_col_date": "Fecha",
   "news_col_agencies": "Agencias",
   "news_col_counties": "Condados",
-  "news_source_note": "Este resumen se compila mediante un modelo de lenguaje grande a partir de la cobertura de prensa publicada y los acuerdos firmados por las agencias, con enlaces a las fuentes originales. Verifique con esas fuentes antes de volver a publicar.",
   "news_ai_written_by": "Resúmenes escritos por",
   "news_ai_promptql": "PromptQL",
   "news_ai_warning": "El texto generado por IA y las fuentes originales que utiliza pueden contener errores. Verifique las fuentes citadas.",
