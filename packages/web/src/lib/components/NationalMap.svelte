@@ -58,6 +58,12 @@
   // the clear subject. Off (homepage) leaves all states and dots uniform.
   export let focusSelected = false;
 
+  // Fit tuning for the single-state focus view (used when selectedStates has a
+  // polygon match). Defaults reproduce the homepage's state-select framing;
+  // the state page passes tighter values so the state fills its inset card.
+  export let focusPadding = 80;
+  export let focusMaxZoom = 6;
+
   let container: HTMLDivElement;
   let map: any = null;
   const isMobile = browser && window.matchMedia("(max-width: 640px)").matches;
@@ -166,7 +172,7 @@
     }
     const polyBounds = getPolygonBounds(selectedStates);
     if (polyBounds) {
-      map.fitBounds(polyBounds, { padding: 80, duration: 500, maxZoom: 6 });
+      map.fitBounds(polyBounds, { padding: focusPadding, duration: 500, maxZoom: focusMaxZoom });
       return;
     }
     const points = agencies

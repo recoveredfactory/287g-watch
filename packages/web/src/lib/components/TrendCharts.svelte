@@ -31,6 +31,10 @@
   export let trend: Record<string, TrendSeries> = {};
   // When true (e.g. state pages), hides the state selector and agency count.
   export let hideSelector = false;
+  // When true, drops the full-bleed section chrome (border/bg/horizontal
+  // padding/max-width) so the chart sits inside a parent content well. The
+  // parent then owns spacing and width. Home page leaves this false.
+  export let embedded = false;
 
   // Locale-aware formatting (thousands separators + month labels) for the active site language.
   const localeTag = getLocale() === "es" ? "es-MX" : "en-US";
@@ -176,8 +180,8 @@
   })();
 </script>
 
-<section class="border-b border-slate-200 bg-white px-4 py-10 sm:px-6 sm:py-12">
-  <div class="mx-auto max-w-[720px]">
+<section class={embedded ? "" : "border-b border-slate-200 bg-white px-4 py-10 sm:px-6 sm:py-12"}>
+  <div class={embedded ? "" : "mx-auto max-w-[720px]"}>
     <!-- Headline stays plain text; the scope control is an ordinary select on the header row -->
     <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
       <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">

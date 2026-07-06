@@ -6,7 +6,7 @@ stage and re-bakes/publishes the map videos + OG cards. It can't run until the
 role trusts GitHub and the repo's Actions secrets/variables are set. One-time
 setup:
 
-Account: `ACCOUNT_ID` · Repo: `recoveredfactory/287g-explorer`
+Account: `ACCOUNT_ID` · Repo: `recoveredfactory/287g-watch`
 
 ## 1. Create the GitHub OIDC provider (once per account)
 
@@ -57,7 +57,11 @@ trust only allows `user/deploy-user` + `user/ci-deploy-user` — keep that, add 
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
         },
         "StringLike": {
-          "token.actions.githubusercontent.com:sub": "repo:recoveredfactory/287g-explorer:ref:refs/heads/main"
+          "token.actions.githubusercontent.com:sub": [
+            "repo:recoveredfactory/287g-watch:ref:refs/heads/main",
+            "repo:recoveredfactory/287g-watch:environment:staging",
+            "repo:recoveredfactory/287g-watch:environment:prod"
+          ]
         }
       }
     }
@@ -70,12 +74,25 @@ aws iam update-assume-role-policy --role-name sst-deployer \
   --policy-document file://trust.json
 ```
 
-The workflow is `workflow_dispatch` and only appears once it's on the default
-branch (`main`), so dispatching from `main` is the normal path — hence scoping
-`sub` to `refs/heads/main`. To dispatch from another branch, widen that line to
-`repo:recoveredfactory/287g-explorer:*`. This accepts the known cross-project
-blast radius of reusing `sst-deployer` (AWS is rebuildable; the OIDC `sub`
-condition is the boundary that matters).
+Three `sub` values are trusted: the `refresh` job dispatches from `main`
+(`:ref:refs/heads/main`), and the `post-social` job runs under an
+`environment:` so GitHub mints an environment-scoped `sub` instead
+(`:environment:staging` / `:environment:prod`) — both are needed or the
+social step fails OIDC while the deploy succeeds.
+
+This repo is **public**, so the `sub` list is the security boundary — keep it
+pinned. Do NOT widen to `repo:recoveredfactory/287g-watch:*` to dispatch from a
+feature branch: on a public repo that would let any pushed branch assume
+`sst-deployer`. Dispatch from `main`. This accepts the known cross-project blast
+radius of reusing `sst-deployer` (AWS is rebuildable; the OIDC `sub` condition
+is the boundary that matters) — see the dedicated-role alternative below to
+shrink it.
+
+> **Renamed repo?** GitHub mints the OIDC `sub` from the repo's *current* name,
+> while `git remote` keeps working via redirect — so a rename silently breaks
+> assume-role with "Not authorized to perform sts:AssumeRoleWithWebIdentity"
+> until you update these `sub` lines. (Bit us when `287g-explorer` →
+> `287g-watch` rode along with open-sourcing.)
 
 ### Alternative: a new dedicated role
 

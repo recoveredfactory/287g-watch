@@ -15,3 +15,13 @@ export const STATE_NAMES: Record<string, string> = {
   PR: "Puerto Rico", GU: "Guam", VI: "Virgin Islands",
   AS: "American Samoa", MP: "Northern Mariana Islands",
 }
+
+// Jurisdictions that get a /state/<abbr> page and appear in state navigation.
+// Every US state + DC + the two territories that actually participate in 287(g)
+// (Guam, Northern Mariana Islands). The bare territories — Puerto Rico, Virgin
+// Islands, American Samoa — are excluded: no agencies, no state_meta row, and no
+// focusable map geometry, so they 404 until we have data + geometry for them.
+const NON_NAVIGABLE = new Set(["PR", "VI", "AS"]);
+export const NAVIGABLE_STATES: Record<string, string> = Object.fromEntries(
+  Object.entries(STATE_NAMES).filter(([abbr]) => !NON_NAVIGABLE.has(abbr)),
+);

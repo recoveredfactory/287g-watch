@@ -1,6 +1,7 @@
 import type { RequestHandler } from "./$types";
 import type { Agency } from "../+page.server";
 import { locales, baseLocale } from "$lib/paraglide/runtime";
+import { NAVIGABLE_STATES } from "$lib/states";
 
 export const prerender = true;
 
@@ -50,6 +51,10 @@ export const GET: RequestHandler = async ({ fetch, url }) => {
   const entries: string[] = [];
   for (const path of STATIC_PATHS) {
     entries.push(urlEntry(siteUrl, path, snapshotDate));
+  }
+  // Every navigable state has a page now (participating or not), so list them all.
+  for (const abbr of Object.keys(NAVIGABLE_STATES)) {
+    entries.push(urlEntry(siteUrl, `/state/${abbr.toLowerCase()}`, snapshotDate));
   }
   for (const a of agencies) {
     entries.push(urlEntry(siteUrl, `/agency/${a.slug}`, snapshotDate));

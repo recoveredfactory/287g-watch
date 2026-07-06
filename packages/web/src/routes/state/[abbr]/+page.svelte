@@ -2,21 +2,60 @@
   import type { PageData } from "./$types";
   import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_DARK_COLORS, MODEL_SHORT, MODEL_MINI, MODEL_SLUG, MODEL_ORDER } from "$lib/colors";
   import { browser } from "$app/environment";
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import { localizeHref, getLocale } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
   import NationalMap from "$lib/components/NationalMap.svelte";
   import TrendCharts from "$lib/components/TrendCharts.svelte";
   import ModelLink from "$lib/components/ModelLink.svelte";
+  import NewsAiWarning from "$lib/components/NewsAiWarning.svelte";
+  import LegislationBadge from "$lib/components/LegislationBadge.svelte";
+  import { SHOW_LEGISLATION_STANCE } from "$lib/features";
 
   export let data: PageData;
 
   $: ({ abbr, stateName, agencies, stateMeta, snapshotDate, modelCounts, agencyTypeCounts, trendMonths, trend } = data);
 
+  // "% of local LE agencies" (FBI LEE County+City; state police excluded both
+  // sides). Rounded whole percent, but a participating state that rounds to 0
+  // shows "<1" so a card never reads "1 agency · 0%". Null when no LEE denom.
+  $: localLePct =
+    stateMeta && stateMeta.local_le_agencies
+      ? stateMeta.participating > 0 && Math.round(stateMeta.pct * 100) === 0
+        ? "<1"
+        : String(Math.round(stateMeta.pct * 100))
+      : null;
+
   const localeTag = getLocale() === "es" ? "es-MX" : "en-US";
   const intFmt = new Intl.NumberFormat(localeTag);
   const popFmt = new Intl.NumberFormat(localeTag, { notation: "compact", maximumFractionDigits: 1 });
   const dateFmt = new Intl.DateTimeFormat(localeTag, { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
+
+  // The real last-built time from the program (built_at); server already falls it
+  // back to the local write stamp when an older cached response lacks it.
+  $: newsUpdatedDate = data.news ? dateFmt.format(new Date(data.news.built_at)) : "";
+
+  // The TL;DR is always shown; one "show more" toggle unfurls BOTH the full
+  // narrative body and the source-article table, and a single "show less" at the
+  // foot collapses them (the fixed-height table keeps the expanded block from
+  // running too long). Collapsing from the foot scrolls the section back up.
+  let newsExpanded = false;
+  let newsSection: HTMLElement;
+  $: newsCanExpand = Boolean(data.news?.body_html || data.news?.articles?.length);
+  async function collapseNews() {
+    newsExpanded = false;
+    await tick();
+    newsSection?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  // Server ships the relevant article rows already shaped (cleaned title + link,
+  // publication, date, agencies, counties) and sorted newest-first. The program's
+  // Date is an RSS string ("Thu, 02 Apr 2026 07:00:00 GMT"); render it as a locale
+  // month-day-year, falling back to the raw value if unparseable.
+  const fmtArticleDate = (raw: string) => {
+    const d = new Date(raw);
+    return isNaN(d.getTime()) ? raw : dateFmt.format(d);
+  };
 
   // ── Filters ─────────────────────────────────────────────────────────────────
   let activeModels: Set<string> = new Set();
@@ -121,53 +160,58 @@
   <meta name="description" content={m.state_meta_description({ count: agencies.length, state: stateName })} />
 </svelte:head>
 
-<main id="main-content">
+<main id="main-content" class="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
 
   <!-- ── Header ──────────────────────────────────────────────────────────────── -->
-  <section class="border-b border-slate-200 bg-white px-4 py-8 sm:px-6 sm:py-10">
-    <div class="mx-auto max-w-6xl">
-      <p class="text-xs font-semibold uppercase tracking-widest text-slate-400">
-        {m.state_eyebrow()}
-      </p>
-      <h1 class="mt-1 text-2xl font-black text-slate-900 sm:text-3xl">
-        {stateName}
-      </h1>
-      <div class="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-600">
+  <header>
+    <p class="text-xs font-semibold uppercase tracking-widest text-slate-400">
+      {m.state_eyebrow()}
+    </p>
+    <h1 class="mt-1 text-2xl font-black text-slate-900 sm:text-3xl">
+      {stateName}
+    </h1>
+    <div class="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-slate-600">
+      {#if SHOW_LEGISLATION_STANCE && data.news?.legislation}
+        <LegislationBadge legislation={data.news.legislation} />
+      {/if}
+      <span>
+        <span class="font-semibold text-slate-900">{intFmt.format(agencies.length)}</span>
+        {agencies.length === 1 ? m.state_agency_one() : m.state_agency_other()}
+      </span>
+      {#if localLePct !== null}
         <span>
-          <span class="font-semibold text-slate-900">{intFmt.format(agencies.length)}</span>
-          {agencies.length === 1 ? m.state_agency_one() : m.state_agency_other()}
+          <span class="font-semibold text-slate-900">{localLePct}%</span>
+          {m.state_local_le_pct()}
         </span>
-        {#each MODEL_ORDER as model}
-          {#if modelCounts[model]}
-            <span class="flex items-center gap-1.5">
-              <span class="inline-block h-2 w-2 rounded-full" style="background: {MODEL_COLORS[model]};"></span>
-              <span class="font-semibold text-slate-900">{modelCounts[model]}</span>
-              {MODEL_SHORT[model]}
-            </span>
-          {/if}
-        {/each}
-        {#if stateMeta?.population_served}
-          <span>
-            <span class="font-semibold text-slate-900">{popFmt.format(stateMeta.population_served)}</span>
-            {m.state_covered()}
+      {/if}
+      {#each MODEL_ORDER as model}
+        {#if modelCounts[model]}
+          <span class="flex items-center gap-1.5">
+            <span class="inline-block h-2 w-2 rounded-full" style="background: {MODEL_COLORS[model]};"></span>
+            <span class="font-semibold text-slate-900">{modelCounts[model]}</span>
+            {MODEL_SHORT[model]}
           </span>
         {/if}
-      </div>
-      {#if snapshotDate}
-        <p class="mt-2 text-xs italic text-slate-400">
-          {m.state_as_of({ date: dateFmt.format(new Date(snapshotDate)) })}
-        </p>
+      {/each}
+      {#if stateMeta?.population_served}
+        <span>
+          <span class="font-semibold text-slate-900">{popFmt.format(stateMeta.population_served)}</span>
+          {m.state_covered()}
+        </span>
       {/if}
     </div>
-  </section>
+    {#if snapshotDate}
+      <p class="mt-2 text-xs italic text-slate-400">
+        {m.state_as_of({ date: dateFmt.format(new Date(snapshotDate)) })}
+      </p>
+    {/if}
+  </header>
 
   <!-- ── Map ──────────────────────────────────────────────────────────────── -->
-  <section class="border-b border-slate-200 bg-stone-50 pt-6 sm:pt-8">
-    <div class="mx-auto max-w-6xl px-4 sm:px-6">
-      <h2 class="font-serif text-lg font-bold text-slate-900 sm:text-xl">{m.state_map_heading()}</h2>
-    </div>
+  <section class="mt-8">
+    <h2 class="font-serif text-lg font-bold text-slate-900 sm:text-xl">{m.state_map_heading()}</h2>
     <div
-      class="relative mt-3 h-[300px] overflow-hidden border-y border-slate-200 shadow-sm sm:h-[420px]"
+      class="relative mt-3 h-[260px] overflow-hidden rounded-lg border border-slate-200 shadow-sm sm:h-[320px]"
       aria-label={m.state_map_aria({ state: stateName })}
     >
       <NationalMap
@@ -175,6 +219,8 @@
         terminatedAgencies={[]}
         {selectedStates}
         focusSelected
+        focusPadding={24}
+        focusMaxZoom={7}
         cursorIdx={null}
       />
     </div>
@@ -182,16 +228,139 @@
 
   <!-- ── Trend chart ──────────────────────────────────────────────────────── -->
   {#if showTrend}
-    <TrendCharts {trendMonths} {trend} hideSelector />
+    <section class="mt-10">
+      <TrendCharts {trendMonths} {trend} hideSelector embedded />
+    </section>
+  {/if}
+
+  <!-- ── News summary ─────────────────────────────────────────────────────── -->
+  {#if data.news}
+    <section class="mt-10" bind:this={newsSection}>
+      <h2 class="font-serif text-lg font-bold text-slate-900 sm:text-xl">
+        {m.news_heading({ state: stateName })}
+      </h2>
+
+      <!-- Real last-built date, ahead of the summary (the stance pill rides up in
+           the header's topline figures). -->
+      <!-- Just the date — the PromptQL credit lives in the warning right below. -->
+      <p class="mt-1.5 text-xs italic text-slate-400">
+        {m.news_updated({ date: newsUpdatedDate })}
+      </p>
+
+      <!-- Small hallucination caution, directly above the AI-written summary.
+           Full width of the news section (not clamped to the reading measure). -->
+      <div class="mt-4">
+        <NewsAiWarning />
+      </div>
+
+      <!-- TL;DR lead — a narrow reading measure (max-w-prose), set apart from the
+           full-width map/chart above it. Tapping it toggles the full summary
+           open/closed (same convenience as the states-index cards); the toggle
+           button below stays the keyboard/AT path, and clicks on links and
+           active text selections pass through. -->
+      <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
+      <div
+        class="news-prose news-tldr mt-5 max-w-prose {newsCanExpand ? 'cursor-pointer' : ''}"
+        on:click={(e) => {
+          if (!newsCanExpand) return;
+          if (e.target instanceof Element && e.target.closest("a, button")) return;
+          if (window.getSelection()?.toString()) return;
+          newsExpanded = !newsExpanded;
+        }}
+      >
+        {@html data.news.tldr_html}
+      </div>
+
+      {#if data.news.body_html || data.news.articles?.length}
+        <!-- One trigger unfurls BOTH the full narrative and the source-article
+             table. Anchored under the TL;DR; centered pill flanked by hairline
+             rules. Default collapsed → only the TL;DR shows. -->
+        <div class="news-toggle-row mt-4">
+          <span class="news-rule" aria-hidden="true"></span>
+          <button
+            type="button"
+            class="news-toggle"
+            on:click={() => (newsExpanded = !newsExpanded)}
+            aria-expanded={newsExpanded}
+            aria-controls="news-expand"
+          >
+            {newsExpanded ? m.news_show_less() : m.news_show_more()}
+            <span class="news-chev" class:rotate-180={newsExpanded} aria-hidden="true">▾</span>
+          </button>
+          <span class="news-rule" aria-hidden="true"></span>
+        </div>
+
+        {#if newsExpanded}
+          <div id="news-expand">
+            {#if data.news.body_html}
+              <div class="news-prose news-body mt-5 max-w-prose">
+                {@html data.news.body_html}
+              </div>
+            {/if}
+
+            {#if data.news.articles?.length}
+              <!-- Source-article list: fixed-height scroll, sticky header, newest
+                   first (sorted server-side). Title links out (a gnews redirect
+                   unless it resolved); Link/Relevant/Found-Via columns dropped. -->
+              <div
+                id="news-articles"
+                class="news-articles mt-6 max-h-[28rem] overflow-auto rounded-lg border border-slate-200"
+              >
+                <table class="news-articles-table">
+                  <thead>
+                    <tr>
+                      <th>{m.news_col_title()}</th>
+                      <th>{m.news_col_publication()}</th>
+                      <th>{m.news_col_date()}</th>
+                      <th>{m.news_col_agencies()}</th>
+                      <th>{m.news_col_counties()}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {#each data.news.articles as a}
+                      <tr>
+                        <td>
+                          {#if a.url}
+                            <a href={a.url} target="_blank" rel="noopener noreferrer">{a.title}</a>
+                          {:else}
+                            {a.title}
+                          {/if}
+                        </td>
+                        <td>{a.publication}</td>
+                        <td class="whitespace-nowrap tabular-nums">{fmtArticleDate(a.date)}</td>
+                        <td>{#each a.agencies as ag, i}{#if i > 0}, {/if}{#if ag.slug}<a href={localizeHref(`/agency/${ag.slug}`)}>{ag.name}</a>{:else}{ag.name}{/if}{/each}</td>
+                        <td>{a.counties}</td>
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
+              </div>
+            {/if}
+          </div>
+
+          <!-- Single collapse at the foot of the expanded block. -->
+          <div class="news-toggle-row mt-6">
+            <span class="news-rule" aria-hidden="true"></span>
+            <button type="button" class="news-toggle" on:click={collapseNews}>
+              {m.news_show_less()}
+              <span class="news-chev rotate-180" aria-hidden="true">▾</span>
+            </button>
+            <span class="news-rule" aria-hidden="true"></span>
+          </div>
+        {/if}
+      {/if}
+
+    </section>
   {/if}
 
   <!-- ── Agency list ──────────────────────────────────────────────────────── -->
-  <section class="px-4 py-8 sm:px-6 sm:py-10">
-    <div class="mx-auto max-w-6xl">
+  <section id="agencies" class="mt-10 scroll-mt-24">
+    <div>
       <h2 class="font-serif text-lg font-bold text-slate-900 sm:text-xl">
         {m.state_agencies_heading({ state: stateName })}
       </h2>
 
+      {#if agencies.length}
       <!-- Model filter pills (split-button: toggle left, ⓘ info right) -->
       <div class="mt-4 flex flex-wrap gap-2">
         {#each MODEL_ORDER as model}
@@ -363,6 +532,23 @@
               {/each}
             </tbody>
           </table>
+        </div>
+      {/if}
+      {:else}
+        <!-- Non-participating state: no signed 287(g) agreement on the current
+             roster. A deliberately-empty state (the "why" lives in the news
+             summary above when present) — not a data-missing error. -->
+        <div class="mt-4 rounded-lg border border-slate-200 bg-white px-6 py-10 text-center">
+          <p class="text-base font-semibold text-slate-800">
+            {m.state_no_agencies_title({ state: stateName })}
+          </p>
+          <p class="mx-auto mt-2 max-w-prose text-sm leading-relaxed text-slate-600">
+            {m.state_no_agencies_body({ state: stateName })}
+          </p>
+          <a
+            href={localizeHref("/")}
+            class="mt-4 inline-block text-sm font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900"
+          >{m.state_no_agencies_cta()}</a>
         </div>
       {/if}
     </div>
