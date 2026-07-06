@@ -258,7 +258,7 @@
               href={localizeHref("/")}
               class="no-underline {isNavActive('/', basePath) ? 'text-white underline underline-offset-4 decoration-2' : 'text-white/60 hover:text-white'}"
               aria-current={isNavActive('/', basePath) ? 'page' : undefined}
-            >{m.nav_map()}</a>
+            ><span class="sm:hidden">{m.nav_map_short()}</span><span class="hidden sm:inline">{m.nav_map()}</span></a>
             <a
               href={localizeHref("/states")}
               class="no-underline {isNavActive('/states', basePath) ? 'text-white underline underline-offset-4 decoration-2' : 'text-white/60 hover:text-white'}"

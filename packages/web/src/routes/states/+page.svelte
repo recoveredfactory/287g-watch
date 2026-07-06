@@ -290,14 +290,36 @@
         </div>
 
         <!-- Block A (always): the quick take beside the map — TL;DR on the left
-             (wider ~2/3), state map on the right. Stacks on mobile. -->
-        <div class="mt-4 sm:grid sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] sm:items-start sm:gap-10">
+             (wider ~2/3), state map on the right. Stacks on mobile. Tapping
+             anywhere in it opens the card — a convenience layer over the real
+             toggle button below (which keeps the keyboard/AT path). Clicks on
+             links and active text selections pass through; expand-only, so
+             collapsing stays on the explicit buttons. -->
+        <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
+        <div
+          class="mt-4 sm:grid sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] sm:items-start sm:gap-10 {canExpand && !isExp
+            ? 'cursor-pointer'
+            : ''}"
+          on:click={(e) => {
+            if (!canExpand || isExp) return;
+            if (e.target instanceof Element && e.target.closest("a, button")) return;
+            if (window.getSelection()?.toString()) return;
+            toggle(row.abbr);
+          }}
+        >
           <div class="min-w-0">
             {#if row.news}
               <!-- This state's own last-built date, ahead of the summary (the
                    stance pill rides up in the card's topline figures). -->
               <p class="mb-2 text-xs italic text-slate-400">
-                {m.news_updated({ date: builtDate(row.news.built_at) })}
+                {m.news_updated({ date: builtDate(row.news.built_at) })} ·
+                {m.news_generated_with()}
+                <a
+                  href="https://promptql.io"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="underline decoration-slate-300 underline-offset-2 hover:text-slate-600"
+                >{m.news_ai_promptql()}</a>
               </p>
               <div class="news-prose news-tldr max-w-prose">{@html row.news.tldr_html}</div>
             {:else}
@@ -349,6 +371,15 @@
                   {/if}
                   {@html restHtml}
                 </div>
+                {#if row.agencyCount > 1}
+                  <p class="mt-4 text-sm">
+                    <a
+                      href={`${localizeHref(`/state/${row.abbr.toLowerCase()}`)}#agencies`}
+                      class="font-medium text-slate-600 underline decoration-slate-300 underline-offset-2 hover:text-slate-900"
+                    >{m.states_index_view_all_agencies({ count: intFmt.format(row.agencyCount) })}
+                      <span aria-hidden="true">→</span></a>
+                  </p>
+                {/if}
               </div>
             {/if}
             {#if hasRail}
@@ -369,7 +400,7 @@
                 {/if}
                 {#if row.topAgencies.length}
                   <div class="mt-6">
-                    <StateTopAgencies agencies={row.topAgencies} />
+                    <StateTopAgencies agencies={row.topAgencies} abbr={row.abbr} total={row.agencyCount} />
                   </div>
                 {/if}
               </div>

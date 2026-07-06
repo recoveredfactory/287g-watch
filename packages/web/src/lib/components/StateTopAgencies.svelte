@@ -4,6 +4,10 @@
   import { MODEL_COLORS } from "$lib/colors";
 
   export let agencies: { slug: string; name: string; model: string; officers: number }[] = [];
+  // State abbr + full agency count for the "view all" link under the list;
+  // omit either and the link doesn't render.
+  export let abbr: string | undefined = undefined;
+  export let total: number | undefined = undefined;
 
   const intFmt = new Intl.NumberFormat(getLocale() === "es" ? "es-MX" : "en-US");
 </script>
@@ -29,4 +33,15 @@
       </li>
     {/each}
   </ul>
+  <!-- Only when there's more than the list already shows — otherwise "view all"
+       points at the same handful of names. -->
+  {#if abbr && total && total > agencies.length}
+    <p class="mt-3 text-sm">
+      <a
+        href={`${localizeHref(`/state/${abbr.toLowerCase()}`)}#agencies`}
+        class="font-medium text-slate-600 underline decoration-slate-300 underline-offset-2 hover:text-slate-900"
+      >{m.states_index_view_all_agencies({ count: intFmt.format(total) })}
+        <span aria-hidden="true">→</span></a>
+    </p>
+  {/if}
 </div>

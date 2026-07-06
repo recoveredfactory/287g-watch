@@ -12,6 +12,13 @@
 >
   <span class="shrink-0" aria-hidden="true">⚠</span>
   <p>
+    {m.news_ai_written_by()}
+    <a
+      href="https://promptql.io"
+      target="_blank"
+      rel="noopener noreferrer"
+      class="font-semibold underline decoration-amber-400 underline-offset-2 hover:decoration-amber-700"
+    >{m.news_ai_promptql()}</a>.
     {m.news_ai_warning()}
     <a
       href={localizeHref("/methodology#ai")}

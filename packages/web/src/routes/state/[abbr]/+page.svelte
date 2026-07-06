@@ -242,7 +242,14 @@
       <!-- Real last-built date, ahead of the summary (the stance pill rides up in
            the header's topline figures). -->
       <p class="mt-1.5 text-xs italic text-slate-400">
-        {m.news_updated({ date: newsUpdatedDate })}
+        {m.news_updated({ date: newsUpdatedDate })} ·
+        {m.news_generated_with()}
+        <a
+          href="https://promptql.io"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="underline decoration-slate-300 underline-offset-2 hover:text-slate-600"
+        >{m.news_ai_promptql()}</a>
       </p>
 
       <!-- Small hallucination caution, directly above the AI-written summary.
@@ -343,7 +350,7 @@
   {/if}
 
   <!-- ── Agency list ──────────────────────────────────────────────────────── -->
-  <section class="mt-10">
+  <section id="agencies" class="mt-10 scroll-mt-24">
     <div>
       <h2 class="font-serif text-lg font-bold text-slate-900 sm:text-xl">
         {m.state_agencies_heading({ state: stateName })}
