@@ -129,6 +129,33 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm pipeline
 
+      # The per-state news summaries are built manually/locally for now
+      # (PromptQL creds + residential-IP gnews link resolution), so CI doesn't
+      # regenerate them — it carries forward whatever the live site already
+      # serves. Without this, a scheduled refresh would build with an empty
+      # (gitignored) news dir and silently wipe the summaries from the site.
+      # On a first deploy (nothing live yet) it no-ops and the pages fall back
+      # to their no-summary state.
+      - name: Carry forward news summaries from the live site
+        run: |
+          case "$STAGE" in
+            prod) HOST="$WEB_DOMAIN" ;;
+            staging) HOST="$WEB_STAGING_DOMAIN" ;;
+            *) echo "Unknown stage: $STAGE" >&2; exit 1 ;;
+          esac
+          NEWS_DIR=packages/web/static/data/dist/news
+          mkdir -p "$NEWS_DIR"
+          base="https://$HOST/data/dist/news"
+          if ! curl -fsSL --retry 3 "$base/index.json" -o "$NEWS_DIR/index.json"; then
+            echo "no live news to carry forward (first deploy?) — skipping"
+            exit 0
+          fi
+          for abbr in $(node -p "require('./$NEWS_DIR/index.json').states.map(s=>s.abbr).join(' ')"); do
+            curl -fsSL --retry 3 "$base/$abbr.json" -o "$NEWS_DIR/$abbr.json" \
+              || { echo "::warning::news/$abbr.json missing on live site"; rm -f "$NEWS_DIR/$abbr.json"; }
+          done
+          echo "carried $(ls "$NEWS_DIR" | wc -l) news files from https://$HOST"
+
       # Hash the freshly-built JSON against what's live. If every file matches,
       # the upstream snapshot didn't move — skip the (slow) deploy + bake.
       - name: Change gate
