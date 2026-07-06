@@ -265,11 +265,6 @@
               aria-current={isNavActive('/states', basePath) ? 'page' : undefined}
             >{m.nav_states()}</a>
             <a
-              href={localizeHref("/about")}
-              class="no-underline {isNavActive('/about', basePath) ? 'text-white underline underline-offset-4 decoration-2' : 'text-white/60 hover:text-white'}"
-              aria-current={isNavActive('/about', basePath) ? 'page' : undefined}
-            >{m.nav_about()}</a>
-            <a
               href={localizeHref("/glossary")}
               class="no-underline {isNavActive('/glossary', basePath) ? 'text-white underline underline-offset-4 decoration-2' : 'text-white/60 hover:text-white'}"
               aria-current={isNavActive('/glossary', basePath) ? 'page' : undefined}
@@ -279,6 +274,11 @@
               class="no-underline {isNavActive('/methodology', basePath) ? 'text-white underline underline-offset-4 decoration-2' : 'text-white/60 hover:text-white'}"
               aria-current={isNavActive('/methodology', basePath) ? 'page' : undefined}
             >{m.nav_methodology()}</a>
+            <a
+              href={localizeHref("/about")}
+              class="no-underline {isNavActive('/about', basePath) ? 'text-white underline underline-offset-4 decoration-2' : 'text-white/60 hover:text-white'}"
+              aria-current={isNavActive('/about', basePath) ? 'page' : undefined}
+            >{m.nav_about()}</a>
           </nav>
           <!-- Lang switcher — hidden on mobile; visible on desktop -->
           <div class="ml-auto hidden items-center gap-2 border-l border-white/20 pl-5 text-xs uppercase tracking-wider sm:flex" aria-label={m.lang_toggle_aria()}>
