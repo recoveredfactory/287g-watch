@@ -62,6 +62,7 @@
   "states_index_top_agencies": "Largest agencies",
   "states_index_officers": "sworn officers",
   "states_index_view_all_agencies": "View all {count} agencies",
+  "states_index_explore_state": "Explore 287(g) agreements in {state}",
   "states_index_local_le_pct": "of local agencies",
   "state_meta_title": "{state} 287(g) Agencies",
   "state_meta_description": "{count} agencies in {state} participating in the 287(g) immigration enforcement program.",

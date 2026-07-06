@@ -62,6 +62,7 @@
   "states_index_top_agencies": "Agencias más grandes",
   "states_index_officers": "agentes jurados",
   "states_index_view_all_agencies": "Ver las {count} agencias",
+  "states_index_explore_state": "Explore los acuerdos 287(g) en {state}",
   "states_index_local_le_pct": "de agencias locales",
   "state_meta_title": "Agencias 287(g) de {state}",
   "state_meta_description": "{count} agencias en {state} que participan en el programa de control migratorio 287(g).",

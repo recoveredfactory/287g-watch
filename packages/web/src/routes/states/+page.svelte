@@ -371,15 +371,13 @@
                   {/if}
                   {@html restHtml}
                 </div>
-                {#if row.agencyCount > 1}
-                  <p class="mt-4 text-sm">
-                    <a
-                      href={`${localizeHref(`/state/${row.abbr.toLowerCase()}`)}#agencies`}
-                      class="font-medium text-slate-600 underline decoration-slate-300 underline-offset-2 hover:text-slate-900"
-                    >{m.states_index_view_all_agencies({ count: intFmt.format(row.agencyCount) })}
-                      <span aria-hidden="true">→</span></a>
-                  </p>
-                {/if}
+                <p class="mt-4 text-sm">
+                  <a
+                    href={localizeHref(`/state/${row.abbr.toLowerCase()}`)}
+                    class="font-medium text-slate-600 underline decoration-slate-300 underline-offset-2 hover:text-slate-900"
+                  >{m.states_index_explore_state({ state: row.stateName })}
+                    <span aria-hidden="true">→</span></a>
+                </p>
               </div>
             {/if}
             {#if hasRail}
