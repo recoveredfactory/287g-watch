@@ -443,7 +443,9 @@ async function buildState(abbr: string, name: string) {
       ? `THROTTLED — resolved ${resolveStats.resolved}/${toResolve.length}, ${left} left as gnews (retry after cooldown)`
       : `ok (${resolveStats.resolved}/${toResolve.length} links resolved)`,
   )
-  return { abbr, state: name, generated_at: out.generated_at }
+  // built_at rides along in the index so CI's change gate can compare content
+  // stamps across builds — generated_at is a fresh write-clock every run.
+  return { abbr, state: name, generated_at: out.generated_at, built_at: builtAt }
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
@@ -469,7 +471,7 @@ function statesToBuild(): Array<{ abbr: string; name: string }> {
 
 const states = statesToBuild()
 console.log(`Building news summaries for ${states.length} states (after=${AFTER})\n`)
-const manifest: Array<{ abbr: string; state: string; generated_at: string }> = []
+const manifest: Array<{ abbr: string; state: string; generated_at: string; built_at: string }> = []
 for (const { abbr, name } of states) {
   const entry = await buildState(abbr, name)
   if (entry) manifest.push(entry)

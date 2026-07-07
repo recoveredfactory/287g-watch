@@ -13,6 +13,17 @@
 # GITHUB_TOKEN is the built-in Actions token — the pipeline uses it for the
 # (public) appelson/Tracking_287g GitHub API reads.
 #
+# News summaries (issue #220):
+#   Secret PQL_NEWS_URL, PQL_NEWS_TOKEN — the PromptQL saved-program endpoint.
+# CI runs `pnpm news` plain (never --force): the program runs on its own
+# schedule and caches results server-side, so plain calls are cheap and fresh.
+# If the build fails (PromptQL outage, missing secrets on a fork), the old
+# carry-forward step kicks in as a fallback so a refresh can't wipe the live
+# summaries. Google News link resolution may not work from Actions IPs —
+# unresolved links stay as gnews redirects (still clickable; the browser
+# resolves them); whatever does resolve is kept in an actions/cache so later
+# runs don't redo it.
+#
 # Bake compute (issue #186 — the video bake is GPU-accelerated to beat the
 # timeout). Both default safely so an unconfigured repo still runs (slow):
 #   Variable BAKE_RUNNER_LABEL  label of a GPU larger runner created in org
@@ -86,7 +97,9 @@ jobs:
   refresh:
     # GPU larger runner when configured (issue #186), else the standard runner.
     runs-on: ${{ vars.BAKE_RUNNER_LABEL || 'ubuntu-latest' }}
-    timeout-minutes: 45
+    # 45 for ingest+deploy+bake, plus headroom for the news build (~50 PromptQL
+    # calls — server-cached, cheap — and the gnews link-resolution pool).
+    timeout-minutes: 60
     # Exposed to the post-social job: whether to post at all, and the caption date.
     outputs:
       changed: ${{ steps.gate.outputs.changed }}
@@ -129,14 +142,48 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm pipeline
 
-      # The per-state news summaries are built manually/locally for now
-      # (PromptQL creds + residential-IP gnews link resolution), so CI doesn't
-      # regenerate them — it carries forward whatever the live site already
-      # serves. Without this, a scheduled refresh would build with an empty
-      # (gitignored) news dir and silently wipe the summaries from the site.
-      # On a first deploy (nothing live yet) it no-ops and the pages fall back
-      # to their no-summary state.
-      - name: Carry forward news summaries from the live site
+      # Resolved gnews→publisher URLs survive across runs so each refresh only
+      # resolves links it hasn't seen. Saved under a per-run key below (cache
+      # keys are immutable); restore-keys picks up the newest previous run's.
+      - name: Restore gnews link-resolution cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: packages/pipeline/data/gnews_cache.json
+          key: gnews-cache-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: gnews-cache-
+
+      # Build the per-state news summaries against the PromptQL saved program.
+      # Plain call — NEVER --force here: the program refreshes on its own
+      # schedule and caches server-side, so this replays the latest gathered
+      # content (the local raw cache is gitignored → empty every CI run, which
+      # is exactly the plain-call behavior we want). continue-on-error: a
+      # failure falls through to the carry-forward step below instead of
+      # failing the refresh.
+      - name: Build news summaries
+        id: news
+        continue-on-error: true
+        env:
+          PQL_NEWS_URL: ${{ secrets.PQL_NEWS_URL }}
+          PQL_NEWS_TOKEN: ${{ secrets.PQL_NEWS_TOKEN }}
+        run: pnpm news
+
+      # always() + hashFiles guard: save whatever resolved even when the build
+      # failed partway (the script persists after each state), but skip cleanly
+      # if the file never came into being (save errors on a missing path).
+      - name: Save gnews link-resolution cache
+        if: always() && hashFiles('packages/pipeline/data/gnews_cache.json') != ''
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: packages/pipeline/data/gnews_cache.json
+          key: gnews-cache-${{ github.run_id }}-${{ github.run_attempt }}
+
+      # FALLBACK — only when the news build failed (PromptQL outage, missing
+      # secrets on a fork): carry forward whatever the live site already
+      # serves, so a refresh can't build with an empty (gitignored) news dir
+      # and silently wipe the summaries. On a first deploy (nothing live yet)
+      # it no-ops and the pages fall back to their no-summary state.
+      - name: Carry forward news summaries from the live site (fallback)
+        if: steps.news.outcome != 'success'
         run: |
           case "$STAGE" in
             prod) HOST="$WEB_DOMAIN" ;;
@@ -177,6 +224,26 @@ jobs:
             echo "$f: local=$local_hash remote=$remote_hash"
             [ "$local_hash" != "$remote_hash" ] && changed=true
           done
+          # News: compare per-state content stamps (built_at — when the PromptQL
+          # program actually gathered), NOT file hashes. generated_at is a fresh
+          # write-clock every build and gnews link resolution varies run-to-run,
+          # so hashing would deploy on every refresh. When the fallback carried
+          # the live files forward, local == remote and this stays quiet.
+          news_index=packages/web/static/data/dist/news/index.json
+          local_news=$(node -p "JSON.stringify(require('./$news_index').states.map(s=>[s.abbr,s.built_at]))" 2>/dev/null || echo local-missing)
+          if curl -fsSL --retry 3 "https://$HOST/data/dist/news/index.json" -o /tmp/news-index.json; then
+            remote_news=$(node -p "JSON.stringify(require('/tmp/news-index.json').states.map(s=>[s.abbr,s.built_at]))" 2>/dev/null || echo remote-missing)
+          else
+            remote_news=remote-missing
+          fi
+          if [ "$local_news" != "$remote_news" ]; then
+            echo "news: built_at stamps differ (or one side missing)"
+            # Nothing on either side (no live news yet AND the local build +
+            # fallback both came up empty) → not a change, just absence.
+            [ "$local_news" = "local-missing" ] && [ "$remote_news" = "remote-missing" ] || changed=true
+          else
+            echo "news: built_at stamps match"
+          fi
           if [ "$FORCE" = "true" ]; then
             echo "force=true → deploying regardless of change gate"
             changed=true
