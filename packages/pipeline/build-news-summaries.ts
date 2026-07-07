@@ -469,8 +469,38 @@ function statesToBuild(): Array<{ abbr: string; name: string }> {
     .map((a) => ({ abbr: a, name: STATE_NAMES[a] }))
 }
 
+// ── Prefetch ─────────────────────────────────────────────────────────────────
+// On a cold run (CI: the raw cache is gitignored → always cold) the program
+// calls dominate — ~2 min each even when the API replays its server-side cache,
+// which serially is ~2 h for 53 states (it blew the CI job timeout). The build
+// loop below stays serial for gnews-resolution civility, so instead warm the
+// raw-response cache with a bounded worker pool first; the serial pass then
+// reads it back instantly. Skipped under --force, where runProgram must hit the
+// API per call anyway. A prefetch failure is only logged — the serial pass
+// retries that state for real and its error handling stays authoritative.
+const PQL_CONCURRENCY = Number(process.env.PQL_CONCURRENCY) || 6
+
+async function prefetchPrograms(list: Array<{ abbr: string; name: string }>) {
+  let next = 0
+  let done = 0
+  const worker = async () => {
+    while (next < list.length) {
+      const { abbr, name } = list[next++]
+      try {
+        await runProgram(name, abbr, AFTER)
+      } catch (e) {
+        console.log(`  prefetch ${abbr} failed (${(e as Error).message}) — the build pass will retry`)
+      }
+      done++
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(PQL_CONCURRENCY, list.length) }, worker))
+  console.log(`  prefetched ${done}/${list.length} program responses\n`)
+}
+
 const states = statesToBuild()
 console.log(`Building news summaries for ${states.length} states (after=${AFTER})\n`)
+if (!FORCE) await prefetchPrograms(states)
 const manifest: Array<{ abbr: string; state: string; generated_at: string; built_at: string }> = []
 for (const { abbr, name } of states) {
   const entry = await buildState(abbr, name)

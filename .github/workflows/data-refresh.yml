@@ -97,9 +97,11 @@ jobs:
   refresh:
     # GPU larger runner when configured (issue #186), else the standard runner.
     runs-on: ${{ vars.BAKE_RUNNER_LABEL || 'ubuntu-latest' }}
-    # 45 for ingest+deploy+bake, plus headroom for the news build (~50 PromptQL
-    # calls — server-cached, cheap — and the gnews link-resolution pool).
-    timeout-minutes: 60
+    # 45 for ingest+deploy+bake, plus the news build's own 40-min step cap
+    # (~53 PromptQL calls at ~2 min each, prefetched concurrently → ~20 min
+    # typical). Backstop only — the news step must time out at the step level,
+    # not here, so its fallback still runs.
+    timeout-minutes: 90
     # Exposed to the post-social job: whether to post at all, and the caption date.
     outputs:
       changed: ${{ steps.gate.outputs.changed }}
@@ -156,12 +158,16 @@ jobs:
       # Plain call — NEVER --force here: the program refreshes on its own
       # schedule and caches server-side, so this replays the latest gathered
       # content (the local raw cache is gitignored → empty every CI run, which
-      # is exactly the plain-call behavior we want). continue-on-error: a
-      # failure falls through to the carry-forward step below instead of
-      # failing the refresh.
+      # is exactly the plain-call behavior we want; the script prefetches the
+      # ~2-min-each program responses concurrently). continue-on-error + the
+      # step timeout: a failure OR overrun falls through to the carry-forward
+      # step below instead of failing the refresh — the job-level timeout must
+      # never be what stops this step, because that cancels the whole job
+      # (deploy included) and the fallback never runs.
       - name: Build news summaries
         id: news
         continue-on-error: true
+        timeout-minutes: 40
         env:
           PQL_NEWS_URL: ${{ secrets.PQL_NEWS_URL }}
           PQL_NEWS_TOKEN: ${{ secrets.PQL_NEWS_TOKEN }}
