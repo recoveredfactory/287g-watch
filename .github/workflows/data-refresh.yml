@@ -2,8 +2,8 @@
 # redeploy the site and re-bake/publish the map video + OG cards. Mirrors the
 # manual release flow in ARCHITECTURE.md ("Map assets & releasing").
 #
-# Trigger: manual for now (workflow_dispatch). The daily `schedule` below is
-# wired but commented out — enable it once a few manual runs are green.
+# Triggers: twice-daily cron (data), weekly Monday cron (news), and manual
+# workflow_dispatch (stage/force/build_news inputs).
 #
 # Required repo config (Settings → Secrets and variables → Actions):
 #   Secret   AWS_ROLE_ARN        IAM role for GitHub OIDC to assume (sst deploy + s3)
@@ -15,14 +15,21 @@
 #
 # News summaries (issue #220):
 #   Secret PQL_NEWS_URL, PQL_NEWS_TOKEN — the PromptQL saved-program endpoint.
-# CI runs `pnpm news` plain (never --force): the program runs on its own
-# schedule and caches results server-side, so plain calls are cheap and fresh.
-# If the build fails (PromptQL outage, missing secrets on a fork), the old
-# carry-forward step kicks in as a fallback so a refresh can't wipe the live
-# summaries. Google News link resolution may not work from Actions IPs —
-# unresolved links stay as gnews redirects (still clickable; the browser
-# resolves them); whatever does resolve is kept in an actions/cache so later
-# runs don't redo it.
+# News is built WEEKLY (the Monday cron below) or on demand (dispatch with
+# build_news=true) — each PromptQL call takes ~2 min even server-cached, so
+# building on every refresh added ~20 min of larger-runner time per tick for
+# summaries that barely move day to day. Every other run carries the live
+# site's summaries forward unchanged (the fallback step doubles as the normal
+# path). When it does build, CI runs `pnpm news` plain (never --force): the
+# program runs on its own schedule and caches results server-side, so plain
+# calls replay the latest gathered content. If the build fails (PromptQL
+# outage, missing secrets on a fork), the same carry-forward kicks in so a
+# refresh can't wipe the live summaries. Google News link resolution may not
+# work from Actions IPs — unresolved links stay as gnews redirects (still
+# clickable; the browser resolves them); whatever does resolve is kept in an
+# actions/cache so later runs don't redo it. A news-only change redeploys the
+# site but skips the video/OG bake and the social post — those are
+# data-driven and nothing in them reads news.
 #
 # Bake compute (issue #186 — the video bake is GPU-accelerated to beat the
 # timeout). Both default safely so an unconfigured repo still runs (slow):
@@ -72,6 +79,10 @@ on:
         type: choice
         options: [post, dry-run]
         default: post
+      build_news:
+        description: Build fresh news summaries (default carries the live site's forward)
+        type: boolean
+        default: false
   # Twice daily, both AFTER the upstream auto-commit window: appelson/
   # Tracking_287g lands its daily "Auto-commit from GitHub Actions" around
   # 17:00–20:00 UTC. 21:00 catches that day's update; 01:00 is a safety net for
@@ -83,6 +94,10 @@ on:
   schedule:
     - cron: "0 21 * * *" # 21:00 UTC — primary, just after upstream lands
     - cron: "0 1 * * *"  # 01:00 UTC — safety net for a late upstream push
+    # Weekly news build — Monday 14:00 UTC (morning US). ONLY this tick builds
+    # fresh news (matched by string in BUILD_NEWS below — keep them in sync);
+    # the daily ticks above carry the live summaries forward.
+    - cron: "0 14 * * 1"
 
 # Don't let two refreshes for the same stage clobber each other mid-deploy.
 concurrency:
@@ -104,7 +119,7 @@ jobs:
     timeout-minutes: 90
     # Exposed to the post-social job: whether to post at all, and the caption date.
     outputs:
-      changed: ${{ steps.gate.outputs.changed }}
+      data_changed: ${{ steps.gate.outputs.data_changed }}
       snapshot_date: ${{ steps.snapshot.outputs.date }}
       # Immutable per-release video keys for the social email (see the archive step).
       map_trend_archive_en: ${{ steps.archive.outputs.map_trend_archive_en }}
@@ -115,6 +130,11 @@ jobs:
       WEB_DOMAIN: ${{ vars.WEB_DOMAIN }}
       WEB_STAGING_DOMAIN: ${{ vars.WEB_STAGING_DOMAIN }}
       BAKE_GL: ${{ vars.BAKE_GL || 'swiftshader' }}
+      # News is expensive (~20 min of PromptQL calls): build only on the weekly
+      # Monday cron (string-matched against the schedule entry above) or an
+      # explicit build_news dispatch. Everything else carries the live
+      # summaries forward.
+      BUILD_NEWS: ${{ (github.event.schedule == '0 14 * * 1' || inputs.build_news == true) && 'true' || 'false' }}
     steps:
       # Actions are pinned to commit SHAs (not mutable tags) so a hijacked tag
       # can't inject code that exfiltrates GITHUB_TOKEN or abuses the OIDC step.
@@ -144,10 +164,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm pipeline
 
-      # Resolved gnews→publisher URLs survive across runs so each refresh only
-      # resolves links it hasn't seen. Saved under a per-run key below (cache
-      # keys are immutable); restore-keys picks up the newest previous run's.
+      # Resolved gnews→publisher URLs survive across runs so each news build
+      # only resolves links it hasn't seen. Saved under a per-run key below
+      # (cache keys are immutable); restore-keys picks up the newest previous
+      # run's. Only touched on news-building runs.
       - name: Restore gnews link-resolution cache
+        if: env.BUILD_NEWS == 'true'
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: packages/pipeline/data/gnews_cache.json
@@ -155,6 +177,7 @@ jobs:
           restore-keys: gnews-cache-
 
       # Build the per-state news summaries against the PromptQL saved program.
+      # Weekly Monday cron / build_news dispatch only — see BUILD_NEWS above.
       # Plain call — NEVER --force here: the program refreshes on its own
       # schedule and caches server-side, so this replays the latest gathered
       # content (the local raw cache is gitignored → empty every CI run, which
@@ -166,6 +189,7 @@ jobs:
       # (deploy included) and the fallback never runs.
       - name: Build news summaries
         id: news
+        if: env.BUILD_NEWS == 'true'
         continue-on-error: true
         timeout-minutes: 40
         env:
@@ -177,18 +201,20 @@ jobs:
       # failed partway (the script persists after each state), but skip cleanly
       # if the file never came into being (save errors on a missing path).
       - name: Save gnews link-resolution cache
-        if: always() && hashFiles('packages/pipeline/data/gnews_cache.json') != ''
+        if: always() && env.BUILD_NEWS == 'true' && hashFiles('packages/pipeline/data/gnews_cache.json') != ''
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: packages/pipeline/data/gnews_cache.json
           key: gnews-cache-${{ github.run_id }}-${{ github.run_attempt }}
 
-      # FALLBACK — only when the news build failed (PromptQL outage, missing
-      # secrets on a fork): carry forward whatever the live site already
-      # serves, so a refresh can't build with an empty (gitignored) news dir
-      # and silently wipe the summaries. On a first deploy (nothing live yet)
-      # it no-ops and the pages fall back to their no-summary state.
-      - name: Carry forward news summaries from the live site (fallback)
+      # THE NORMAL PATH on daily refreshes (news step skipped → outcome !=
+      # 'success'), and the FALLBACK when a Monday/dispatched build fails
+      # (PromptQL outage, missing secrets on a fork): carry forward whatever
+      # the live site already serves, so a refresh can't build with an empty
+      # (gitignored) news dir and silently wipe the summaries. On a first
+      # deploy (nothing live yet) it no-ops and the pages fall back to their
+      # no-summary state.
+      - name: Carry forward news summaries from the live site
         if: steps.news.outcome != 'success'
         run: |
           case "$STAGE" in
@@ -209,8 +235,10 @@ jobs:
           done
           echo "carried $(ls "$NEWS_DIR" | wc -l) news files from https://$HOST"
 
-      # Hash the freshly-built JSON against what's live. If every file matches,
-      # the upstream snapshot didn't move — skip the (slow) deploy + bake.
+      # Hash the freshly-built JSON against what's live. Two separate verdicts:
+      # data_changed drives the full deploy + bake + social release, while a
+      # news-only change gets a plain site deploy (nothing in the bake or the
+      # social post reads news). If neither moved, skip everything.
       - name: Change gate
         id: gate
         run: |
@@ -219,7 +247,7 @@ jobs:
             staging) HOST="$WEB_STAGING_DOMAIN" ;;
             *) echo "Unknown stage: $STAGE" >&2; exit 1 ;;
           esac
-          changed=false
+          data_changed=false
           for f in agency_index state_meta terminated_agencies; do
             local_hash=$(sha256sum "packages/web/static/data/dist/$f.json" | awk '{print $1}')
             if curl -fsSL --retry 3 "https://$HOST/data/dist/$f.json" -o /tmp/remote.json; then
@@ -228,13 +256,14 @@ jobs:
               remote_hash=missing
             fi
             echo "$f: local=$local_hash remote=$remote_hash"
-            [ "$local_hash" != "$remote_hash" ] && changed=true
+            [ "$local_hash" != "$remote_hash" ] && data_changed=true
           done
           # News: compare per-state content stamps (built_at — when the PromptQL
           # program actually gathered), NOT file hashes. generated_at is a fresh
           # write-clock every build and gnews link resolution varies run-to-run,
-          # so hashing would deploy on every refresh. When the fallback carried
-          # the live files forward, local == remote and this stays quiet.
+          # so hashing would deploy on every refresh. When the carry-forward
+          # brought the live files over, local == remote and this stays quiet.
+          news_changed=false
           news_index=packages/web/static/data/dist/news/index.json
           local_news=$(node -p "JSON.stringify(require('./$news_index').states.map(s=>[s.abbr,s.built_at]))" 2>/dev/null || echo local-missing)
           if curl -fsSL --retry 3 "https://$HOST/data/dist/news/index.json" -o /tmp/news-index.json; then
@@ -246,28 +275,29 @@ jobs:
             echo "news: built_at stamps differ (or one side missing)"
             # Nothing on either side (no live news yet AND the local build +
             # fallback both came up empty) → not a change, just absence.
-            [ "$local_news" = "local-missing" ] && [ "$remote_news" = "remote-missing" ] || changed=true
+            [ "$local_news" = "local-missing" ] && [ "$remote_news" = "remote-missing" ] || news_changed=true
           else
             echo "news: built_at stamps match"
           fi
           if [ "$FORCE" = "true" ]; then
-            echo "force=true → deploying regardless of change gate"
-            changed=true
+            echo "force=true → full deploy regardless of change gate"
+            data_changed=true
           fi
-          echo "changed=$changed" >> "$GITHUB_OUTPUT"
-          echo "### Data refresh ($STAGE): changed=$changed" >> "$GITHUB_STEP_SUMMARY"
+          echo "data_changed=$data_changed" >> "$GITHUB_OUTPUT"
+          echo "news_changed=$news_changed" >> "$GITHUB_OUTPUT"
+          echo "### Data refresh ($STAGE): data_changed=$data_changed news_changed=$news_changed" >> "$GITHUB_STEP_SUMMARY"
 
       # Expose the ICE release date (latest snapshot) for the social caption.
       - name: Read snapshot date
         id: snapshot
-        if: steps.gate.outputs.changed == 'true'
+        if: steps.gate.outputs.data_changed == 'true'
         run: |
           d=$(node -p "(require('./packages/web/static/data/dist/agency_index.json').find(a=>a.snapshot_date)||{}).snapshot_date?.slice(0,10)||''")
           echo "date=$d" >> "$GITHUB_OUTPUT"
 
       # Everything below only runs when the dataset moved (or --force).
       - name: Install chromium for bakes
-        if: steps.gate.outputs.changed == 'true'
+        if: steps.gate.outputs.data_changed == 'true'
         # playwright-chromium auto-download is disabled in pnpm-workspace.yaml
         # (allowBuilds), so fetch the browser + system libs explicitly.
         run: pnpm --filter web exec playwright install --with-deps chromium
@@ -275,15 +305,15 @@ jobs:
       # GPU path only: headed Chromium needs a display. (NVIDIA drivers are
       # already on the GPU runner image.)
       - name: Install xvfb (GPU bake)
-        if: steps.gate.outputs.changed == 'true' && env.BAKE_GL == 'gpu'
+        if: steps.gate.outputs.data_changed == 'true' && env.BAKE_GL == 'gpu'
         run: sudo apt-get update && sudo apt-get install -y xvfb
 
       - name: Ensure ffmpeg
-        if: steps.gate.outputs.changed == 'true'
+        if: steps.gate.outputs.data_changed == 'true'
         run: ffmpeg -version >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y ffmpeg)
 
       - name: Deploy + bake + publish assets
-        if: steps.gate.outputs.changed == 'true'
+        if: steps.gate.outputs.data_changed == 'true'
         # Under BAKE_GL=gpu the bake runs headed → wrap in a virtual display.
         run: |
           if [ "$BAKE_GL" = "gpu" ]; then
@@ -299,7 +329,7 @@ jobs:
       # key is byte-identical to the object it just uploaded.
       - name: Archive video keys (for the social email)
         id: archive
-        if: steps.gate.outputs.changed == 'true'
+        if: steps.gate.outputs.data_changed == 'true'
         env:
           DATE: ${{ steps.snapshot.outputs.date }}
         run: |
@@ -315,13 +345,23 @@ jobs:
             fi
           done
 
+      # News moved but the dataset didn't: redeploy the site so the fresh
+      # summaries go live, skipping the (slow, data-driven) video/OG bake and
+      # the social release — nothing in either reads news.
+      - name: Deploy site only (news-only change)
+        if: steps.gate.outputs.data_changed != 'true' && steps.gate.outputs.news_changed == 'true'
+        run: pnpm "deploy:${STAGE}"
+
       - name: Summary
         if: always()
         env:
-          CHANGED: ${{ steps.gate.outputs.changed }}
+          DATA_CHANGED: ${{ steps.gate.outputs.data_changed }}
+          NEWS_CHANGED: ${{ steps.gate.outputs.news_changed }}
         run: |
-          if [ "$CHANGED" = "true" ]; then
+          if [ "$DATA_CHANGED" = "true" ]; then
             echo "Deployed $STAGE and refreshed map video + OG cards." >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$NEWS_CHANGED" = "true" ]; then
+            echo "News-only change — deployed $STAGE without re-baking assets or posting social." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "No change in the upstream snapshot — nothing deployed." >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -339,7 +379,7 @@ jobs:
   # `dry-run` prints the YouTube plan and sends no email.
   post-social:
     needs: refresh
-    if: needs.refresh.outputs.changed == 'true'
+    if: needs.refresh.outputs.data_changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # The environment scopes the per-stage YOUTUBE_REFRESH_TOKEN (a staging run
