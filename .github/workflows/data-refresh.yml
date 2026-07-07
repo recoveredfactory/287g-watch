@@ -13,6 +13,12 @@
 # GITHUB_TOKEN is the built-in Actions token — the pipeline uses it for the
 # (public) appelson/Tracking_287g GitHub API reads.
 #
+# MOA signer/contact extraction (issue #225): ingest needs the gitignored
+# data/moa_extracts.json or it ships null moa_poc_*/ice_signer_*/agreements[]
+# fields. The refresh job builds it (poppler pdftotext + regex over the
+# upstream MOA PDFs — no LLM) behind an actions/cache, and hard-fails the run
+# if it can't, so a refresh can never again silently strip those fields.
+#
 # News summaries (issue #220):
 #   Secret PQL_NEWS_URL, PQL_NEWS_TOKEN — the PromptQL saved-program endpoint.
 # News is built WEEKLY (the Monday cron below) or on demand (dispatch with
@@ -112,10 +118,12 @@ jobs:
   refresh:
     # GPU larger runner when configured (issue #186), else the standard runner.
     runs-on: ${{ vars.BAKE_RUNNER_LABEL || 'ubuntu-latest' }}
-    # 45 for ingest+deploy+bake, plus the news build's own 40-min step cap
+    # 45 for ingest+deploy+bake, plus the news build's 40-min step cap
     # (~53 PromptQL calls at ~2 min each, prefetched concurrently → ~20 min
-    # typical). Backstop only — the news step must time out at the step level,
-    # not here, so its fallback still runs.
+    # typical; Monday/dispatch runs only) and the MOA extract's 30-min cap
+    # (cold cache ~15 min, warm seconds). Backstop only — those steps must
+    # time out at the STEP level, not here: a job timeout cancels everything
+    # downstream (news fallback, cache saves, deploy).
     timeout-minutes: 90
     # Exposed to the post-social job: whether to post at all, and the caption date.
     outputs:
@@ -158,6 +166,50 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      # ── MOA signer/contact extraction (issue #225) ─────────────────────
+      # ingest §7b enriches agencies from data/moa_extracts.json. That file is
+      # gitignored, and until these steps existed CI ran ingest without it —
+      # silently shipping null moa_poc_*/ice_signer_*/agreements[] fields to
+      # prod (2026-07-02, see #225). The extract is incremental (resumes from
+      # existing output), so with the cache below steady-state runs only
+      # process new or previously-errored agencies. These steps FAIL THE JOB
+      # on error — a failed refresh deploys nothing, which beats silently
+      # publishing a field-less dataset.
+      - name: Install poppler (pdftotext for MOA extraction)
+        run: pdftotext -v >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y poppler-utils)
+
+      - name: Restore MOA extracts cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: packages/pipeline/data/moa_extracts.json
+          key: moa-extracts-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: moa-extracts-
+
+      # Refresh the committed agreement index against upstream (~85 API
+      # calls), then extract signers/POCs from any PDFs not already covered.
+      # Step-level timeout so the JOB timeout can never be what kills this
+      # mid-run (that would cancel the cache save below and lose the
+      # progress); the script persists after each agency, so even a timed-out
+      # run leaves a bigger cache for the next tick to resume from. A cold
+      # cache is ~15 min; warm is seconds. The trailing `test -s` catches the
+      # exits-zero-but-wrote-nothing case so ingest can't quietly null the
+      # fields again.
+      - name: Extract MOA signers & contacts
+        timeout-minutes: 30
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pnpm -F pipeline build:agreement-index
+          pnpm -F pipeline extract:moa-signers
+          test -s packages/pipeline/data/moa_extracts.json
+
+      - name: Save MOA extracts cache
+        if: always() && hashFiles('packages/pipeline/data/moa_extracts.json') != ''
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: packages/pipeline/data/moa_extracts.json
+          key: moa-extracts-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Run ingest pipeline
         env:
