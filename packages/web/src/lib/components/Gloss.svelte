@@ -11,7 +11,7 @@
   export let seen: Set<string> | undefined = undefined;
 
   let container: HTMLElement;
-  let popover = { visible: false, term: "", def: "", slug: "", x: 0, y: 0 };
+  let popover = { visible: false, term: "", def: "", slug: "", key: "", x: 0, y: 0 };
   let hideTimer: ReturnType<typeof setTimeout>;
 
   $: processed = processGloss(text, seen);
@@ -21,6 +21,10 @@
     return TERMS_MAP.get(key) ?? null;
   }
 
+  function termKey(el: HTMLElement) {
+    return decodeURIComponent(el.dataset.term ?? "").toLowerCase();
+  }
+
   function openFor(el: HTMLElement) {
     clearTimeout(hideTimer);
     const entry = getEntry(el);
@@ -28,7 +32,7 @@
     const rect = el.getBoundingClientRect();
     const x = Math.max(8, Math.min(rect.left, window.innerWidth - 300));
     const y = rect.bottom + 8;
-    popover = { visible: true, term: entry.term, def: entry.definition, slug: termSlug(entry.term), x, y };
+    popover = { visible: true, term: entry.term, def: entry.definition, slug: termSlug(entry.term), key: termKey(el), x, y };
   }
 
   function scheduleHide() {
@@ -59,15 +63,16 @@
     const focusout = (e: FocusEvent) => {
       if ((e.target as HTMLElement).classList.contains("gloss-term")) scheduleHide();
     };
-    // Mobile: tap shows popover (prevent navigation on first tap)
+    // Tap shows popover; tap the same term again to follow the link.
     const click = (e: MouseEvent) => {
       const el = (e.target as HTMLElement).closest<HTMLElement>(".gloss-term");
       if (!el) return;
-      if (!popover.visible) {
+      const thisTermOpen = popover.visible && popover.key === termKey(el);
+      if (!thisTermOpen) {
         e.preventDefault();
         openFor(el);
       }
-      // Second tap: let the link navigate naturally
+      // Second tap on the same open term: let the link navigate naturally.
     };
     const outsideClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
