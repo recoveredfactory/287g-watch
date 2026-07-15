@@ -307,11 +307,18 @@ jobs:
         id: news_health
         if: always()
         run: |
-          if [ "$BUILD_NEWS" = 'true' ] && [ '${{ steps.news.outcome }}' != 'success' ]; then
-            echo "news_failed=true" >> "$GITHUB_OUTPUT"
+          news_outcome='${{ steps.news.outcome }}'
+          if [ "$BUILD_NEWS" = 'true' ] && [ "$news_outcome" != 'success' ]; then
+            verdict=true
           else
-            echo "news_failed=false" >> "$GITHUB_OUTPUT"
+            verdict=false
           fi
+          echo "news_failed=$verdict" >> "$GITHUB_OUTPUT"
+          # Echo the verdict AND its inputs. news-health skips on 'false' AND on an
+          # empty/severed output alike, so without this a log can't tell a healthy
+          # run from broken plumbing — the same "silence reads as success" trap
+          # this whole ticket is about (#234). Don't make the next person guess.
+          echo "news_failed=$verdict (BUILD_NEWS=$BUILD_NEWS, news step outcome=${news_outcome:-<none>})"
 
       # Hash the freshly-built JSON against what's live. Two separate verdicts:
       # data_changed drives the full deploy + bake + social release, while a
