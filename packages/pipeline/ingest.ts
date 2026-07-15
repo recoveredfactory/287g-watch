@@ -744,9 +744,19 @@ console.log(
 
 console.log('\nGrouping models per agency...')
 
+// Group on the pipeline's own notion of agency identity, NOT the raw name.
+// Upstream spells one agency more than one way — a curly apostrophe in the Jail
+// Enforcement row and a straight one in the Task Force row — and keying on the
+// raw string made that one agency into two, each holding a fragment of its
+// models (#240). historyKey is the right key because it's already the identity
+// the history/rename layer uses, so grouping and history can't disagree about
+// what an agency is; it strips non-alphanumerics, which is exactly the class of
+// difference upstream produces. (The slug generator had been quietly absorbing
+// the same signal: both spellings slugify identically, collide, and the twin
+// became `…-tx-1`. See the collision warning below.)
 const byAgency = new Map<string, NormalizedRow[]>()
 for (const row of normalizedRows) {
-  const key = `${row.state}\x00${row.name}`
+  const key = historyKey(row.name, row.state)
   const bucket = byAgency.get(key)
   if (bucket) bucket.push(row)
   else byAgency.set(key, [row])
@@ -764,13 +774,22 @@ interface GroupedAgency {
 
 const grouped: GroupedAgency[] = []
 for (const rows of byAgency.values()) {
-  const first = rows[0]
+  // The rows in a group can spell the name differently, but only in characters
+  // historyKey ignores — so the choice is typographic, never semantic, and any
+  // variant is equally true. Sort and take the first: deterministic, and it
+  // happens to prefer the ASCII apostrophe (U+0027 sorts before U+2019), which
+  // is what the other ~1,800 agencies read like. Deterministic is the load-
+  // bearing part — picking by row order would let an upstream reshuffle rewrite
+  // the name, and a changed name means a changed agency_index, which means a
+  // spurious deploy, bake and social post. (titleAgency re-cases it downstream.)
+  const displayName = [...new Set(rows.map((r) => r.name))].sort()[0]
+  const first = rows.find((r) => r.name === displayName) ?? rows[0]
   const models = [
     ...new Set(rows.map((r) => r.model).filter((m): m is string => !!m)),
   ].sort()
   const moa = rows.map((r) => r.moa_url).find((u) => u?.startsWith('http')) ?? null
   grouped.push({
-    name: first.name,
+    name: displayName,
     state: first.state,
     county: first.county,
     agency_type: first.agency_type,
@@ -1067,6 +1086,16 @@ for (const row of grouped) {
   const base = makeSlug(name, state)
   const count = seenSlugs.get(base) ?? 0
   const slug = count === 0 ? base : `${base}-${count}`
+  if (count > 0) {
+    // Two agencies we consider distinct slugify the same. This counter is how
+    // the apostrophe duplicates hid for years (#240) — it minted `…-tx-1` and
+    // said nothing, so one agency reading as two looked like two agencies. Now
+    // that grouping keys on historyKey this should never fire, and if it does,
+    // the pair deserves a look before anyone trusts the count.
+    console.warn(
+      `  ⚠ slug collision: '${name}' (${state}) → ${slug} — two agencies share a slug; is one a duplicate?`,
+    )
+  }
   seenSlugs.set(base, count + 1)
 
   const [lat, lng] = geocode(name, row.county, state, row.agency_type) ?? [null, null]
