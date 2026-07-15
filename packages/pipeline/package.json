@@ -6,6 +6,7 @@
   "scripts": {
     "ingest": "tsx ingest.ts",
     "news": "tsx build-news-summaries.ts",
+    "diff:states": "tsx diff-states.ts",
     "cache:warm": "node warm-cache.mjs",
     "build:muckrock": "tsx build-muckrock-snapshot.ts",
     "build:moa-index": "tsx build-moa-index.ts",
