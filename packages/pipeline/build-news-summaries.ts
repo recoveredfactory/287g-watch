@@ -113,8 +113,17 @@ async function runProgram(stateName: string, abbr: string, after: string): Promi
   })
   if (!res.ok) throw new Error(`PromptQL ${abbr}: HTTP ${res.status} ${await res.text()}`)
   const result = (await res.json()) as ProgramResult
-  mkdirSync(RAW_DIR, { recursive: true })
-  writeFileSync(cachePath, JSON.stringify(result))
+  // Cache ONLY a completed run. A failed program comes back as HTTP 200 with
+  // status:"errored" in the BODY, so the check above never sees it — and caching
+  // it anyway latched a transient upstream error in for the whole run: the
+  // prefetch wrote the error, the build pass replayed it instead of re-calling,
+  // and 29/53 states vanished from a green build (#238). Worse locally, where
+  // the raw cache never expires: one bad reply overwrote a known-good gather and
+  // replayed forever. A state with no cache file is simply retried.
+  if (result.status === 'completed') {
+    mkdirSync(RAW_DIR, { recursive: true })
+    writeFileSync(cachePath, JSON.stringify(result))
+  }
   return result
 }
 
@@ -329,8 +338,13 @@ async function buildState(abbr: string, name: string) {
   process.stdout.write(`${abbr} (${name})… `)
   const result = await runProgram(name, abbr, AFTER)
   if (result.status !== 'completed') {
-    console.log(`SKIP — status=${result.status} error=${JSON.stringify(result.error)}`)
-    return null
+    // An errored program is a FAILURE, not a shrug. Returning null here dropped
+    // the state without recording anything in failures[], so the end-of-run
+    // warning never named it and the exit check — which only asks whether ANY
+    // state built fresh — still called it a success. That is how a build that
+    // lost 29 of 53 states shipped green (#238). Throw, and it rides the same
+    // path every other failure already takes.
+    throw new Error(`program status=${result.status} error=${JSON.stringify(result.error)}`)
   }
 
   // Public prose: a short TL;DR plus the full statewide narrative, each in EN
@@ -433,14 +447,19 @@ async function buildState(abbr: string, name: string) {
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
+// A TARGETED run names its states (`pnpm news OH PA`) — in CI that's the daily
+// refresh of the states whose data just moved (#233). A bare run sweeps them all.
+// The distinction decides how loud a partial failure is; see the exit check.
+const CLI_STATES = process.argv
+  .slice(2)
+  .filter((s) => !s.startsWith('--'))
+  .map((s) => s.toUpperCase())
+const TARGETED = CLI_STATES.length > 0
+
 function statesToBuild(): Array<{ abbr: string; name: string }> {
-  const cliStates = process.argv
-    .slice(2)
-    .filter((s) => !s.startsWith('--'))
-    .map((s) => s.toUpperCase())
   let abbrs: string[]
-  if (cliStates.length) {
-    abbrs = cliStates
+  if (TARGETED) {
+    abbrs = CLI_STATES
   } else {
     // Every state the pipeline knows (all 50 + DC + GU/MP), NOT just the agency
     // roster — non-participating states get a summary too. For them the absence
@@ -460,26 +479,53 @@ function statesToBuild(): Array<{ abbr: string; name: string }> {
 // loop below stays serial for gnews-resolution civility, so instead warm the
 // raw-response cache with a bounded worker pool first; the serial pass then
 // reads it back instantly. Skipped under --force, where runProgram must hit the
-// API per call anyway. A prefetch failure is only logged — the serial pass
-// retries that state for real and its error handling stays authoritative.
+// API per call anyway. A prefetch failure is only logged, never fatal here: a
+// state that doesn't land gets one retry round below, and failing that, the
+// serial build pass calls it again — that call's error handling is the
+// authoritative one. (This comment used to promise the serial pass would retry
+// come what may. It couldn't: an errored reply was cached, so the serial pass
+// replayed it instead of re-calling. That was #238 — hence the retry round.)
 const PQL_CONCURRENCY = Number(process.env.PQL_CONCURRENCY) || 6
+// Rounds of prefetch: the first pass plus one retry for whatever didn't land.
+const PREFETCH_ROUNDS = 2
 
 async function prefetchPrograms(list: Array<{ abbr: string; name: string }>) {
-  let next = 0
-  let done = 0
-  const worker = async () => {
-    while (next < list.length) {
-      const { abbr, name } = list[next++]
-      try {
-        await runProgram(name, abbr, AFTER)
-      } catch (e) {
-        console.log(`  prefetch ${abbr} failed (${(e as Error).message}) — the build pass will retry`)
-      }
-      done++
+  // Only a completed run leaves a cache file, so "didn't land" is just an absent
+  // file — and a second round retries exactly those. Worth the round: on
+  // 2026-07-15 an upstream blip errored the 29 states the pool reached FIRST
+  // (AK→MS) and had cleared by the time it reached NC, so a retry would have
+  // recovered every one of them; instead they were cached as errors and lost
+  // (#238). Bounded at one extra round: if a full second pass still can't land a
+  // state, that's not a blip, and the build pass's own call is the last word.
+  let pending = list
+  for (let round = 1; round <= PREFETCH_ROUNDS && pending.length; round++) {
+    if (round > 1) {
+      console.log(`  retrying ${pending.length} that didn't land: ${pending.map((s) => s.abbr).join(' ')}`)
     }
+    const batch = pending
+    let next = 0
+    const worker = async () => {
+      while (next < batch.length) {
+        const { abbr, name } = batch[next++]
+        try {
+          await runProgram(name, abbr, AFTER)
+        } catch (e) {
+          console.log(`  prefetch ${abbr} failed (${(e as Error).message})`)
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(PQL_CONCURRENCY, batch.length) }, worker))
+    pending = batch.filter(({ abbr }) => !existsSync(resolve(RAW_DIR, `${abbr}.json`)))
   }
-  await Promise.all(Array.from({ length: Math.min(PQL_CONCURRENCY, list.length) }, worker))
-  console.log(`  prefetched ${done}/${list.length} program responses\n`)
+  // Count what actually LANDED, not what we attempted. The old counter tallied
+  // attempts, so it cheerfully printed "prefetched 53/53" on the run where 29 of
+  // them had errored — a number that reads like success and means nothing (#238).
+  const landed = list.length - pending.length
+  console.log(
+    `  prefetched ${landed}/${list.length} program responses` +
+      (pending.length ? ` — ${pending.map((s) => s.abbr).join(' ')} still not cached (the build pass calls them)` : '') +
+      '\n',
+  )
 }
 
 type IndexEntry = { abbr: string; state: string; generated_at: string; built_at: string }
@@ -518,15 +564,16 @@ console.log(`Building news summaries for ${states.length} states (after=${AFTER}
 if (!FORCE) await prefetchPrograms(states)
 
 // One state's failure is survivable: log it, leave it out of the fresh manifest,
-// move on. runProgram throws on any non-OK HTTP response, so without this a
-// single transient state aborts the run and loses every other state's work — and
-// a bad token (which fails ALL of them) loses the entire build. See #234.
+// move on. runProgram throws on any non-OK HTTP response, and buildState now
+// throws on an errored program too (#238) — so every way a state can fail lands
+// in failures[] and nothing slips through unnamed. Without this a single
+// transient state would abort the run and lose every other state's work, and a
+// bad token (which fails ALL of them) would lose the entire build. See #234.
 const manifest: IndexEntry[] = []
 const failures: Array<{ abbr: string; error: string }> = []
 for (const { abbr, name } of states) {
   try {
-    const entry = await buildState(abbr, name)
-    if (entry) manifest.push(entry)
+    manifest.push(await buildState(abbr, name))
   } catch (e) {
     // buildState already wrote the "AB (Name)… " prefix — finish its line.
     console.log(`FAILED — ${(e as Error).message}`)
@@ -558,14 +605,30 @@ if (resolutionThrottled) {
   )
 }
 
-// Zero fresh states is not a success — it's the signature of a dead token or a
-// PromptQL outage, and quietly reporting success is exactly what let #234 sit
-// green for a week. Exit non-zero so CI's news-health job can turn the run red.
-// The site is unaffected: the carry-forward baseline still holds the last-good
-// summaries, and the change gate sees no diff, so nothing ships.
-if (states.length > 0 && manifest.length === 0) {
+// When does a partial build turn CI red? Quietly reporting success is what let
+// #234 sit green for a week, but "any failure at all" would cry wolf over a lone
+// undici timeout that the next run fixes by itself. So the line follows what the
+// failure MEANS:
+//
+//   • A TARGETED run (#233) only asks for states whose data just changed, so
+//     every failure is a concrete defect: that state now serves new numbers
+//     under its previous prose. Red at any count.
+//   • A FULL sweep is a catch-all. One flaky state is noise — the carry-forward
+//     covers it and next week's sweep retries it — but a majority failing is the
+//     signature of an outage or a dead token, not bad luck. Red past half.
+//   • Zero fresh is red either way (that was the only line before, and it's why
+//     a 24/53 build shipped green — #238).
+//
+// Red NOTIFIES, it never blocks: the site keeps its carried-forward summaries,
+// the change gate sees no diff, and news-health is a separate job precisely so a
+// news outage can't cancel the data deploy or the social post.
+const redline = TARGETED ? failures.length > 0 : failures.length > states.length / 2
+if (states.length > 0 && (manifest.length === 0 || redline)) {
+  const scope = TARGETED ? 'targeted' : 'full'
   console.error(
-    `\n✖ news build produced ZERO fresh summaries (${failures.length} failed) — refusing to exit 0.`,
+    `\n✖ ${scope} news build FAILED ${failures.length}/${states.length} states` +
+      (manifest.length === 0 ? ' — NOTHING built fresh' : '') +
+      ` — refusing to exit 0.`,
   )
   process.exit(1)
 }

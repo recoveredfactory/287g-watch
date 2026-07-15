@@ -545,13 +545,13 @@ jobs:
     steps:
       - name: Report the failed news build
         run: |
-          echo "::error title=News build produced no fresh summaries::The news build failed for every state, so the site is still serving the previously-published summaries. Check PQL_NEWS_TOKEN (a malformed value returns 'HTTP 401 … Invalid token format') and PromptQL availability, then re-run with build_news=true."
+          echo "::error title=News build failed::The news build lost states it should have built — the site is still serving their previously-published summaries. Per-state verdicts are in the refresh job's 'Build news summaries' step. Check PQL_NEWS_TOKEN (a malformed value returns 'HTTP 401 … Invalid token format') and PromptQL availability, then re-run with build_news=true."
           {
             echo "## News build failed"
             echo
-            echo "Zero states built fresh — the site kept its carried-forward summaries, so **nothing was lost, but nothing was updated either**."
+            echo "The site kept its carried-forward summaries, so **nothing was lost — but the states that failed are serving their previous prose**."
             echo
-            echo "On a daily tick this was a targeted refresh of the states whose data changed (#233), which makes the gap concrete: those states shipped **new numbers with their previous prose**."
+            echo "This fires when a **targeted** daily refresh (#233) loses ANY state — its data moved, so it now shows new numbers under old prose — or when a **full** build loses a majority of states, which is the signature of an outage or a dead token rather than bad luck. Either way, the per-state verdicts are in the \`Build news summaries\` step."
             echo
             echo "Check, in order:"
             echo "1. \`PQL_NEWS_TOKEN\` — a malformed value returns \`HTTP 401 … Invalid token format\` on every state."
