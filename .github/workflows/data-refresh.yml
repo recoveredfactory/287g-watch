@@ -129,6 +129,8 @@ jobs:
     outputs:
       data_changed: ${{ steps.gate.outputs.data_changed }}
       snapshot_date: ${{ steps.snapshot.outputs.date }}
+      # Read by the news-health job to fail the workflow on a dead news build.
+      news_failed: ${{ steps.news_health.outputs.news_failed }}
       # Immutable per-release video keys for the social email (see the archive step).
       map_trend_archive_en: ${{ steps.archive.outputs.map_trend_archive_en }}
       map_trend_archive_es: ${{ steps.archive.outputs.map_trend_archive_es }}
@@ -216,6 +218,38 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm pipeline
 
+      # THE BASELINE for every refresh: whatever the live site already serves.
+      # On daily refreshes (news step skipped) it's the whole payload — without
+      # it a refresh would build against an empty (gitignored) news dir and
+      # silently wipe the summaries. On a first deploy (nothing live yet) it
+      # no-ops and the pages fall back to their no-summary state.
+      #
+      # It runs BEFORE the build so it doubles as the fallback: the build
+      # overwrites the states it rebuilds, and any state it fails on just keeps
+      # the last-good copy seeded here. That ordering is what makes a PARTIAL
+      # build safe — pre-#234 this ran after the build and replaced everything
+      # or nothing, so surviving a per-state failure would have dropped that
+      # state's summary from the site entirely.
+      - name: Carry forward news summaries from the live site
+        run: |
+          case "$STAGE" in
+            prod) HOST="$WEB_DOMAIN" ;;
+            staging) HOST="$WEB_STAGING_DOMAIN" ;;
+            *) echo "Unknown stage: $STAGE" >&2; exit 1 ;;
+          esac
+          NEWS_DIR=packages/web/static/data/dist/news
+          mkdir -p "$NEWS_DIR"
+          base="https://$HOST/data/dist/news"
+          if ! curl -fsSL --retry 3 "$base/index.json" -o "$NEWS_DIR/index.json"; then
+            echo "no live news to carry forward (first deploy?) — skipping"
+            exit 0
+          fi
+          for abbr in $(node -p "require('./$NEWS_DIR/index.json').states.map(s=>s.abbr).join(' ')"); do
+            curl -fsSL --retry 3 "$base/$abbr.json" -o "$NEWS_DIR/$abbr.json" \
+              || { echo "::warning::news/$abbr.json missing on live site"; rm -f "$NEWS_DIR/$abbr.json"; }
+          done
+          echo "carried $(ls "$NEWS_DIR" | wc -l) news files from https://$HOST"
+
       # Resolved gnews→publisher URLs survive across runs so each news build
       # only resolves links it hasn't seen. Saved under a per-run key below
       # (cache keys are immutable); restore-keys picks up the newest previous
@@ -235,10 +269,12 @@ jobs:
       # content (the local raw cache is gitignored → empty every CI run, which
       # is exactly the plain-call behavior we want; the script prefetches the
       # ~2-min-each program responses concurrently). continue-on-error + the
-      # step timeout: a failure OR overrun falls through to the carry-forward
-      # step below instead of failing the refresh — the job-level timeout must
-      # never be what stops this step, because that cancels the whole job
-      # (deploy included) and the fallback never runs.
+      # step timeout: a failure OR overrun leaves the carry-forward baseline
+      # seeded above in place instead of failing the refresh — a news outage
+      # shouldn't block a data deploy. The job-level timeout must never be what
+      # stops this step, because that cancels the whole job (deploy included).
+      # Silence is not success, though: the script exits non-zero when NOTHING
+      # built fresh, and the news-health job below turns the run red. See #234.
       - name: Build news summaries
         id: news
         if: env.BUILD_NEWS == 'true'
@@ -259,33 +295,23 @@ jobs:
           path: packages/pipeline/data/gnews_cache.json
           key: gnews-cache-${{ github.run_id }}-${{ github.run_attempt }}
 
-      # THE NORMAL PATH on daily refreshes (news step skipped → outcome !=
-      # 'success'), and the FALLBACK when a Monday/dispatched build fails
-      # (PromptQL outage, missing secrets on a fork): carry forward whatever
-      # the live site already serves, so a refresh can't build with an empty
-      # (gitignored) news dir and silently wipe the summaries. On a first
-      # deploy (nothing live yet) it no-ops and the pages fall back to their
-      # no-summary state.
-      - name: Carry forward news summaries from the live site
-        if: steps.news.outcome != 'success'
+      # continue-on-error keeps a news failure from blocking the data deploy, but
+      # it also makes the step's CONCLUSION 'success' (only its OUTCOME stays
+      # 'failure') — which is precisely how a dead token sat green for a week in
+      # #234. Hoist the real verdict into a job output so the news-health job can
+      # fail the WORKFLOW without failing this job (post-social is `needs:
+      # refresh` without always(), so failing here would silently skip the social
+      # post on data-changed days). always(): a skipped/failed news step must
+      # still record a verdict.
+      - name: Flag news build health
+        id: news_health
+        if: always()
         run: |
-          case "$STAGE" in
-            prod) HOST="$WEB_DOMAIN" ;;
-            staging) HOST="$WEB_STAGING_DOMAIN" ;;
-            *) echo "Unknown stage: $STAGE" >&2; exit 1 ;;
-          esac
-          NEWS_DIR=packages/web/static/data/dist/news
-          mkdir -p "$NEWS_DIR"
-          base="https://$HOST/data/dist/news"
-          if ! curl -fsSL --retry 3 "$base/index.json" -o "$NEWS_DIR/index.json"; then
-            echo "no live news to carry forward (first deploy?) — skipping"
-            exit 0
+          if [ "$BUILD_NEWS" = 'true' ] && [ '${{ steps.news.outcome }}' != 'success' ]; then
+            echo "news_failed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "news_failed=false" >> "$GITHUB_OUTPUT"
           fi
-          for abbr in $(node -p "require('./$NEWS_DIR/index.json').states.map(s=>s.abbr).join(' ')"); do
-            curl -fsSL --retry 3 "$base/$abbr.json" -o "$NEWS_DIR/$abbr.json" \
-              || { echo "::warning::news/$abbr.json missing on live site"; rm -f "$NEWS_DIR/$abbr.json"; }
-          done
-          echo "carried $(ls "$NEWS_DIR" | wc -l) news files from https://$HOST"
 
       # Hash the freshly-built JSON against what's live. Two separate verdicts:
       # data_changed drives the full deploy + bake + social release, while a
@@ -409,6 +435,7 @@ jobs:
         env:
           DATA_CHANGED: ${{ steps.gate.outputs.data_changed }}
           NEWS_CHANGED: ${{ steps.gate.outputs.news_changed }}
+          NEWS_FAILED: ${{ steps.news_health.outputs.news_failed }}
         run: |
           if [ "$DATA_CHANGED" = "true" ]; then
             echo "Deployed $STAGE and refreshed map video + OG cards." >> "$GITHUB_STEP_SUMMARY"
@@ -417,6 +444,39 @@ jobs:
           else
             echo "No change in the upstream snapshot — nothing deployed." >> "$GITHUB_STEP_SUMMARY"
           fi
+          # Never let the deploy verdict imply the news build was healthy (#234).
+          if [ "$NEWS_FAILED" = "true" ]; then
+            echo "⚠️ The news build produced NO fresh summaries — the site kept the carried-forward copies. See the news-health job." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  # Turn the run RED when a news build produced nothing fresh, so a dead token or
+  # a PromptQL outage can't hide behind a green check (#234: it hid for a week).
+  # Deliberately a separate job rather than a failing step in `refresh`:
+  # post-social is `needs: refresh` WITHOUT always(), so failing `refresh` would
+  # silently skip the social post on data-changed days. This way the data deploy
+  # and the social release complete untouched — a news outage is loud, not
+  # blocking — while the workflow still fails and GitHub notifies on it.
+  news-health:
+    needs: refresh
+    if: always() && needs.refresh.outputs.news_failed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Report the failed news build
+        run: |
+          echo "::error title=News build produced no fresh summaries::The news build failed for every state, so the site is still serving the previously-published summaries. Check PQL_NEWS_TOKEN (a malformed value returns 'HTTP 401 … Invalid token format') and PromptQL availability, then re-run with build_news=true."
+          {
+            echo "## News build failed"
+            echo
+            echo "Zero states built fresh — the site kept its carried-forward summaries, so **nothing was lost, but nothing was updated either**."
+            echo
+            echo "Check, in order:"
+            echo "1. \`PQL_NEWS_TOKEN\` — a malformed value returns \`HTTP 401 … Invalid token format\` on every state."
+            echo "2. PromptQL availability / the saved program."
+            echo
+            echo "Then re-run: \`gh workflow run data-refresh.yml -f stage=prod -f build_news=true\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
 
   # Finish the social release. A SEPARATE job from the deploy so the per-stage
   # YouTube token scoping (and any prod gate) covers only posting. Runs whenever

@@ -30,7 +30,7 @@
  *      pnpm news ID --force # bypass both caches; re-gather from scratch
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
+import { readFileSync, readdirSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -498,25 +498,90 @@ async function prefetchPrograms(list: Array<{ abbr: string; name: string }>) {
   console.log(`  prefetched ${done}/${list.length} program responses\n`)
 }
 
+type IndexEntry = { abbr: string; state: string; generated_at: string; built_at: string }
+
+// The index is DERIVED from the state files actually on disk, not accumulated
+// from this run's manifest. Whatever `<abbr>.json` is present gets listed —
+// freshly built, seeded by CI's carry-forward, or left by an earlier local run —
+// and every state file already carries these four fields, so nothing has to be
+// remembered across runs. That makes the index self-healing and impossible to
+// shrink: writing `manifest` alone is what let `pnpm news WY` cut the index down
+// to one state, and would have dropped failed states off the site once per-state
+// failures became survivable. It also never advertises a file that isn't there.
+// See #234.
+function indexFromDisk(): IndexEntry[] {
+  const entries: IndexEntry[] = []
+  for (const file of readdirSync(OUT_DIR)) {
+    if (!file.endsWith('.json') || file === 'index.json') continue
+    try {
+      const d = JSON.parse(readFileSync(resolve(OUT_DIR, file), 'utf8'))
+      if (!d?.abbr) continue
+      entries.push({
+        abbr: d.abbr,
+        state: d.state,
+        generated_at: d.generated_at,
+        built_at: d.built_at,
+      })
+    } catch {
+      console.log(`  (news/${file} is unreadable — left out of the index)`)
+    }
+  }
+  return entries.sort((a, b) => a.abbr.localeCompare(b.abbr))
+}
+
 const states = statesToBuild()
 console.log(`Building news summaries for ${states.length} states (after=${AFTER})\n`)
 if (!FORCE) await prefetchPrograms(states)
-const manifest: Array<{ abbr: string; state: string; generated_at: string; built_at: string }> = []
+
+// One state's failure is survivable: log it, leave it out of the fresh manifest,
+// move on. runProgram throws on any non-OK HTTP response, so without this a
+// single transient state aborts the run and loses every other state's work — and
+// a bad token (which fails ALL of them) loses the entire build. See #234.
+const manifest: IndexEntry[] = []
+const failures: Array<{ abbr: string; error: string }> = []
 for (const { abbr, name } of states) {
-  const entry = await buildState(abbr, name)
-  if (entry) manifest.push(entry)
+  try {
+    const entry = await buildState(abbr, name)
+    if (entry) manifest.push(entry)
+  } catch (e) {
+    // buildState already wrote the "AB (Name)… " prefix — finish its line.
+    console.log(`FAILED — ${(e as Error).message}`)
+    failures.push({ abbr, error: (e as Error).message })
+  }
 }
 writeFileSync(GNEWS_CACHE, JSON.stringify(gnewsCache, null, 2))
-mkdirSync(OUT_DIR, { recursive: true })
+mkdirSync(OUT_DIR, { recursive: true }) // before indexFromDisk: readdirSync needs it to exist
+const indexStates = indexFromDisk()
 writeFileSync(
   resolve(OUT_DIR, 'index.json'),
-  JSON.stringify({ generated_at: new Date().toISOString(), states: manifest }, null, 2),
+  JSON.stringify({ generated_at: new Date().toISOString(), states: indexStates }, null, 2),
 )
-console.log(`\nWrote ${manifest.length} states → ${OUT_DIR}`)
+
+const carriedCount = indexStates.length - manifest.length
+console.log(
+  `\nWrote ${manifest.length} fresh states → ${OUT_DIR}` +
+    (carriedCount > 0 ? ` (index lists ${indexStates.length}, ${carriedCount} carried)` : ''),
+)
+if (failures.length) {
+  console.log(`\n⚠  ${failures.length}/${states.length} states FAILED — kept their previous copy:`)
+  for (const f of failures) console.log(`   ${f.abbr}: ${f.error}`)
+}
 if (resolutionThrottled) {
   console.log(
     '\n⚠  Google throttled link resolution partway through — later states kept raw gnews links.\n' +
       '   They are uncached, so re-run WITHOUT --force after a cooldown to retry only the failures,\n' +
       '   ideally gentler: RESOLVE_CONCURRENCY=2 RESOLVE_DELAY_MS=500 pnpm news <states…>',
   )
+}
+
+// Zero fresh states is not a success — it's the signature of a dead token or a
+// PromptQL outage, and quietly reporting success is exactly what let #234 sit
+// green for a week. Exit non-zero so CI's news-health job can turn the run red.
+// The site is unaffected: the carry-forward baseline still holds the last-good
+// summaries, and the change gate sees no diff, so nothing ships.
+if (states.length > 0 && manifest.length === 0) {
+  console.error(
+    `\n✖ news build produced ZERO fresh summaries (${failures.length} failed) — refusing to exit 0.`,
+  )
+  process.exit(1)
 }
