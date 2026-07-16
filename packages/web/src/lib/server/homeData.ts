@@ -19,10 +19,11 @@ export const buildHomeData = async (
 ): Promise<PageData> => {
   try {
     const url = "/data/dist/agency_index.json";
-    const [res, metaRes, terminatedRes] = await Promise.all([
+    const [res, metaRes, terminatedRes, pendingRes] = await Promise.all([
       fetch(url),
       fetch("/data/dist/state_meta.json"),
       fetch("/data/dist/terminated_agencies.json"),
+      fetch("/data/dist/pending_agencies.json"),
     ]);
     if (!res.ok) throw new Error(`${res.status} ${url}`);
     const agencies: Agency[] = await res.json();
@@ -123,7 +124,10 @@ export const buildHomeData = async (
     // nationally and per state. Dec 2024 is the pre-2025 archive baseline
     // (#169); earlier events fold into that first sample.
     const TREND_START = "2024-12";
-    const allForTrend = [...agencies, ...terminatedRaw];
+    // Pending agencies (absent 1–2 snapshots) are map-excluded but their history
+    // must still replay, or the monthly counts misdate program starts (NE). #245
+    const pendingRaw: Agency[] = pendingRes.ok ? await pendingRes.json() : [];
+    const allForTrend = [...agencies, ...terminatedRaw, ...pendingRaw];
     let lastMonth = TREND_START;
     for (const a of allForTrend)
       for (const h of a.history ?? [])

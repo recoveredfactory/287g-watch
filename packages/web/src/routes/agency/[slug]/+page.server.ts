@@ -40,9 +40,10 @@ export const load = async ({ fetch, params, url }): Promise<AgencyPageData> => {
   const mergedInto = AGENCY_SLUG_REDIRECTS[params.slug];
   if (mergedInto) redirect(301, url.pathname.replace(/[^/]+$/, mergedInto) + url.search);
 
-  const [agenciesRes, terminatedRes, muckrockRes] = await Promise.all([
+  const [agenciesRes, terminatedRes, pendingRes, muckrockRes] = await Promise.all([
     fetch("/data/dist/agency_index.json"),
     fetch("/data/dist/terminated_agencies.json"),
+    fetch("/data/dist/pending_agencies.json"),
     fetch("/data/dist/muckrock_requests.json"),
   ]);
   if (!agenciesRes.ok) throw error(503, "Data unavailable");
@@ -52,8 +53,12 @@ export const load = async ({ fetch, params, url }): Promise<AgencyPageData> => {
   // index). Resolve those slugs too, so a dot that faded off the map still
   // links to a real page — flagged as ended via its terminated_date. See #118.
   const terminated: Agency[] = terminatedRes.ok ? await terminatedRes.json() : [];
+  // Pending agencies (absent 1–2 snapshots, terminated_date null) resolve here too
+  // so their page renders instead of 404'ing while they're briefly off-roster. #245
+  const pending: Agency[] = pendingRes.ok ? await pendingRes.json() : [];
   const agency = agencies.find((a) => a.slug === params.slug)
-    ?? terminated.find((a) => a.slug === params.slug);
+    ?? terminated.find((a) => a.slug === params.slug)
+    ?? pending.find((a) => a.slug === params.slug);
   if (!agency) throw error(404, `Agency not found: ${params.slug}`);
 
   // muckrock_requests.json is optional — fall back gracefully so older deploys

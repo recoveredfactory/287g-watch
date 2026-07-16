@@ -159,16 +159,20 @@ export const load = async ({ fetch, params }): Promise<StatePageData> => {
   const stateName = NAVIGABLE_STATES[abbr];
   if (!stateName) throw error(404, `No state page for: ${abbr}`);
 
-  const [agenciesRes, metaRes, terminatedRes, newsRes] = await Promise.all([
+  const [agenciesRes, metaRes, terminatedRes, pendingRes, newsRes] = await Promise.all([
     fetch("/data/dist/agency_index.json"),
     fetch("/data/dist/state_meta.json"),
     fetch("/data/dist/terminated_agencies.json"),
+    fetch("/data/dist/pending_agencies.json"),
     fetch(`/data/dist/news/${abbr}.json`),
   ]);
   if (!agenciesRes.ok) throw error(503, "Data unavailable");
 
   const allAgencies: Agency[] = await agenciesRes.json();
   const terminatedRaw: Agency[] = terminatedRes.ok ? await terminatedRes.json() : [];
+  // Pending agencies (absent 1–2 snapshots) feed the trend/timeline only, so their
+  // history replays; they are not treated as departures. #245
+  const pendingRaw: Agency[] = pendingRes.ok ? await pendingRes.json() : [];
   // No agency-count gate: non-participating states get a page too (an empty-state
   // plus their news summary). Only abbrs outside NAVIGABLE_STATES 404 (above).
   const agencies = allAgencies.filter((a) => a.state === abbr);
@@ -219,7 +223,11 @@ export const load = async ({ fetch, params }): Promise<StatePageData> => {
 
   // ── Trend computation ────────────────────────────────────────────────────────
   const TREND_START = "2024-12";
-  const stateForTrend = [...agencies, ...terminatedRaw.filter((a) => a.state === abbr)];
+  const stateForTrend = [
+    ...agencies,
+    ...terminatedRaw.filter((a) => a.state === abbr),
+    ...pendingRaw.filter((a) => a.state === abbr),
+  ];
   let lastMonth = TREND_START;
   for (const a of stateForTrend)
     for (const h of a.history ?? [])
@@ -279,8 +287,12 @@ export const load = async ({ fetch, params }): Promise<StatePageData> => {
 
   return {
     abbr, stateName, agencies, mapAgencies, stateMeta, snapshotDate, modelCounts, agencyTypeCounts,
-    timeline: buildTimeline([...agencies, ...terminatedRaw.filter((a) => a.state === abbr)]),
-    nationalTimeline: buildTimeline([...allAgencies, ...terminatedRaw]),
+    timeline: buildTimeline([
+      ...agencies,
+      ...terminatedRaw.filter((a) => a.state === abbr),
+      ...pendingRaw.filter((a) => a.state === abbr),
+    ]),
+    nationalTimeline: buildTimeline([...allAgencies, ...terminatedRaw, ...pendingRaw]),
     trendMonths,
     trend: { "": sampleMonthly(stateForTrend) },
     news,
