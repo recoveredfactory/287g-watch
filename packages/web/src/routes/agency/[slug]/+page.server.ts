@@ -1,4 +1,5 @@
-import { error } from "@sveltejs/kit";
+import { error, redirect } from "@sveltejs/kit";
+import { AGENCY_SLUG_REDIRECTS } from "$lib/agencyRedirects";
 import type { Agency } from "../../+page.server";
 
 export type MuckrockRequest = {
@@ -31,7 +32,14 @@ export type AgencyPageData = {
   };
 };
 
-export const load = async ({ fetch, params }): Promise<AgencyPageData> => {
+export const load = async ({ fetch, params, url }): Promise<AgencyPageData> => {
+  // A slug the dedup retired (#240): one agency that upstream spelled two ways
+  // used to be two records, and the twin held a `…-1` URL that the sitemap
+  // published. Point it at the record that absorbed it. Only the last path
+  // segment is swapped, so the locale prefix (/es/agency/…) rides along.
+  const mergedInto = AGENCY_SLUG_REDIRECTS[params.slug];
+  if (mergedInto) redirect(301, url.pathname.replace(/[^/]+$/, mergedInto) + url.search);
+
   const [agenciesRes, terminatedRes, muckrockRes] = await Promise.all([
     fetch("/data/dist/agency_index.json"),
     fetch("/data/dist/terminated_agencies.json"),
