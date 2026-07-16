@@ -1206,8 +1206,13 @@ console.log(`  ${agencies.length} active agencies, ${terminatedAgencies.length} 
 console.log('\nJoining FBI LEE + upstream agreements.csv...')
 
 const LEE_CSV = resolve(__dirname, 'data/fbi_lee_latest.csv')
-const UPSTREAM_AGREEMENTS_URL =
-  'https://raw.githubusercontent.com/appelson/Tracking_287g/main/agreements.csv'
+// Hand-vetted ORI + population/budget crosswalk, vendored from
+// appelson/Tracking_287g@0afaab4f (data/agreements.csv, the last commit before upstream
+// deleted the file on 2026-06-08). It joins the 287g roster to ICPSR study 38771; the ORIs
+// and figures are near-static. Was fetched live from .../main/agreements.csv, which has
+// 404'd since the deletion while the build shipped green — hence the fail-loud guard below.
+// Refresh by re-running that repo's analysis/adding_address.R against a newer roster. #244
+const AGREEMENTS_CSV = resolve(__dirname, 'data/agreements.csv')
 
 interface LeeRow {
   ori: string
@@ -1290,12 +1295,16 @@ console.log(`  Loaded ${leeRows.length} FBI LEE rows`)
 const leeByOri = new Map<string, LeeRow>()
 for (const r of leeRows) leeByOri.set(r.ori, r)
 
-// Fetch upstream curated agreements.csv (~33% coverage but ORIs are hand-vetted)
-console.log(`  Fetching ${UPSTREAM_AGREEMENTS_URL}`)
-const upResp = await ghFetch(UPSTREAM_AGREEMENTS_URL)
-const upRowsArr = upResp.ok ? parseCSV(await upResp.text()) : [[]]
+// Load the vendored upstream agreements crosswalk (~29% coverage but ORIs are hand-vetted).
+// readFileSync throws if the file is missing — a dead input must fail the build, never ship
+// green (this is the fourth time an upstream input rotted silently: #225, #234, #238).
+console.log(`  Loading ${AGREEMENTS_CSV}`)
+const upRowsArr = parseCSV(readFileSync(AGREEMENTS_CSV, 'utf8'))
 const upHeaders = upRowsArr[0]
 const uc = Object.fromEntries(upHeaders.map((h, i) => [h, i])) as Record<string, number>
+for (const col of ['state', 'agency', 'ori', 'population_policed', 'operating_budget', 'agency_type']) {
+  if (!(col in uc)) throw new Error(`agreements.csv missing expected column "${col}" (schema changed?). Headers: ${upHeaders.join(', ')}`)
+}
 
 const STATE_FULL_TO_ABBR: Record<string, string> = Object.fromEntries(
   Object.entries(STATE_ABBREVS).map(([full, ab]) => [full, ab]),
@@ -1322,13 +1331,19 @@ for (let i = 1; i < upRowsArr.length; i++) {
   if (upstream.has(k)) continue
   const ori = r[uc.ori]
   upstream.set(k, {
-    ori: ori && ori !== 'NA' ? ori : null,
+    // ORI9 is two letters + seven digits. The source also carries "NA" and "-1" sentinels.
+    ori: /^[A-Z]{2}\d{7}$/.test(ori) ? ori : null,
     population_policed: numOrNull(r[uc.population_policed]),
     operating_budget: numOrNull(r[uc.operating_budget]),
     agency_type: r[uc.agency_type] || null,
   })
 }
 console.log(`  Loaded ${upstream.size} upstream agreement entries (${[...upstream.values()].filter(e => e.ori).length} with ORI)`)
+// A zero-entry crosswalk is never legitimate and, left unguarded, is indistinguishable from
+// a healthy build — the exact failure that let the dead URL ship green for weeks. #244
+if (upstream.size === 0) {
+  throw new Error(`agreements.csv parsed to 0 entries — expected ~600. The vendored crosswalk is empty or its rows no longer match the expected schema.`)
+}
 
 // FBI agency_type → bucket
 const FBI_BUCKET: Record<string, string> = {
@@ -1538,6 +1553,13 @@ let leeAttached = 0
 let agreementAttached = 0
 const leeYearDist = new Map<number, number>()
 
+// Agencies whose vendored-upstream ORI is known-stale and should yield to the FBI name
+// heuristic instead. The crosswalk is frozen at 2026-06-08 (see AGREEMENTS_CSV), so FBI
+// re-modellings accrue against it: JSO moved from a 2020 consolidated-city row (FL0160200,
+// 920,508 residents) to a 2025 County row (FL0160000, 1,008,920), which the #243 county
+// match now finds. Suppressing the stale ORI lets that fresher match win. #243/#244
+const STALE_UPSTREAM_ORI = new Set(['jacksonville-sheriffs-office-fl'])
+
 for (const a of agencies) {
   const up = findUpstream(a.state, a.name)
   if (up) {
@@ -1547,7 +1569,7 @@ for (const a of agencies) {
       agency_type: up.agency_type,
     }
     agreementAttached++
-    if (up.ori) {
+    if (up.ori && !STALE_UPSTREAM_ORI.has(a.slug)) {
       a.ori = up.ori
       oriFromUpstream++
     }
