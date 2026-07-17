@@ -320,6 +320,18 @@ function parseLeaTitle(text: string): string | null {
 
 // Date signed — right column of signature block.
 // Formats: "9/22/2025", "02/10/2026", "2/10/26", "March 17, 2025"
+// A signing date can't be in the future or predate the 287(g) program (1996). An
+// implausible one means the parser grabbed the wrong line — an expiration or
+// revision date, or a stray "02/28/2028" — not the signature. Null is unparseable-
+// but-matched: keep it (the regex already vouched for the shape). #229
+function isPlausibleSignDate(raw: string | null): boolean {
+  if (!raw) return true;
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return true;
+  const y = d.getUTCFullYear();
+  return y >= 1996 && d.getTime() <= Date.now() + 86_400_000;
+}
+
 function parseDateSigned(text: string): string | null {
   // The signature block contains "Signature:" labels (unique to that section).
   // Walk backwards from the last "Signature:" to find "For the LEA:" above it.
@@ -330,20 +342,19 @@ function parseDateSigned(text: string): string | null {
   const sigStart = sigBlockStart >= 0 ? sigBlockStart : -1;
   const chunk = sigStart >= 0 ? text.slice(sigStart, sigStart + 1000) : text;
 
-  // Numeric preceded by "Date:" label: "9/22/2025"
-  const m1 = chunk.match(/Date:\s*[-–~\s]*(\d{1,2}\/\d{1,2}\/\d{2,4})/);
-  if (m1) return m1[1];
-
-  // Spelled-out preceded by "Date:" label: "March 17, 2025"
-  const m2 = chunk.match(/Date:\s*[-–~\s]*([A-Z][a-z]+ \d{1,2},?\s*\d{2,4})/);
-  if (m2) return m2[1].trim();
-
-  // Standalone date on its own line (new template: date appears on left-column
-  // line before the right-column "Date:" label line, e.g. "9/22/2025" alone).
-  // Restrict to first 600 chars of sig block to avoid footer "Revised" dates.
-  const m3 = chunk.slice(0, 600).match(/^\s*(\d{1,2}\/\d{1,2}\/(?:20\d{2}|\d{2}))\s*$/m);
-  if (m3) return m3[1];
-
+  const candidates = [
+    // Numeric preceded by "Date:" label: "9/22/2025"
+    chunk.match(/Date:\s*[-–~\s]*(\d{1,2}\/\d{1,2}\/\d{2,4})/)?.[1],
+    // Spelled-out preceded by "Date:" label: "March 17, 2025"
+    chunk.match(/Date:\s*[-–~\s]*([A-Z][a-z]+ \d{1,2},?\s*\d{2,4})/)?.[1]?.trim(),
+    // Standalone date on its own line (new template: date appears on left-column
+    // line before the right-column "Date:" label line, e.g. "9/22/2025" alone).
+    // Restrict to first 600 chars of sig block to avoid footer "Revised" dates.
+    chunk.slice(0, 600).match(/^\s*(\d{1,2}\/\d{1,2}\/(?:20\d{2}|\d{2}))\s*$/m)?.[1],
+  ];
+  // First candidate in precedence order that is a plausible signing date. Skipping
+  // an implausible match lets a later pattern still recover the real date.
+  for (const c of candidates) if (c && isPlausibleSignDate(c)) return c;
   return null;
 }
 
@@ -573,6 +584,17 @@ const moaAgreements: Record<string, IndexedAgreement[]> = JSON.parse(
 const existing: Record<string, MoaExtract> = existsSync(OUT_PATH)
   ? JSON.parse(readFileSync(OUT_PATH, "utf8"))
   : {};
+
+// The incremental cache skips already-extracted agencies, so the parseDateSigned
+// guard alone would never revisit a bad date already on file (e.g. the cached
+// "02/28/2028"). Re-validate on load and null implausible signing dates, top-level
+// and per-agreement; the end-of-run write persists the correction. #229
+for (const v of Object.values(existing)) {
+  if (!isPlausibleSignDate(v.date_signed)) v.date_signed = null;
+  for (const a of v.agreements ?? []) {
+    if (!isPlausibleSignDate(a.date_signed)) a.date_signed = null;
+  }
+}
 
 const entries = Object.entries(moaAgreements).filter(([, ags]) => ags.length > 0);
 // --force: reprocess all | default: skip successfully-extracted entries
