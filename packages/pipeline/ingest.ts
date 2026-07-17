@@ -312,6 +312,8 @@ function canonName(name: string): string {
     .replace(/\bste\b/g, 'sainte')
     .replace(/\btwp\b/g, 'township')
     .replace(/\bdept\b/g, 'department')
+    .replace(/\bpd\b/g, 'police department')
+    .replace(/\bbocc\b/g, 'board of county commissioners')
     .replace(/[^a-z0-9 ]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
@@ -1027,31 +1029,129 @@ function findRenameTarget(vanishedKey: string): string | null {
 // Walk every disappeared agency: merge renames into their survivor (carrying the
 // earlier first-seen + a unified history) and collect sustained departures.
 const TERMINATION_MIN_ABSENT_SNAPSHOTS = 3 // ~1 week at the every-other-day cadence
-const aliasGroups = new Map<string, Set<string>>() // active key → {self, ...pre-rename aliases}
-const mergedFirstIdx = new Map<string, number>()    // active key → earliest first-seen idx
-for (const key of activeKeys) {
-  const e = observed.get(key)
-  if (e) mergedFirstIdx.set(key, e.firstIdx)
+const aliasGroups = new Map<string, Set<string>>() // survivor key → {self, ...pre-rename aliases}
+const mergedFirstIdx = new Map<string, number>()    // survivor key → earliest first-seen idx
+for (const [key, e] of observed) mergedFirstIdx.set(key, e.firstIdx)
+
+// ── Tier-0 handoff detection (#242) ──────────────────────────────────────────
+//
+// The name tiers in findRenameTarget miss three relabel shapes and so publish
+// live agencies as departures: ICE's 2025-03-17 abbreviation expansions (Tampa
+// Pd → Tampa Police Department), rename *chains* where every intermediate link
+// also vanishes (findRenameTarget only searches currently-active candidates),
+// and state-column corrections (Cass County MT → MN). The reliable, previously
+// unused signal is structural: a vanished record is a relabel, not a departure,
+// when some other record shares its exact signed_date (the same MOA) AND its
+// first model-add lands on the same date as this record's last model-removal AND
+// it's the same model being handed off. Name similarity is only a guard on top,
+// which is why this tier is state-agnostic — that's what lets MT→MN resolve.
+const HANDOFF_FILLER = new Set([
+  's', 'police', 'department', 'sheriffs', 'sheriff', 'office', 'of', 'the', 'county', 'city',
+  'town', 'village', 'borough', 'services', 'service', 'public', 'safety', 'division', 'corrections',
+  'correctional', 'board', 'commissioners', 'detention', 'center', 'dps', 'authority', 'and',
+  'district', 'so', 'constable', 'constables', 'state', 'jail', 'thp', 'trustees', 'facility',
+  'prison', 'patrol',
+])
+const handoffToks = (name: string): Set<string> =>
+  new Set(canonName(name).split(' ').filter((w) => w && !HANDOFF_FILLER.has(w)))
+const jaccard = (a: Set<string>, b: Set<string>): number => {
+  const inter = [...a].filter((x) => b.has(x)).length
+  const union = new Set([...a, ...b]).size
+  return union ? inter / union : 0
 }
+// Name guard on a handoff: distinctive-token overlap, a small typo, or a bare
+// state-prefix addition ("Department of Corrections" → "Virginia Department …").
+function handoffNameMatch(x: SnapshotAgency, y: SnapshotAgency): boolean {
+  if (jaccard(handoffToks(x.name), handoffToks(y.name)) >= 0.3) return true
+  const cx = canonName(x.name), cy = canonName(y.name)
+  if (editDistance(cx, cy) <= 3) return true
+  const strip = (s: string, st: string) => {
+    const sn = STATE_FULL_BY_ABBR[st]
+    return sn && s.startsWith(sn + ' ') ? s.slice(sn.length + 1) : s
+  }
+  const sx = strip(cx, x.state)
+  return !!sx && sx === strip(cy, y.state)
+}
+// Per-key first model-add / last model-removal / signed_date, from single-key history.
+const firstAddByKey = new Map<string, { date: string; models: string[] }>()
+const lastRemovalByKey = new Map<string, { date: string; models: string[] }>()
+const signedByKey = new Map<string, string>()
+for (const [key, e] of observed) {
+  const h = buildHistory(new Set([key]))
+  const fa = h.find((ev) => ev.added.length)
+  const lr = [...h].reverse().find((ev) => ev.removed.length)
+  if (fa) firstAddByKey.set(key, { date: fa.date, models: fa.added })
+  if (lr) lastRemovalByKey.set(key, { date: lr.date, models: lr.removed })
+  const s = earliestSigned.get(key) ?? e.lastRow.signed_date
+  if (s) signedByKey.set(key, s)
+}
+// Two records the handoff signature flags but whose semantics aren't settled: a
+// city PD → county sheriff jump (different counties), and a sheriff vs a separate
+// corrections body. Hold them as departures for human review rather than silently
+// folding a live agency's name into another — the error class this ticket exists
+// to prevent. Re-evaluate against upstream before folding. #242
+const isReviewHold = (row: SnapshotAgency): boolean =>
+  (row.state === 'OK' && /haskell police/i.test(row.name)) ||
+  (row.state === 'PA' && /cambria county sheriff/i.test(row.name))
+// Handoff edge: vanished key → the record that took over its MOA and model.
+const handoffEdge = new Map<string, string>()
+for (const [key, e] of observed) {
+  if (activeKeys.has(key) || isReviewHold(e.lastRow)) continue
+  const lr = lastRemovalByKey.get(key)
+  const signed = signedByKey.get(key)
+  if (!lr || !signed) continue
+  let best: string | null = null
+  let bestScore = -1
+  for (const [y, ye] of observed) {
+    if (y === key || signedByKey.get(y) !== signed) continue
+    const fa = firstAddByKey.get(y)
+    if (!fa || fa.date !== lr.date || !lr.models.some((m) => fa.models.includes(m))) continue
+    if (!handoffNameMatch(e.lastRow, ye.lastRow)) continue
+    const sc = jaccard(handoffToks(e.lastRow.name), handoffToks(ye.lastRow.name))
+    if (sc > bestScore) { bestScore = sc; best = y }
+  }
+  if (best) handoffEdge.set(key, best)
+}
+// Resolve a vanished key to its final survivor: follow handoff edges (which can
+// chain through other vanished records), then take one name-tier hop, which by
+// construction lands on an active agency. Returns the key itself if nothing
+// resolves (a genuine departure). Cycle-guarded.
+function resolveSurvivor(startKey: string): string {
+  const seen = new Set([startKey])
+  let cur = startKey
+  for (;;) {
+    if (activeKeys.has(cur)) return cur
+    let nxt = handoffEdge.get(cur) ?? findRenameTarget(cur) ?? undefined
+    if (!nxt || seen.has(nxt)) return cur
+    seen.add(nxt)
+    cur = nxt
+  }
+}
+
 const terminationKeys: string[] = []
 let renameCount = 0
 let blipCount = 0
+function foldInto(aliasKey: string, survivorKey: string) {
+  renameCount++
+  const group = aliasGroups.get(survivorKey) ?? new Set([survivorKey])
+  group.add(aliasKey)
+  aliasGroups.set(survivorKey, group)
+  const ai = observed.get(aliasKey)!.firstIdx
+  if (ai < (mergedFirstIdx.get(survivorKey) ?? Infinity)) mergedFirstIdx.set(survivorKey, ai)
+}
 for (const [key, e] of observed) {
   if (activeKeys.has(key)) continue // still active
-  const target = findRenameTarget(key)
-  if (target) {
-    renameCount++
-    const group = aliasGroups.get(target) ?? new Set([target])
-    group.add(key)
-    aliasGroups.set(target, group)
-    if (e.firstIdx < (mergedFirstIdx.get(target) ?? Infinity)) mergedFirstIdx.set(target, e.firstIdx)
+  const survivor = isReviewHold(e.lastRow) ? key : resolveSurvivor(key)
+  if (survivor !== key) {
+    foldInto(key, survivor)
     continue
   }
+  // No survivor: a sustained absence is a departure; a 1–2 snapshot gap is a blip (#245).
   if (N - 1 - e.lastIdx >= TERMINATION_MIN_ABSENT_SNAPSHOTS) terminationKeys.push(key)
   else blipCount++
 }
 console.log(
-  `  Rename resolution: ${renameCount} relabels merged, ${blipCount} brief blips ignored, ${terminationKeys.length} genuine terminations`,
+  `  Rename resolution: ${renameCount} relabels merged (handoffs + name-tier), ${blipCount} brief blips ignored, ${terminationKeys.length} genuine terminations`,
 )
 
 // first_seen reflects the earliest alias in the group; an active agency is never
