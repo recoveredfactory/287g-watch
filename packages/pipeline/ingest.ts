@@ -1129,8 +1129,12 @@ function resolveSurvivor(startKey: string): string {
 }
 
 const terminationKeys: string[] = []
+// Absent for 1–2 snapshots (below the debounce): not on the latest roster so not
+// active, not gone long enough to confirm a departure. Neither payload had a bucket
+// for this, so these keys were dropped on the floor — their pages 404'd and their
+// history vanished from the trend charts. Emit them as "pending" instead. #245
+const blipKeys: string[] = []
 let renameCount = 0
-let blipCount = 0
 function foldInto(aliasKey: string, survivorKey: string) {
   renameCount++
   const group = aliasGroups.get(survivorKey) ?? new Set([survivorKey])
@@ -1146,12 +1150,12 @@ for (const [key, e] of observed) {
     foldInto(key, survivor)
     continue
   }
-  // No survivor: a sustained absence is a departure; a 1–2 snapshot gap is a blip (#245).
+  // No survivor: a sustained absence is a departure; a 1–2 snapshot gap is pending (#245).
   if (N - 1 - e.lastIdx >= TERMINATION_MIN_ABSENT_SNAPSHOTS) terminationKeys.push(key)
-  else blipCount++
+  else blipKeys.push(key)
 }
 console.log(
-  `  Rename resolution: ${renameCount} relabels merged (handoffs + name-tier), ${blipCount} brief blips ignored, ${terminationKeys.length} genuine terminations`,
+  `  Rename resolution: ${renameCount} relabels merged (handoffs + name-tier), ${blipKeys.length} pending (brief blips), ${terminationKeys.length} genuine terminations`,
 )
 
 // first_seen reflects the earliest alias in the group; an active agency is never
@@ -1240,16 +1244,17 @@ for (const row of grouped) {
   })
 }
 
-// Genuine terminations: rebuild each from its last-seen snapshot row (it never
-// reached the latest-snapshot pass above) and emit to a SEPARATE payload so the
-// active topline in agency_index.json is unchanged. The map animation reads
-// this file to fade agencies out at their terminated_date.
-const terminatedAgencies: Agency[] = []
-for (const key of terminationKeys) {
+// Rebuild a vanished agency from its last-seen snapshot row (it never reached the
+// latest-snapshot pass above). terminatedDate is its departure date, or null for a
+// pending record — absent only 1–2 snapshots, not yet a confirmed departure (#245).
+// Emitted to SEPARATE payloads so the active topline in agency_index.json is
+// unchanged; the map animation fades out confirmed departures at terminated_date
+// and never animates a pending (unconfirmed) one.
+function buildVanishedAgency(key: string, terminatedDate: string | null): Agency | null {
   const e = observed.get(key)!
   const row = e.lastRow
   const name = titleAgency(row.name)
-  if (!name || !row.state) continue
+  if (!name || !row.state) return null
 
   const models = [...row.models].sort()
   const primary = MODEL_PRIORITY.find((m) => models.includes(m)) ?? models[0] ?? null
@@ -1261,7 +1266,7 @@ for (const key of terminationKeys) {
 
   const [lat, lng] = geocode(name, row.county, row.state, row.agency_type) ?? [null, null]
 
-  terminatedAgencies.push({
+  return {
     slug,
     name,
     state: row.state,
@@ -1272,7 +1277,7 @@ for (const key of terminationKeys) {
     primary_model: primary,
     signed_date: earliestSignedDate(aliasGroupOf(key)) ?? row.signed_date,
     first_seen_date: firstSeenDate(key),
-    terminated_date: dateAt(e.lastIdx),
+    terminated_date: terminatedDate,
     population: null,
     lat,
     lng,
@@ -1297,7 +1302,18 @@ for (const key of terminationKeys) {
     lee: null,
     agreement: null,
     notes: null,
-  })
+  }
+}
+
+const terminatedAgencies: Agency[] = []
+for (const key of terminationKeys) {
+  const a = buildVanishedAgency(key, dateAt(observed.get(key)!.lastIdx))
+  if (a) terminatedAgencies.push(a)
+}
+const pendingAgencies: Agency[] = []
+for (const key of blipKeys) {
+  const a = buildVanishedAgency(key, null)
+  if (a) pendingAgencies.push(a)
 }
 console.log(`  ${agencies.length} active agencies, ${terminatedAgencies.length} terminated`)
 
@@ -2068,6 +2084,11 @@ writeFileSync(resolve(OUT_DIR, 'state_meta.json'), JSON.stringify(stateCoverage,
 // untouched; the homepage map reads this to fade departures out (#118).
 writeFileSync(resolve(OUT_DIR, 'terminated_agencies.json'), JSON.stringify(terminatedAgencies, null, 2))
 console.log(`Wrote ${terminatedAgencies.length} terminated agencies → ${resolve(OUT_DIR, 'terminated_agencies.json')}`)
+// Pending agencies: absent 1–2 snapshots, neither confirmed-active nor confirmed-gone.
+// Read by the same places that merge the terminated payload so their pages resolve and
+// their history replays in the trend charts, but with terminated_date null (#245).
+writeFileSync(resolve(OUT_DIR, 'pending_agencies.json'), JSON.stringify(pendingAgencies, null, 2))
+console.log(`Wrote ${pendingAgencies.length} pending agencies → ${resolve(OUT_DIR, 'pending_agencies.json')}`)
 
 const geocoded = agencies.filter((a) => a.lat !== null).length
 const stateAgencies = agencies.filter((a) => a.agency_type === 'State Agency').length
