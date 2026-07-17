@@ -1359,6 +1359,14 @@ function leeNorm(s: string): string {
 // generate alternate lookup keys.
 const FBI_CITY_TRAILS = [/\s+beach$/i, /\s+village$/i, /\s+township$/i, /\s+city$/i, /\s+borough$/i, /\s+town$/i]
 
+const COUNTY_SUFFIXES_287 = [
+  /\s+county sheriff'?s? office$/i, /\s+county sheriff'?s? department$/i, /\s+county sheriff'?s?$/i,
+  /\s+parish sheriff'?s? office$/i, /\s+parish sheriff'?s? department$/i,
+  /\s+borough sheriff'?s? office$/i,
+  /\s+sheriff'?s? office$/i, /\s+sheriff'?s? department$/i, /\s+sheriff'?s?$/i,
+  /\s+county$/i, /\s+parish$/i,
+]
+
 const leeLookup = new Map<string, LeeRow>()
 const leeLookupCollapsed = new Map<string, LeeRow>()
 for (const r of leeRows) {
@@ -1371,6 +1379,13 @@ for (const r of leeRows) {
       const stripped = name.replace(re, '').trim()
       if (stripped) variants.add(stripped)
     }
+  } else if (bucket === 'county') {
+    // County LEE rows register their full name ("Jacksonville Sheriff's Office"), but the
+    // 287g side strips suffixes down to bare "jacksonville"/"duval". Register the stripped
+    // variant too, so a consolidated city-county reaches its real County row instead of
+    // falling through to a same-named City row (Jacksonville Beach). #243
+    const stripped = applyRegexes(name, COUNTY_SUFFIXES_287)
+    if (stripped) variants.add(stripped)
   }
   for (const v of variants) {
     const k = `${r.state_abbr}|${bucket}|${v}`
@@ -1390,13 +1405,7 @@ const CITY_SUFFIXES = [
   /\s+police$/i, /\bpd$/i,
 ]
 const CITY_PREFIXES = [/^city of\s+/i, /^town of\s+/i, /^township of\s+/i, /^village of\s+/i, /^borough of\s+/i]
-const COUNTY_SUFFIXES_287 = [
-  /\s+county sheriff'?s? office$/i, /\s+county sheriff'?s? department$/i, /\s+county sheriff'?s?$/i,
-  /\s+parish sheriff'?s? office$/i, /\s+parish sheriff'?s? department$/i,
-  /\s+borough sheriff'?s? office$/i,
-  /\s+sheriff'?s? office$/i, /\s+sheriff'?s? department$/i, /\s+sheriff'?s?$/i,
-  /\s+county$/i, /\s+parish$/i,
-]
+// COUNTY_SUFFIXES_287 is declared above the LEE lookup build, which now consumes it too.
 const STATE_SUFFIXES = [/\s+department$/i, /\s+police department$/i, /\s+division$/i]
 const UNIVERSITY_SUFFIXES = [/\s+board of trustees$/i, /\s+department of public safety$/i, /\s+police department$/i]
 const UNIVERSITY_PREFIXES = [/^district board of trustees of\s+/i, /^board of trustees of\s+/i]
@@ -1460,8 +1469,13 @@ function matchAgency(a: Agency): LeeRow | null {
   if (a.agency_type === 'County') {
     const m = findLee(a.state, ['county'], countyCandidates(a.name, a.county))
     if (m) return m
-    // Consolidated city-counties / independent cities (Jacksonville, Hopewell, etc.)
-    return findLee(a.state, ['city'], cityCandidates(a.name.replace(/\s+sheriff'?s? office$/i, '').replace(/\s+county$/i, '')))
+    // Consolidated city-counties (Jacksonville/Duval) now resolve via the county bucket
+    // above. The only County agencies that legitimately match a *city* LEE row are
+    // independent cities (VA/MD/MO/NV), which the FBI codes with a "<NAME> CITY"
+    // county_name. Gate the fallback on that signal: unconditional, it grabbed a same-named
+    // city or township for six county sheriffs — three in a different county entirely. #243
+    const cityMatch = findLee(a.state, ['city'], cityCandidates(a.name.replace(/\s+sheriff'?s? office$/i, '').replace(/\s+county$/i, '')))
+    return cityMatch && /\bcity$/i.test((cityMatch.county_name ?? '').trim()) ? cityMatch : null
   }
   if (a.agency_type === 'Municipality') {
     const cands = cityCandidates(a.name)
