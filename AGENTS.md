@@ -55,7 +55,7 @@ After any change to `packages/web`, run `pnpm dev:web`, open the browser, and ex
 
 ## Data source
 
-The authoritative source is the `sheets/` directory in [appelson/Tracking_287g](https://github.com/appelson/Tracking_287g). Daily snapshots. The `agreements.csv` at that repo's root is stale (last updated July 2025) — do not use it.
+The authoritative roster is the `sheets/` directory in [appelson/Tracking_287g](https://github.com/appelson/Tracking_287g) (daily snapshots). That repo also published a hand-vetted `agreements.csv` (the roster joined to ICPSR study 38771 for ORIs, population, and budgets) that runs as a correction layer *ahead* of the FBI name heuristic. Upstream deleted it on 2026-06-08, so the pipeline now reads a vendored last-good copy at `packages/pipeline/data/agreements.csv` (pinned to commit `0afaab4f`); it is committed, not fetched. See `AGREEMENTS_CSV` in `ingest.ts`. Refresh it by re-running that repo's `analysis/adding_address.R` against a newer roster.
 
 When the upstream schema changes (it has before), the pipeline will fail noisily at the column mapping step in `ingest.ts`. Fix it there. Do not patch around it deeper in the logic.
 
@@ -64,7 +64,7 @@ When the upstream schema changes (it has before), the pipeline will fail noisily
 ## Known gaps — do not invent solutions for these without direction
 
 - **MOA links** — the `moa_url` field exists throughout but the sheets source currently only has placeholder "link" text. When real URLs arrive, the agency pages will show them automatically. No action needed now.
-- **Population data** — dropped when we moved off `agreements.csv`. Could be restored via a crosswalk to CSLLEA or another source. Not a current priority.
+- **Population data** — `population_policed` and `operating_budget` are attached for ~526 agencies from the vendored `agreements.csv` crosswalk (see Data source). They are frozen at upstream's last publication (2026-06-08), so agencies that signed after that date won't carry them until the crosswalk is refreshed. FBI LEE `population` (a different figure) covers the rest.
 - **City-level geocoding** — we currently place agencies at the county centroid. More precise geocoding (by address or agency name) is possible but not needed yet.
 - **Historical tracking** — the pipeline always takes the latest snapshot. Trend data over time is a future concern.
 - **Editorial content** — the About, Methodology, and Glossary pages are stubs. The placeholder text in the model description cards on the homepage ("Fill in: ...") also needs real copy. These are editorial tasks, not engineering.
