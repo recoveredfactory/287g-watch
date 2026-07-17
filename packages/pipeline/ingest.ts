@@ -261,16 +261,17 @@ function makeSlug(name: string, state: string): string {
 
 function parseSignedDate(val: unknown): string | null {
   if (val == null || val === '') return null
-  if (val instanceof Date) return val.toISOString().split('T')[0]
-  if (typeof val === 'number') {
-    const d = new Date(Date.UTC(1899, 11, 30) + val * 86_400_000)
-    return d.toISOString().split('T')[0]
-  }
-  if (typeof val === 'string') {
-    const d = new Date(val.trim())
-    return isNaN(d.getTime()) ? null : d.toISOString().split('T')[0]
-  }
-  return null
+  let d: Date | null = null
+  if (val instanceof Date) d = val
+  else if (typeof val === 'number') d = new Date(Date.UTC(1899, 11, 30) + val * 86_400_000)
+  else if (typeof val === 'string') d = new Date(val.trim())
+  if (!d || isNaN(d.getTime())) return null
+  // Sanity guard: a "6/30/20026" source typo parses to year 20026, whose ISO form
+  // ("+020026-06-30") sorts before every real date and corrupts timeline/hero logic.
+  // 287(g) was created in 1996; anything past next year is a typo, not a signing. #228
+  const y = d.getUTCFullYear()
+  if (y < 1996 || y > new Date().getUTCFullYear() + 1) return null
+  return d.toISOString().split('T')[0]
 }
 
 function str(val: unknown): string {
