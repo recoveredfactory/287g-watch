@@ -79,6 +79,26 @@
       <li><Gloss text={m.methodology_limitations_li_2()} {seen} /></li>
     </ul>
 
+    <h2 id="agreements" class="mt-8 scroll-mt-24 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.methodology_moa_heading()}</h2>
+
+    <h3 class="mt-6 font-serif text-lg font-bold text-slate-900 sm:mt-8 sm:text-xl">{m.methodology_moa_coverage_heading()}</h3>
+    <p class="mt-3"><Gloss text={m.methodology_moa_coverage_body()} {seen} /></p>
+
+    <h3 class="mt-6 font-serif text-lg font-bold text-slate-900 sm:mt-8 sm:text-xl">{m.methodology_moa_signers_heading()}</h3>
+    <p class="mt-3"><Gloss text={m.methodology_moa_signers_body()} {seen} /></p>
+
+    <h3 class="mt-6 font-serif text-lg font-bold text-slate-900 sm:mt-8 sm:text-xl">{m.methodology_moa_timeline_heading()}</h3>
+    <p class="mt-3"><Gloss text={m.methodology_moa_timeline_body_1()} {seen} /></p>
+    <p class="mt-3"><Gloss text={m.methodology_moa_timeline_body_2()} {seen} /></p>
+
+    <h3 class="mt-6 font-serif text-lg font-bold text-slate-900 sm:mt-8 sm:text-xl">{m.methodology_moa_caveats_heading()}</h3>
+    <ul class="mt-3">
+      <li><Gloss text={m.methodology_moa_caveats_li_1()} {seen} /></li>
+      <li><Gloss text={m.methodology_moa_caveats_li_2()} {seen} /></li>
+      <li><Gloss text={m.methodology_moa_caveats_li_3()} {seen} /></li>
+      <li><Gloss text={m.methodology_moa_caveats_li_4()} {seen} /></li>
+    </ul>
+
     <h2 id="ai" class="mt-8 scroll-mt-24 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.methodology_ai_heading()}</h2>
 
     <p class="mt-3"><Gloss text={m.methodology_ai_body_1()} {seen} /></p>
