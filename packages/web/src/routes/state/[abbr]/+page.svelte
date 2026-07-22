@@ -363,6 +363,19 @@
         {/if}
       {/if}
 
+      <!-- Reuse license for the summary prose: CC BY 4.0. Always visible (even in
+           the collapsed TL;DR view) so the terms travel with the summary. Covers
+           our prose, not the cited third-party articles. -->
+      <p class="mt-6 max-w-prose text-xs italic text-slate-400">
+        {m.news_license_prefix()}
+        <a
+          href="https://creativecommons.org/licenses/by/4.0/"
+          target="_blank"
+          rel="license noopener noreferrer"
+          class="font-semibold underline decoration-slate-300 underline-offset-2 hover:text-slate-600 hover:decoration-slate-500"
+        >{m.news_license_link()}</a>
+        {m.news_license_suffix()}
+      </p>
     </section>
   {/if}
 
