@@ -361,39 +361,23 @@
       </h2>
 
       {#if agencies.length}
-      <!-- Model filter pills (split-button: toggle left, ⓘ info right) -->
+      <!-- Model filter pills -->
       <div class="mt-4 flex flex-wrap gap-2">
         {#each MODEL_ORDER as model}
           {#if modelCounts[model]}
             {@const active = activeModels.has(model)}
-            <div
-              class="inline-flex overflow-hidden rounded border text-xs font-semibold transition-colors"
+            <button
+              type="button"
+              on:click={() => toggleModel(model)}
+              aria-pressed={active}
+              class="rounded border px-3 py-1.5 text-xs font-semibold transition-colors"
               style={active
-                ? `border-color: ${MODEL_COLORS[model]}; background: ${MODEL_COLORS[model]};`
-                : `border-color: ${MODEL_COLORS[model]}88; background: ${MODEL_COLORS[model]}18;`}
+                ? `background: ${MODEL_COLORS[model]}; border-color: ${MODEL_COLORS[model]}; color: ${MODEL_TEXT_COLORS[model] ?? "#fff"};`
+                : `background: ${MODEL_COLORS[model]}22; border-color: ${MODEL_COLORS[model]}88; color: ${MODEL_DARK_COLORS[model] ?? "#334155"};`}
             >
-              <button
-                type="button"
-                on:click={() => toggleModel(model)}
-                aria-pressed={active}
-                class="px-3 py-1.5"
-                style={active
-                  ? `color: ${MODEL_TEXT_COLORS[model] ?? "#fff"};`
-                  : `color: ${MODEL_DARK_COLORS[model] ?? "#334155"};`}
-              >
-                {MODEL_SHORT[model]}
-                <span class="ml-1 tabular-nums opacity-70">{modelCounts[model]}</span>
-              </button>
-              <a
-                href={localizeHref(`/model/${MODEL_SLUG[model]}`)}
-                class="flex items-center border-l px-2 py-1.5 no-underline transition-opacity hover:opacity-70"
-                style={active
-                  ? `border-color: ${MODEL_TEXT_COLORS[model] ?? "#fff"}44; color: ${MODEL_TEXT_COLORS[model] ?? "#fff"};`
-                  : `border-color: ${MODEL_COLORS[model]}44; color: ${MODEL_DARK_COLORS[model] ?? "#334155"};`}
-                aria-label={m.state_learn_about_model({ model })}
-                title={m.state_learn_about_model({ model })}
-              >ⓘ</a>
-            </div>
+              {MODEL_SHORT[model]}
+              <span class="ml-1 tabular-nums opacity-70">{modelCounts[model]}</span>
+            </button>
           {/if}
         {/each}
       </div>
@@ -507,11 +491,10 @@
                   <td class="px-2 py-2 sm:px-3 sm:py-3">
                     <div class="flex flex-wrap gap-1">
                       {#each agency.models as model}
-                        <ModelLink
-                          {model}
-                          underline={false}
-                          class="model-badge model-badge--{MODEL_SLUG[model]}"
-                        ><span class="sm:hidden">{MODEL_MINI[model] ?? model}</span><span class="hidden sm:inline">{MODEL_SHORT[model] ?? model}</span></ModelLink>
+                        <span class="model-badge model-badge--{MODEL_SLUG[model]}">
+                          <ModelLink {model} underline={false}
+                            ><span class="sm:hidden">{MODEL_MINI[model] ?? model}</span><span class="hidden sm:inline">{MODEL_SHORT[model] ?? model}</span></ModelLink>
+                        </span>
                       {/each}
                     </div>
                   </td>
