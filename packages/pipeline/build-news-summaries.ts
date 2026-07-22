@@ -217,10 +217,37 @@ function assertFilled(label: string, s: string): void {
 // (already relevant, direct URLs) into that shape so nothing on the site changes.
 // The DDN carries no per-article agency/county tags, so those stay blank (no chips).
 type RawArticle = Record<string, unknown>
+
+// DDN titles often trail site chrome: "Headline | Section | Publisher" or
+// "Headline - Publisher". Strip it conservatively — headlines rarely contain these
+// separators as content, but some do ("…facility — and other projects — on hold"),
+// so a dash suffix is only removed when it LOOKS like a source (matches the
+// publisher, ends in a TLD, or is a short Capitalized name), and a pipe is only
+// treated as chrome when the first segment is long enough to be the headline.
+function cleanArticleTitle(title: string, publisher: string): string {
+  let t = title.replace(/\s+/g, ' ').trim()
+  const pipe = t.indexOf(' | ')
+  if (pipe > 0) {
+    const head = t.slice(0, pipe).trim()
+    if (head.split(/\s+/).length >= 4) t = head
+  }
+  const m = t.match(/^(.*\S)\s+[-–—]\s+([^-–—]{1,50})$/)
+  if (m) {
+    const tail = m[2].trim()
+    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '')
+    const sourceLike =
+      norm(tail) === norm(publisher) ||
+      /\.(com|org|net|news)$/i.test(tail) ||
+      (/^[\p{Lu}\p{N}]/u.test(tail) && tail.split(/\s+/).length <= 6)
+    if (sourceLike) t = m[1].trim()
+  }
+  return t
+}
+
 function mapCandidateArticles(rows: unknown): RawArticle[] {
   if (!Array.isArray(rows)) return []
   return rows.map((r: Record<string, unknown>) => ({
-    Title: str(r.title),
+    Title: cleanArticleTitle(str(r.title), str(r.publisher)),
     Link: str(r.url),
     Publication: str(r.publisher),
     Date: str(r.published_at),
