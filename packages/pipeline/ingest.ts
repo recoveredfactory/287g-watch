@@ -261,16 +261,17 @@ function makeSlug(name: string, state: string): string {
 
 function parseSignedDate(val: unknown): string | null {
   if (val == null || val === '') return null
-  if (val instanceof Date) return val.toISOString().split('T')[0]
-  if (typeof val === 'number') {
-    const d = new Date(Date.UTC(1899, 11, 30) + val * 86_400_000)
-    return d.toISOString().split('T')[0]
-  }
-  if (typeof val === 'string') {
-    const d = new Date(val.trim())
-    return isNaN(d.getTime()) ? null : d.toISOString().split('T')[0]
-  }
-  return null
+  let d: Date | null = null
+  if (val instanceof Date) d = val
+  else if (typeof val === 'number') d = new Date(Date.UTC(1899, 11, 30) + val * 86_400_000)
+  else if (typeof val === 'string') d = new Date(val.trim())
+  if (!d || isNaN(d.getTime())) return null
+  // Sanity guard: a "6/30/20026" source typo parses to year 20026, whose ISO form
+  // ("+020026-06-30") sorts before every real date and corrupts timeline/hero logic.
+  // 287(g) was created in 1996; anything past next year is a typo, not a signing. #228
+  const y = d.getUTCFullYear()
+  if (y < 1996 || y > new Date().getUTCFullYear() + 1) return null
+  return d.toISOString().split('T')[0]
 }
 
 function str(val: unknown): string {
@@ -312,6 +313,8 @@ function canonName(name: string): string {
     .replace(/\bste\b/g, 'sainte')
     .replace(/\btwp\b/g, 'township')
     .replace(/\bdept\b/g, 'department')
+    .replace(/\bpd\b/g, 'police department')
+    .replace(/\bbocc\b/g, 'board of county commissioners')
     .replace(/[^a-z0-9 ]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
@@ -744,9 +747,19 @@ console.log(
 
 console.log('\nGrouping models per agency...')
 
+// Group on the pipeline's own notion of agency identity, NOT the raw name.
+// Upstream spells one agency more than one way — a curly apostrophe in the Jail
+// Enforcement row and a straight one in the Task Force row — and keying on the
+// raw string made that one agency into two, each holding a fragment of its
+// models (#240). historyKey is the right key because it's already the identity
+// the history/rename layer uses, so grouping and history can't disagree about
+// what an agency is; it strips non-alphanumerics, which is exactly the class of
+// difference upstream produces. (The slug generator had been quietly absorbing
+// the same signal: both spellings slugify identically, collide, and the twin
+// became `…-tx-1`. See the collision warning below.)
 const byAgency = new Map<string, NormalizedRow[]>()
 for (const row of normalizedRows) {
-  const key = `${row.state}\x00${row.name}`
+  const key = historyKey(row.name, row.state)
   const bucket = byAgency.get(key)
   if (bucket) bucket.push(row)
   else byAgency.set(key, [row])
@@ -764,13 +777,22 @@ interface GroupedAgency {
 
 const grouped: GroupedAgency[] = []
 for (const rows of byAgency.values()) {
-  const first = rows[0]
+  // The rows in a group can spell the name differently, but only in characters
+  // historyKey ignores — so the choice is typographic, never semantic, and any
+  // variant is equally true. Sort and take the first: deterministic, and it
+  // happens to prefer the ASCII apostrophe (U+0027 sorts before U+2019), which
+  // is what the other ~1,800 agencies read like. Deterministic is the load-
+  // bearing part — picking by row order would let an upstream reshuffle rewrite
+  // the name, and a changed name means a changed agency_index, which means a
+  // spurious deploy, bake and social post. (titleAgency re-cases it downstream.)
+  const displayName = [...new Set(rows.map((r) => r.name))].sort()[0]
+  const first = rows.find((r) => r.name === displayName) ?? rows[0]
   const models = [
     ...new Set(rows.map((r) => r.model).filter((m): m is string => !!m)),
   ].sort()
   const moa = rows.map((r) => r.moa_url).find((u) => u?.startsWith('http')) ?? null
   grouped.push({
-    name: first.name,
+    name: displayName,
     state: first.state,
     county: first.county,
     agency_type: first.agency_type,
@@ -1008,31 +1030,133 @@ function findRenameTarget(vanishedKey: string): string | null {
 // Walk every disappeared agency: merge renames into their survivor (carrying the
 // earlier first-seen + a unified history) and collect sustained departures.
 const TERMINATION_MIN_ABSENT_SNAPSHOTS = 3 // ~1 week at the every-other-day cadence
-const aliasGroups = new Map<string, Set<string>>() // active key → {self, ...pre-rename aliases}
-const mergedFirstIdx = new Map<string, number>()    // active key → earliest first-seen idx
-for (const key of activeKeys) {
-  const e = observed.get(key)
-  if (e) mergedFirstIdx.set(key, e.firstIdx)
+const aliasGroups = new Map<string, Set<string>>() // survivor key → {self, ...pre-rename aliases}
+const mergedFirstIdx = new Map<string, number>()    // survivor key → earliest first-seen idx
+for (const [key, e] of observed) mergedFirstIdx.set(key, e.firstIdx)
+
+// ── Tier-0 handoff detection (#242) ──────────────────────────────────────────
+//
+// The name tiers in findRenameTarget miss three relabel shapes and so publish
+// live agencies as departures: ICE's 2025-03-17 abbreviation expansions (Tampa
+// Pd → Tampa Police Department), rename *chains* where every intermediate link
+// also vanishes (findRenameTarget only searches currently-active candidates),
+// and state-column corrections (Cass County MT → MN). The reliable, previously
+// unused signal is structural: a vanished record is a relabel, not a departure,
+// when some other record shares its exact signed_date (the same MOA) AND its
+// first model-add lands on the same date as this record's last model-removal AND
+// it's the same model being handed off. Name similarity is only a guard on top,
+// which is why this tier is state-agnostic — that's what lets MT→MN resolve.
+const HANDOFF_FILLER = new Set([
+  's', 'police', 'department', 'sheriffs', 'sheriff', 'office', 'of', 'the', 'county', 'city',
+  'town', 'village', 'borough', 'services', 'service', 'public', 'safety', 'division', 'corrections',
+  'correctional', 'board', 'commissioners', 'detention', 'center', 'dps', 'authority', 'and',
+  'district', 'so', 'constable', 'constables', 'state', 'jail', 'thp', 'trustees', 'facility',
+  'prison', 'patrol',
+])
+const handoffToks = (name: string): Set<string> =>
+  new Set(canonName(name).split(' ').filter((w) => w && !HANDOFF_FILLER.has(w)))
+const jaccard = (a: Set<string>, b: Set<string>): number => {
+  const inter = [...a].filter((x) => b.has(x)).length
+  const union = new Set([...a, ...b]).size
+  return union ? inter / union : 0
 }
+// Name guard on a handoff: distinctive-token overlap, a small typo, or a bare
+// state-prefix addition ("Department of Corrections" → "Virginia Department …").
+function handoffNameMatch(x: SnapshotAgency, y: SnapshotAgency): boolean {
+  if (jaccard(handoffToks(x.name), handoffToks(y.name)) >= 0.3) return true
+  const cx = canonName(x.name), cy = canonName(y.name)
+  if (editDistance(cx, cy) <= 3) return true
+  const strip = (s: string, st: string) => {
+    const sn = STATE_FULL_BY_ABBR[st]
+    return sn && s.startsWith(sn + ' ') ? s.slice(sn.length + 1) : s
+  }
+  const sx = strip(cx, x.state)
+  return !!sx && sx === strip(cy, y.state)
+}
+// Per-key first model-add / last model-removal / signed_date, from single-key history.
+const firstAddByKey = new Map<string, { date: string; models: string[] }>()
+const lastRemovalByKey = new Map<string, { date: string; models: string[] }>()
+const signedByKey = new Map<string, string>()
+for (const [key, e] of observed) {
+  const h = buildHistory(new Set([key]))
+  const fa = h.find((ev) => ev.added.length)
+  const lr = [...h].reverse().find((ev) => ev.removed.length)
+  if (fa) firstAddByKey.set(key, { date: fa.date, models: fa.added })
+  if (lr) lastRemovalByKey.set(key, { date: lr.date, models: lr.removed })
+  const s = earliestSigned.get(key) ?? e.lastRow.signed_date
+  if (s) signedByKey.set(key, s)
+}
+// Two records the handoff signature flags but whose semantics aren't settled: a
+// city PD → county sheriff jump (different counties), and a sheriff vs a separate
+// corrections body. Hold them as departures for human review rather than silently
+// folding a live agency's name into another — the error class this ticket exists
+// to prevent. Re-evaluate against upstream before folding. #242
+const isReviewHold = (row: SnapshotAgency): boolean =>
+  (row.state === 'OK' && /haskell police/i.test(row.name)) ||
+  (row.state === 'PA' && /cambria county sheriff/i.test(row.name))
+// Handoff edge: vanished key → the record that took over its MOA and model.
+const handoffEdge = new Map<string, string>()
+for (const [key, e] of observed) {
+  if (activeKeys.has(key) || isReviewHold(e.lastRow)) continue
+  const lr = lastRemovalByKey.get(key)
+  const signed = signedByKey.get(key)
+  if (!lr || !signed) continue
+  let best: string | null = null
+  let bestScore = -1
+  for (const [y, ye] of observed) {
+    if (y === key || signedByKey.get(y) !== signed) continue
+    const fa = firstAddByKey.get(y)
+    if (!fa || fa.date !== lr.date || !lr.models.some((m) => fa.models.includes(m))) continue
+    if (!handoffNameMatch(e.lastRow, ye.lastRow)) continue
+    const sc = jaccard(handoffToks(e.lastRow.name), handoffToks(ye.lastRow.name))
+    if (sc > bestScore) { bestScore = sc; best = y }
+  }
+  if (best) handoffEdge.set(key, best)
+}
+// Resolve a vanished key to its final survivor: follow handoff edges (which can
+// chain through other vanished records), then take one name-tier hop, which by
+// construction lands on an active agency. Returns the key itself if nothing
+// resolves (a genuine departure). Cycle-guarded.
+function resolveSurvivor(startKey: string): string {
+  const seen = new Set([startKey])
+  let cur = startKey
+  for (;;) {
+    if (activeKeys.has(cur)) return cur
+    let nxt = handoffEdge.get(cur) ?? findRenameTarget(cur) ?? undefined
+    if (!nxt || seen.has(nxt)) return cur
+    seen.add(nxt)
+    cur = nxt
+  }
+}
+
 const terminationKeys: string[] = []
+// Absent for 1–2 snapshots (below the debounce): not on the latest roster so not
+// active, not gone long enough to confirm a departure. Neither payload had a bucket
+// for this, so these keys were dropped on the floor — their pages 404'd and their
+// history vanished from the trend charts. Emit them as "pending" instead. #245
+const blipKeys: string[] = []
 let renameCount = 0
-let blipCount = 0
+function foldInto(aliasKey: string, survivorKey: string) {
+  renameCount++
+  const group = aliasGroups.get(survivorKey) ?? new Set([survivorKey])
+  group.add(aliasKey)
+  aliasGroups.set(survivorKey, group)
+  const ai = observed.get(aliasKey)!.firstIdx
+  if (ai < (mergedFirstIdx.get(survivorKey) ?? Infinity)) mergedFirstIdx.set(survivorKey, ai)
+}
 for (const [key, e] of observed) {
   if (activeKeys.has(key)) continue // still active
-  const target = findRenameTarget(key)
-  if (target) {
-    renameCount++
-    const group = aliasGroups.get(target) ?? new Set([target])
-    group.add(key)
-    aliasGroups.set(target, group)
-    if (e.firstIdx < (mergedFirstIdx.get(target) ?? Infinity)) mergedFirstIdx.set(target, e.firstIdx)
+  const survivor = isReviewHold(e.lastRow) ? key : resolveSurvivor(key)
+  if (survivor !== key) {
+    foldInto(key, survivor)
     continue
   }
+  // No survivor: a sustained absence is a departure; a 1–2 snapshot gap is pending (#245).
   if (N - 1 - e.lastIdx >= TERMINATION_MIN_ABSENT_SNAPSHOTS) terminationKeys.push(key)
-  else blipCount++
+  else blipKeys.push(key)
 }
 console.log(
-  `  Rename resolution: ${renameCount} relabels merged, ${blipCount} brief blips ignored, ${terminationKeys.length} genuine terminations`,
+  `  Rename resolution: ${renameCount} relabels merged (handoffs + name-tier), ${blipKeys.length} pending (brief blips), ${terminationKeys.length} genuine terminations`,
 )
 
 // first_seen reflects the earliest alias in the group; an active agency is never
@@ -1067,6 +1191,16 @@ for (const row of grouped) {
   const base = makeSlug(name, state)
   const count = seenSlugs.get(base) ?? 0
   const slug = count === 0 ? base : `${base}-${count}`
+  if (count > 0) {
+    // Two agencies we consider distinct slugify the same. This counter is how
+    // the apostrophe duplicates hid for years (#240) — it minted `…-tx-1` and
+    // said nothing, so one agency reading as two looked like two agencies. Now
+    // that grouping keys on historyKey this should never fire, and if it does,
+    // the pair deserves a look before anyone trusts the count.
+    console.warn(
+      `  ⚠ slug collision: '${name}' (${state}) → ${slug} — two agencies share a slug; is one a duplicate?`,
+    )
+  }
   seenSlugs.set(base, count + 1)
 
   const [lat, lng] = geocode(name, row.county, state, row.agency_type) ?? [null, null]
@@ -1111,16 +1245,17 @@ for (const row of grouped) {
   })
 }
 
-// Genuine terminations: rebuild each from its last-seen snapshot row (it never
-// reached the latest-snapshot pass above) and emit to a SEPARATE payload so the
-// active topline in agency_index.json is unchanged. The map animation reads
-// this file to fade agencies out at their terminated_date.
-const terminatedAgencies: Agency[] = []
-for (const key of terminationKeys) {
+// Rebuild a vanished agency from its last-seen snapshot row (it never reached the
+// latest-snapshot pass above). terminatedDate is its departure date, or null for a
+// pending record — absent only 1–2 snapshots, not yet a confirmed departure (#245).
+// Emitted to SEPARATE payloads so the active topline in agency_index.json is
+// unchanged; the map animation fades out confirmed departures at terminated_date
+// and never animates a pending (unconfirmed) one.
+function buildVanishedAgency(key: string, terminatedDate: string | null): Agency | null {
   const e = observed.get(key)!
   const row = e.lastRow
   const name = titleAgency(row.name)
-  if (!name || !row.state) continue
+  if (!name || !row.state) return null
 
   const models = [...row.models].sort()
   const primary = MODEL_PRIORITY.find((m) => models.includes(m)) ?? models[0] ?? null
@@ -1132,7 +1267,7 @@ for (const key of terminationKeys) {
 
   const [lat, lng] = geocode(name, row.county, row.state, row.agency_type) ?? [null, null]
 
-  terminatedAgencies.push({
+  return {
     slug,
     name,
     state: row.state,
@@ -1143,7 +1278,7 @@ for (const key of terminationKeys) {
     primary_model: primary,
     signed_date: earliestSignedDate(aliasGroupOf(key)) ?? row.signed_date,
     first_seen_date: firstSeenDate(key),
-    terminated_date: dateAt(e.lastIdx),
+    terminated_date: terminatedDate,
     population: null,
     lat,
     lng,
@@ -1168,7 +1303,18 @@ for (const key of terminationKeys) {
     lee: null,
     agreement: null,
     notes: null,
-  })
+  }
+}
+
+const terminatedAgencies: Agency[] = []
+for (const key of terminationKeys) {
+  const a = buildVanishedAgency(key, dateAt(observed.get(key)!.lastIdx))
+  if (a) terminatedAgencies.push(a)
+}
+const pendingAgencies: Agency[] = []
+for (const key of blipKeys) {
+  const a = buildVanishedAgency(key, null)
+  if (a) pendingAgencies.push(a)
 }
 console.log(`  ${agencies.length} active agencies, ${terminatedAgencies.length} terminated`)
 
@@ -1177,8 +1323,13 @@ console.log(`  ${agencies.length} active agencies, ${terminatedAgencies.length} 
 console.log('\nJoining FBI LEE + upstream agreements.csv...')
 
 const LEE_CSV = resolve(__dirname, 'data/fbi_lee_latest.csv')
-const UPSTREAM_AGREEMENTS_URL =
-  'https://raw.githubusercontent.com/appelson/Tracking_287g/main/agreements.csv'
+// Hand-vetted ORI + population/budget crosswalk, vendored from
+// appelson/Tracking_287g@0afaab4f (data/agreements.csv, the last commit before upstream
+// deleted the file on 2026-06-08). It joins the 287g roster to ICPSR study 38771; the ORIs
+// and figures are near-static. Was fetched live from .../main/agreements.csv, which has
+// 404'd since the deletion while the build shipped green — hence the fail-loud guard below.
+// Refresh by re-running that repo's analysis/adding_address.R against a newer roster. #244
+const AGREEMENTS_CSV = resolve(__dirname, 'data/agreements.csv')
 
 interface LeeRow {
   ori: string
@@ -1261,12 +1412,16 @@ console.log(`  Loaded ${leeRows.length} FBI LEE rows`)
 const leeByOri = new Map<string, LeeRow>()
 for (const r of leeRows) leeByOri.set(r.ori, r)
 
-// Fetch upstream curated agreements.csv (~33% coverage but ORIs are hand-vetted)
-console.log(`  Fetching ${UPSTREAM_AGREEMENTS_URL}`)
-const upResp = await ghFetch(UPSTREAM_AGREEMENTS_URL)
-const upRowsArr = upResp.ok ? parseCSV(await upResp.text()) : [[]]
+// Load the vendored upstream agreements crosswalk (~29% coverage but ORIs are hand-vetted).
+// readFileSync throws if the file is missing — a dead input must fail the build, never ship
+// green (this is the fourth time an upstream input rotted silently: #225, #234, #238).
+console.log(`  Loading ${AGREEMENTS_CSV}`)
+const upRowsArr = parseCSV(readFileSync(AGREEMENTS_CSV, 'utf8'))
 const upHeaders = upRowsArr[0]
 const uc = Object.fromEntries(upHeaders.map((h, i) => [h, i])) as Record<string, number>
+for (const col of ['state', 'agency', 'ori', 'population_policed', 'operating_budget', 'agency_type']) {
+  if (!(col in uc)) throw new Error(`agreements.csv missing expected column "${col}" (schema changed?). Headers: ${upHeaders.join(', ')}`)
+}
 
 const STATE_FULL_TO_ABBR: Record<string, string> = Object.fromEntries(
   Object.entries(STATE_ABBREVS).map(([full, ab]) => [full, ab]),
@@ -1293,13 +1448,19 @@ for (let i = 1; i < upRowsArr.length; i++) {
   if (upstream.has(k)) continue
   const ori = r[uc.ori]
   upstream.set(k, {
-    ori: ori && ori !== 'NA' ? ori : null,
+    // ORI9 is two letters + seven digits. The source also carries "NA" and "-1" sentinels.
+    ori: /^[A-Z]{2}\d{7}$/.test(ori) ? ori : null,
     population_policed: numOrNull(r[uc.population_policed]),
     operating_budget: numOrNull(r[uc.operating_budget]),
     agency_type: r[uc.agency_type] || null,
   })
 }
 console.log(`  Loaded ${upstream.size} upstream agreement entries (${[...upstream.values()].filter(e => e.ori).length} with ORI)`)
+// A zero-entry crosswalk is never legitimate and, left unguarded, is indistinguishable from
+// a healthy build — the exact failure that let the dead URL ship green for weeks. #244
+if (upstream.size === 0) {
+  throw new Error(`agreements.csv parsed to 0 entries — expected ~600. The vendored crosswalk is empty or its rows no longer match the expected schema.`)
+}
 
 // FBI agency_type → bucket
 const FBI_BUCKET: Record<string, string> = {
@@ -1330,6 +1491,14 @@ function leeNorm(s: string): string {
 // generate alternate lookup keys.
 const FBI_CITY_TRAILS = [/\s+beach$/i, /\s+village$/i, /\s+township$/i, /\s+city$/i, /\s+borough$/i, /\s+town$/i]
 
+const COUNTY_SUFFIXES_287 = [
+  /\s+county sheriff'?s? office$/i, /\s+county sheriff'?s? department$/i, /\s+county sheriff'?s?$/i,
+  /\s+parish sheriff'?s? office$/i, /\s+parish sheriff'?s? department$/i,
+  /\s+borough sheriff'?s? office$/i,
+  /\s+sheriff'?s? office$/i, /\s+sheriff'?s? department$/i, /\s+sheriff'?s?$/i,
+  /\s+county$/i, /\s+parish$/i,
+]
+
 const leeLookup = new Map<string, LeeRow>()
 const leeLookupCollapsed = new Map<string, LeeRow>()
 for (const r of leeRows) {
@@ -1342,6 +1511,13 @@ for (const r of leeRows) {
       const stripped = name.replace(re, '').trim()
       if (stripped) variants.add(stripped)
     }
+  } else if (bucket === 'county') {
+    // County LEE rows register their full name ("Jacksonville Sheriff's Office"), but the
+    // 287g side strips suffixes down to bare "jacksonville"/"duval". Register the stripped
+    // variant too, so a consolidated city-county reaches its real County row instead of
+    // falling through to a same-named City row (Jacksonville Beach). #243
+    const stripped = applyRegexes(name, COUNTY_SUFFIXES_287)
+    if (stripped) variants.add(stripped)
   }
   for (const v of variants) {
     const k = `${r.state_abbr}|${bucket}|${v}`
@@ -1361,13 +1537,7 @@ const CITY_SUFFIXES = [
   /\s+police$/i, /\bpd$/i,
 ]
 const CITY_PREFIXES = [/^city of\s+/i, /^town of\s+/i, /^township of\s+/i, /^village of\s+/i, /^borough of\s+/i]
-const COUNTY_SUFFIXES_287 = [
-  /\s+county sheriff'?s? office$/i, /\s+county sheriff'?s? department$/i, /\s+county sheriff'?s?$/i,
-  /\s+parish sheriff'?s? office$/i, /\s+parish sheriff'?s? department$/i,
-  /\s+borough sheriff'?s? office$/i,
-  /\s+sheriff'?s? office$/i, /\s+sheriff'?s? department$/i, /\s+sheriff'?s?$/i,
-  /\s+county$/i, /\s+parish$/i,
-]
+// COUNTY_SUFFIXES_287 is declared above the LEE lookup build, which now consumes it too.
 const STATE_SUFFIXES = [/\s+department$/i, /\s+police department$/i, /\s+division$/i]
 const UNIVERSITY_SUFFIXES = [/\s+board of trustees$/i, /\s+department of public safety$/i, /\s+police department$/i]
 const UNIVERSITY_PREFIXES = [/^district board of trustees of\s+/i, /^board of trustees of\s+/i]
@@ -1431,8 +1601,13 @@ function matchAgency(a: Agency): LeeRow | null {
   if (a.agency_type === 'County') {
     const m = findLee(a.state, ['county'], countyCandidates(a.name, a.county))
     if (m) return m
-    // Consolidated city-counties / independent cities (Jacksonville, Hopewell, etc.)
-    return findLee(a.state, ['city'], cityCandidates(a.name.replace(/\s+sheriff'?s? office$/i, '').replace(/\s+county$/i, '')))
+    // Consolidated city-counties (Jacksonville/Duval) now resolve via the county bucket
+    // above. The only County agencies that legitimately match a *city* LEE row are
+    // independent cities (VA/MD/MO/NV), which the FBI codes with a "<NAME> CITY"
+    // county_name. Gate the fallback on that signal: unconditional, it grabbed a same-named
+    // city or township for six county sheriffs — three in a different county entirely. #243
+    const cityMatch = findLee(a.state, ['city'], cityCandidates(a.name.replace(/\s+sheriff'?s? office$/i, '').replace(/\s+county$/i, '')))
+    return cityMatch && /\bcity$/i.test((cityMatch.county_name ?? '').trim()) ? cityMatch : null
   }
   if (a.agency_type === 'Municipality') {
     const cands = cityCandidates(a.name)
@@ -1495,6 +1670,13 @@ let leeAttached = 0
 let agreementAttached = 0
 const leeYearDist = new Map<number, number>()
 
+// Agencies whose vendored-upstream ORI is known-stale and should yield to the FBI name
+// heuristic instead. The crosswalk is frozen at 2026-06-08 (see AGREEMENTS_CSV), so FBI
+// re-modellings accrue against it: JSO moved from a 2020 consolidated-city row (FL0160200,
+// 920,508 residents) to a 2025 County row (FL0160000, 1,008,920), which the #243 county
+// match now finds. Suppressing the stale ORI lets that fresher match win. #243/#244
+const STALE_UPSTREAM_ORI = new Set(['jacksonville-sheriffs-office-fl'])
+
 for (const a of agencies) {
   const up = findUpstream(a.state, a.name)
   if (up) {
@@ -1504,7 +1686,7 @@ for (const a of agencies) {
       agency_type: up.agency_type,
     }
     agreementAttached++
-    if (up.ori) {
+    if (up.ori && !STALE_UPSTREAM_ORI.has(a.slug)) {
       a.ori = up.ori
       oriFromUpstream++
     }
@@ -1903,6 +2085,11 @@ writeFileSync(resolve(OUT_DIR, 'state_meta.json'), JSON.stringify(stateCoverage,
 // untouched; the homepage map reads this to fade departures out (#118).
 writeFileSync(resolve(OUT_DIR, 'terminated_agencies.json'), JSON.stringify(terminatedAgencies, null, 2))
 console.log(`Wrote ${terminatedAgencies.length} terminated agencies → ${resolve(OUT_DIR, 'terminated_agencies.json')}`)
+// Pending agencies: absent 1–2 snapshots, neither confirmed-active nor confirmed-gone.
+// Read by the same places that merge the terminated payload so their pages resolve and
+// their history replays in the trend charts, but with terminated_date null (#245).
+writeFileSync(resolve(OUT_DIR, 'pending_agencies.json'), JSON.stringify(pendingAgencies, null, 2))
+console.log(`Wrote ${pendingAgencies.length} pending agencies → ${resolve(OUT_DIR, 'pending_agencies.json')}`)
 
 const geocoded = agencies.filter((a) => a.lat !== null).length
 const stateAgencies = agencies.filter((a) => a.agency_type === 'State Agency').length

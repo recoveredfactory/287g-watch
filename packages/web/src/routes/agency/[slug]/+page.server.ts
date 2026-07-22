@@ -1,4 +1,5 @@
-import { error } from "@sveltejs/kit";
+import { error, redirect } from "@sveltejs/kit";
+import { AGENCY_SLUG_REDIRECTS } from "$lib/agencyRedirects";
 import type { Agency } from "../../+page.server";
 
 export type MuckrockRequest = {
@@ -31,10 +32,18 @@ export type AgencyPageData = {
   };
 };
 
-export const load = async ({ fetch, params }): Promise<AgencyPageData> => {
-  const [agenciesRes, terminatedRes, muckrockRes] = await Promise.all([
+export const load = async ({ fetch, params, url }): Promise<AgencyPageData> => {
+  // A slug the dedup retired (#240): one agency that upstream spelled two ways
+  // used to be two records, and the twin held a `…-1` URL that the sitemap
+  // published. Point it at the record that absorbed it. Only the last path
+  // segment is swapped, so the locale prefix (/es/agency/…) rides along.
+  const mergedInto = AGENCY_SLUG_REDIRECTS[params.slug];
+  if (mergedInto) redirect(301, url.pathname.replace(/[^/]+$/, mergedInto) + url.search);
+
+  const [agenciesRes, terminatedRes, pendingRes, muckrockRes] = await Promise.all([
     fetch("/data/dist/agency_index.json"),
     fetch("/data/dist/terminated_agencies.json"),
+    fetch("/data/dist/pending_agencies.json"),
     fetch("/data/dist/muckrock_requests.json"),
   ]);
   if (!agenciesRes.ok) throw error(503, "Data unavailable");
@@ -44,8 +53,12 @@ export const load = async ({ fetch, params }): Promise<AgencyPageData> => {
   // index). Resolve those slugs too, so a dot that faded off the map still
   // links to a real page — flagged as ended via its terminated_date. See #118.
   const terminated: Agency[] = terminatedRes.ok ? await terminatedRes.json() : [];
+  // Pending agencies (absent 1–2 snapshots, terminated_date null) resolve here too
+  // so their page renders instead of 404'ing while they're briefly off-roster. #245
+  const pending: Agency[] = pendingRes.ok ? await pendingRes.json() : [];
   const agency = agencies.find((a) => a.slug === params.slug)
-    ?? terminated.find((a) => a.slug === params.slug);
+    ?? terminated.find((a) => a.slug === params.slug)
+    ?? pending.find((a) => a.slug === params.slug);
   if (!agency) throw error(404, `Agency not found: ${params.slug}`);
 
   // muckrock_requests.json is optional — fall back gracefully so older deploys

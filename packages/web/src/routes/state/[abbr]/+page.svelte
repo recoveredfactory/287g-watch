@@ -81,6 +81,19 @@
     if (models) activeModels = new Set(models.split(",").map((s) => SLUG_TO_MODEL[s]).filter(Boolean));
     if (types) activeTypes = new Set(types.split(",").filter(Boolean));
     if (moa === "1") moaOnly = true;
+
+    // Deep-link to the story summary: open the full body and scroll to it when the
+    // URL targets the section (#news or the friendlier #summary). Scroll after a
+    // tick so the just-expanded body is laid out first. No-op where a state has no
+    // news (section unrendered → newsSection undefined).
+    const hash = location.hash.slice(1);
+    if (hash === "news" || hash === "summary") {
+      newsExpanded = true;
+      tick().then(() =>
+        newsSection?.scrollIntoView({ behavior: "smooth", block: "start" }),
+      );
+    }
+
     mounted = true;
   });
 
@@ -235,7 +248,7 @@
 
   <!-- ── News summary ─────────────────────────────────────────────────────── -->
   {#if data.news}
-    <section class="mt-10" bind:this={newsSection}>
+    <section id="news" class="mt-10" bind:this={newsSection}>
       <h2 class="font-serif text-lg font-bold text-slate-900 sm:text-xl">
         {m.news_heading({ state: stateName })}
       </h2>

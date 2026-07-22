@@ -21,12 +21,16 @@
 #
 # News summaries (issue #220):
 #   Secret PQL_NEWS_URL, PQL_NEWS_TOKEN — the PromptQL saved-program endpoint.
-# News is built WEEKLY (the Monday cron below) or on demand (dispatch with
-# build_news=true) — each PromptQL call takes ~2 min even server-cached, so
-# building on every refresh added ~20 min of larger-runner time per tick for
-# summaries that barely move day to day. Every other run carries the live
-# site's summaries forward unchanged (the fallback step doubles as the normal
-# path). When it does build, CI runs `pnpm news` plain (never --force): the
+# News is built in FULL weekly (the Monday cron below) or on demand (dispatch
+# with build_news=true) — each PromptQL call takes ~2 min even server-cached, so
+# building every state on every refresh added ~20 min of larger-runner time per
+# tick for summaries that barely move day to day. Every other run carries the
+# live site's summaries forward unchanged (the fallback step doubles as the
+# normal path) — except for the states whose DATA moved on that tick, which get
+# a targeted rebuild (issue #233; see the detect step). That keeps a state's
+# prose from trailing its own numbers by up to a week, at a handful of states'
+# worth of cost, and the weekly full build stays the catch-all for language that
+# moves on its own. Either way, CI runs `pnpm news` plain (never --force): the
 # program runs on its own schedule and caches results server-side, so plain
 # calls replay the latest gathered content. If the build fails (PromptQL
 # outage, missing secrets on a fork), the same carry-forward kicks in so a
@@ -129,6 +133,8 @@ jobs:
     outputs:
       data_changed: ${{ steps.gate.outputs.data_changed }}
       snapshot_date: ${{ steps.snapshot.outputs.date }}
+      # Read by the news-health job to fail the workflow on a dead news build.
+      news_failed: ${{ steps.news_health.outputs.news_failed }}
       # Immutable per-release video keys for the social email (see the archive step).
       map_trend_archive_en: ${{ steps.archive.outputs.map_trend_archive_en }}
       map_trend_archive_es: ${{ steps.archive.outputs.map_trend_archive_es }}
@@ -216,58 +222,47 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm pipeline
 
-      # Resolved gnews→publisher URLs survive across runs so each news build
-      # only resolves links it hasn't seen. Saved under a per-run key below
-      # (cache keys are immutable); restore-keys picks up the newest previous
-      # run's. Only touched on news-building runs.
-      - name: Restore gnews link-resolution cache
-        if: env.BUILD_NEWS == 'true'
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: packages/pipeline/data/gnews_cache.json
-          key: gnews-cache-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: gnews-cache-
-
-      # Build the per-state news summaries against the PromptQL saved program.
-      # Weekly Monday cron / build_news dispatch only — see BUILD_NEWS above.
-      # Plain call — NEVER --force here: the program refreshes on its own
-      # schedule and caches server-side, so this replays the latest gathered
-      # content (the local raw cache is gitignored → empty every CI run, which
-      # is exactly the plain-call behavior we want; the script prefetches the
-      # ~2-min-each program responses concurrently). continue-on-error + the
-      # step timeout: a failure OR overrun falls through to the carry-forward
-      # step below instead of failing the refresh — the job-level timeout must
-      # never be what stops this step, because that cancels the whole job
-      # (deploy included) and the fallback never runs.
-      - name: Build news summaries
-        id: news
-        if: env.BUILD_NEWS == 'true'
+      # ── Keep the language in step with the numbers (issue #233) ─────────
+      # Data refreshes twice daily; the FULL news build is weekly, so a state's
+      # roster could sit up to a week ahead of the prose describing it. Diff what
+      # ingest just produced against the live site and hand the changed states to
+      # the news step below, which refreshes only those. Cheap by design: a plain
+      # per-state call rides PromptQL's server-side cache (~2 min, no re-gather),
+      # so a normal day's handful of states costs minutes, not the full ~20.
+      #
+      # The diff is a NARROW projection (roster membership, models, signed and
+      # terminated dates) — see diff-states.ts for why the whole record would
+      # flag all 53 states on every ICE release and defeat the point.
+      #
+      # continue-on-error: this is an optimization layered on top of the weekly
+      # build, never a gate for it. If it breaks, the list comes back empty, no
+      # targeted refresh runs, and Monday's full build still catches the state —
+      # far better than blocking a data deploy over a news nicety.
+      - name: Detect data-changed states
+        id: changed
         continue-on-error: true
-        timeout-minutes: 40
-        env:
-          PQL_NEWS_URL: ${{ secrets.PQL_NEWS_URL }}
-          PQL_NEWS_TOKEN: ${{ secrets.PQL_NEWS_TOKEN }}
-        run: pnpm news
+        run: |
+          case "$STAGE" in
+            prod) HOST="$WEB_DOMAIN" ;;
+            staging) HOST="$WEB_STAGING_DOMAIN" ;;
+            *) echo "Unknown stage: $STAGE" >&2; exit 1 ;;
+          esac
+          pnpm -F pipeline diff:states --host="$HOST" --out=/tmp/changed-states.txt
+          echo "states=$(cat /tmp/changed-states.txt)" >> "$GITHUB_OUTPUT"
 
-      # always() + hashFiles guard: save whatever resolved even when the build
-      # failed partway (the script persists after each state), but skip cleanly
-      # if the file never came into being (save errors on a missing path).
-      - name: Save gnews link-resolution cache
-        if: always() && env.BUILD_NEWS == 'true' && hashFiles('packages/pipeline/data/gnews_cache.json') != ''
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: packages/pipeline/data/gnews_cache.json
-          key: gnews-cache-${{ github.run_id }}-${{ github.run_attempt }}
-
-      # THE NORMAL PATH on daily refreshes (news step skipped → outcome !=
-      # 'success'), and the FALLBACK when a Monday/dispatched build fails
-      # (PromptQL outage, missing secrets on a fork): carry forward whatever
-      # the live site already serves, so a refresh can't build with an empty
-      # (gitignored) news dir and silently wipe the summaries. On a first
-      # deploy (nothing live yet) it no-ops and the pages fall back to their
-      # no-summary state.
+      # THE BASELINE for every refresh: whatever the live site already serves.
+      # On daily refreshes (news step skipped) it's the whole payload — without
+      # it a refresh would build against an empty (gitignored) news dir and
+      # silently wipe the summaries. On a first deploy (nothing live yet) it
+      # no-ops and the pages fall back to their no-summary state.
+      #
+      # It runs BEFORE the build so it doubles as the fallback: the build
+      # overwrites the states it rebuilds, and any state it fails on just keeps
+      # the last-good copy seeded here. That ordering is what makes a PARTIAL
+      # build safe — pre-#234 this ran after the build and replaced everything
+      # or nothing, so surviving a per-state failure would have dropped that
+      # state's summary from the site entirely.
       - name: Carry forward news summaries from the live site
-        if: steps.news.outcome != 'success'
         run: |
           case "$STAGE" in
             prod) HOST="$WEB_DOMAIN" ;;
@@ -286,6 +281,107 @@ jobs:
               || { echo "::warning::news/$abbr.json missing on live site"; rm -f "$NEWS_DIR/$abbr.json"; }
           done
           echo "carried $(ls "$NEWS_DIR" | wc -l) news files from https://$HOST"
+
+      # Resolved gnews→publisher URLs survive across runs so each news build
+      # only resolves links it hasn't seen. Saved under a per-run key below
+      # (cache keys are immutable); restore-keys picks up the newest previous
+      # run's. Only touched on news-building runs.
+      - name: Restore gnews link-resolution cache
+        if: env.BUILD_NEWS == 'true'
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: packages/pipeline/data/gnews_cache.json
+          key: gnews-cache-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: gnews-cache-
+
+      # Build the per-state news summaries against the PromptQL saved program.
+      # Two ways in: the weekly Monday cron / build_news dispatch rebuilds ALL
+      # states (see BUILD_NEWS above), and a daily tick rebuilds just the states
+      # whose data moved (see the detect step above, #233). Neither runs → the
+      # carry-forward above is the whole story and this step skips.
+      # Plain call — NEVER --force here: the program refreshes on its own
+      # schedule and caches server-side, so this replays the latest gathered
+      # content (the local raw cache is gitignored → empty every CI run, which
+      # is exactly the plain-call behavior we want; the script prefetches the
+      # ~2-min-each program responses concurrently). continue-on-error + the
+      # step timeout: a failure OR overrun leaves the carry-forward baseline
+      # seeded above in place instead of failing the refresh — a news outage
+      # shouldn't block a data deploy. The job-level timeout must never be what
+      # stops this step, because that cancels the whole job (deploy included).
+      # Silence is not success, though: the script exits non-zero when NOTHING
+      # built fresh, and the news-health job below turns the run red. See #234.
+      - name: Build news summaries
+        id: news
+        if: env.BUILD_NEWS == 'true' || steps.changed.outputs.states != ''
+        continue-on-error: true
+        timeout-minutes: 40
+        env:
+          PQL_NEWS_URL: ${{ secrets.PQL_NEWS_URL }}
+          PQL_NEWS_TOKEN: ${{ secrets.PQL_NEWS_TOKEN }}
+          CHANGED_STATES: ${{ steps.changed.outputs.states }}
+        run: |
+          if [ "$BUILD_NEWS" = 'true' ]; then
+            echo "Full rebuild (weekly cron or build_news dispatch) — all states."
+            pnpm news
+          elif [ -n "$CHANGED_STATES" ]; then
+            echo "Targeted refresh — data changed in: $CHANGED_STATES"
+            # Unquoted on purpose: the list is a space-separated argv for the
+            # script (abbrs only — diff:states filters to states.ts).
+            pnpm news $CHANGED_STATES
+          else
+            # Unreachable via the `if` above, and it must stay that way: a bare
+            # `pnpm news` means ALL 53 states, so an empty variable silently
+            # becoming a full build is exactly the fallthrough to refuse.
+            echo "::error title=Empty state list::Reached the news build with nothing to build."
+            exit 1
+          fi
+
+      # always() + hashFiles guard: save whatever resolved even when the build
+      # failed partway (the script persists after each state), but skip cleanly
+      # if the file never came into being (save errors on a missing path).
+      - name: Save gnews link-resolution cache
+        if: always() && env.BUILD_NEWS == 'true' && hashFiles('packages/pipeline/data/gnews_cache.json') != ''
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: packages/pipeline/data/gnews_cache.json
+          key: gnews-cache-${{ github.run_id }}-${{ github.run_attempt }}
+
+      # continue-on-error keeps a news failure from blocking the data deploy, but
+      # it also makes the step's CONCLUSION 'success' (only its OUTCOME stays
+      # 'failure') — which is precisely how a dead token sat green for a week in
+      # #234. Hoist the real verdict into a job output so the news-health job can
+      # fail the WORKFLOW without failing this job (post-social is `needs:
+      # refresh` without always(), so failing here would silently skip the social
+      # post on data-changed days). always(): a skipped/failed news step must
+      # still record a verdict.
+      - name: Flag news build health
+        id: news_health
+        if: always()
+        env:
+          CHANGED_STATES: ${{ steps.changed.outputs.states }}
+        run: |
+          news_outcome='${{ steps.news.outcome }}'
+          # "Did we try to build?" is no longer just BUILD_NEWS — the daily
+          # targeted refresh (#233) runs the same step, and a failure there is
+          # just as loud: that state's language is now knowably behind its own
+          # data. The step's `if` is the single source of truth for whether we
+          # tried, so read the answer back off the outcome ('skipped' = nothing
+          # to build) instead of restating the condition here and letting the
+          # two drift apart.
+          # Only two outcomes are quiet, and they're both positively stated:
+          # 'success' (it built) and 'skipped' (we never tried). ANYTHING else —
+          # failure, cancelled, or an empty outcome from severed plumbing — is
+          # loud. Never infer success from the absence of a signal (#234).
+          case "$news_outcome" in
+            success|skipped) verdict=false ;;
+            *) verdict=true ;;
+          esac
+          echo "news_failed=$verdict" >> "$GITHUB_OUTPUT"
+          # Echo the verdict AND its inputs. news-health skips on 'false' AND on an
+          # empty/severed output alike, so without this a log can't tell a healthy
+          # run from broken plumbing — the same "silence reads as success" trap
+          # this whole ticket is about (#234). Don't make the next person guess.
+          echo "news_failed=$verdict (BUILD_NEWS=$BUILD_NEWS, changed states=${CHANGED_STATES:-<none>}, news step outcome=${news_outcome:-<none>})"
 
       # Hash the freshly-built JSON against what's live. Two separate verdicts:
       # data_changed drives the full deploy + bake + social release, while a
@@ -409,6 +505,9 @@ jobs:
         env:
           DATA_CHANGED: ${{ steps.gate.outputs.data_changed }}
           NEWS_CHANGED: ${{ steps.gate.outputs.news_changed }}
+          NEWS_FAILED: ${{ steps.news_health.outputs.news_failed }}
+          CHANGED_STATES: ${{ steps.changed.outputs.states }}
+          CHANGED_OUTCOME: ${{ steps.changed.outcome }}
         run: |
           if [ "$DATA_CHANGED" = "true" ]; then
             echo "Deployed $STAGE and refreshed map video + OG cards." >> "$GITHUB_STEP_SUMMARY"
@@ -417,6 +516,50 @@ jobs:
           else
             echo "No change in the upstream snapshot — nothing deployed." >> "$GITHUB_STEP_SUMMARY"
           fi
+          if [ "$BUILD_NEWS" != "true" ] && [ -n "$CHANGED_STATES" ]; then
+            echo "Refreshed news for the states whose data moved: \`$CHANGED_STATES\` (#233)." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          # A broken detector doesn't fail the run — news is never worth blocking
+          # a data deploy — but it doesn't get to pass quietly either (#234).
+          if [ "$CHANGED_OUTCOME" = "failure" ]; then
+            echo "::warning title=Per-state news sync skipped::Couldn't determine which states changed; no targeted news refresh ran (#233)."
+            echo "⚠️ Couldn't work out which states' data changed, so no targeted news refresh ran this tick — any state that moved is serving its previous language until Monday's full build. See the \"Detect data-changed states\" step." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          # Never let the deploy verdict imply the news build was healthy (#234).
+          if [ "$NEWS_FAILED" = "true" ]; then
+            echo "⚠️ The news build produced NO fresh summaries — the site kept the carried-forward copies. See the news-health job." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  # Turn the run RED when a news build produced nothing fresh, so a dead token or
+  # a PromptQL outage can't hide behind a green check (#234: it hid for a week).
+  # Deliberately a separate job rather than a failing step in `refresh`:
+  # post-social is `needs: refresh` WITHOUT always(), so failing `refresh` would
+  # silently skip the social post on data-changed days. This way the data deploy
+  # and the social release complete untouched — a news outage is loud, not
+  # blocking — while the workflow still fails and GitHub notifies on it.
+  news-health:
+    needs: refresh
+    if: always() && needs.refresh.outputs.news_failed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Report the failed news build
+        run: |
+          echo "::error title=News build failed::The news build lost states it should have built — the site is still serving their previously-published summaries. Per-state verdicts are in the refresh job's 'Build news summaries' step. Check PQL_NEWS_TOKEN (a malformed value returns 'HTTP 401 … Invalid token format') and PromptQL availability, then re-run with build_news=true."
+          {
+            echo "## News build failed"
+            echo
+            echo "The site kept its carried-forward summaries, so **nothing was lost — but the states that failed are serving their previous prose**."
+            echo
+            echo "This fires when a **targeted** daily refresh (#233) loses ANY state — its data moved, so it now shows new numbers under old prose — or when a **full** build loses a majority of states, which is the signature of an outage or a dead token rather than bad luck. Either way, the per-state verdicts are in the \`Build news summaries\` step."
+            echo
+            echo "Check, in order:"
+            echo "1. \`PQL_NEWS_TOKEN\` — a malformed value returns \`HTTP 401 … Invalid token format\` on every state."
+            echo "2. PromptQL availability / the saved program."
+            echo
+            echo "Then re-run: \`gh workflow run data-refresh.yml -f stage=prod -f build_news=true\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
 
   # Finish the social release. A SEPARATE job from the deploy so the per-stage
   # YouTube token scoping (and any prod gate) covers only posting. Runs whenever

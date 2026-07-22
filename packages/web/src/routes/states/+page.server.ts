@@ -98,13 +98,15 @@ const pickNews = (raw: NewsFile | null): StateIndexNews | null => {
 export const load = async ({ fetch }): Promise<StatesIndexData> => {
   const abbrs = Object.keys(NAVIGABLE_STATES);
 
-  const [agenciesRes, metaRes, terminatedRes] = await Promise.all([
+  const [agenciesRes, metaRes, terminatedRes, pendingRes] = await Promise.all([
     fetch("/data/dist/agency_index.json"),
     fetch("/data/dist/state_meta.json"),
     fetch("/data/dist/terminated_agencies.json"),
+    fetch("/data/dist/pending_agencies.json"),
   ]);
   const allAgencies: Agency[] = agenciesRes.ok ? await agenciesRes.json() : [];
   const terminated: Agency[] = terminatedRes.ok ? await terminatedRes.json() : [];
+  const pending: Agency[] = pendingRes.ok ? await pendingRes.json() : [];
   const stateMetaArr: StateMeta[] = metaRes.ok ? await metaRes.json() : [];
   const metaByState = new Map(stateMetaArr.map((s) => [s.state, s]));
 
@@ -153,7 +155,7 @@ export const load = async ({ fetch }): Promise<StatesIndexData> => {
     const y = Number(ym.slice(0, 4)), mo = Number(ym.slice(5, 7));
     return mo === 12 ? `${y + 1}-01` : `${y}-${String(mo + 1).padStart(2, "0")}`;
   };
-  const allForTrend = [...allAgencies, ...terminated];
+  const allForTrend = [...allAgencies, ...terminated, ...pending];
   let lastMonth = TREND_START;
   for (const a of allForTrend)
     for (const h of a.history ?? [])
