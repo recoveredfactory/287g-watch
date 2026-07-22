@@ -374,6 +374,20 @@ function mdToHtml(md: string, links: Record<string, string>): string {
 }
 
 // ── Per-state build ──────────────────────────────────────────────────────────
+// Reuse license for the AI-written statewide summary prose (en/es). CC BY 4.0 —
+// anyone may share, adapt, or syndicate it, including commercially, with credit.
+// Emitted in every state file AND the index so an API/syndication consumer gets
+// machine-readable terms. Scope: the summary prose only — the linked third-party
+// source articles under internal.relevant_articles belong to their publishers.
+const SUMMARY_LICENSE = {
+  id: 'CC-BY-4.0',
+  name: 'Creative Commons Attribution 4.0 International',
+  url: 'https://creativecommons.org/licenses/by/4.0/',
+  attribution: '287(g) Watch (a project of Recovered Factory)',
+  attribution_url: 'https://287g.recoveredfactory.net',
+  covers: 'statewide summary prose (en/es); excludes cited third-party articles',
+}
+
 type IndexEntry = { abbr: string; state: string; generated_at: string; built_at: string }
 // A brief attempt lands in one of four buckets. Only `error` is a real failure;
 // `skip` (DDN hasn't reached this state) and `mismatch` (program returned another
@@ -431,6 +445,7 @@ async function buildStateBrief(abbr: string, name: string): Promise<BriefOutcome
       after: str(runMeta.after_date),
       generated_at: new Date().toISOString(),
       built_at: builtAt,
+      license: SUMMARY_LICENSE,
       // news_bilingual_brief drops the legislation stance artifact; the badge is
       // flag-gated, so null is safe. Keep/retire the field is still an open call.
       legislation: null,
@@ -554,7 +569,7 @@ mkdirSync(OUT_DIR, { recursive: true }) // before indexFromDisk: readdirSync nee
 const indexStates = indexFromDisk()
 writeFileSync(
   resolve(OUT_DIR, 'index.json'),
-  JSON.stringify({ generated_at: new Date().toISOString(), states: indexStates }, null, 2),
+  JSON.stringify({ generated_at: new Date().toISOString(), license: SUMMARY_LICENSE, states: indexStates }, null, 2),
 )
 
 const carried = indexStates.length - manifest.length
