@@ -22,10 +22,10 @@
 </svelte:head>
 
 <main id="main-content" class="mx-auto max-w-3xl px-4 py-8 sm:py-12 sm:px-6">
-  <h1 class="text-2xl font-black text-slate-900 sm:text-4xl">{m.methodology_heading()}</h1>
+  <h1 class="text-2xl font-black text-ink-900 sm:text-4xl">{m.methodology_heading()}</h1>
 
   <div class="prose-editorial mt-6 sm:mt-8">
-    <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">{m.methodology_sources_heading()}</h2>
+    <h2 class="font-serif text-xl font-bold text-ink-900 sm:text-2xl">{m.methodology_sources_heading()}</h2>
 
     <p class="mt-3"><Gloss text={m.methodology_sources_lead()} {seen} /></p>
 
@@ -58,40 +58,40 @@
       </li>
     </ul>
 
-    <h2 class="mt-8 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.methodology_matching_heading()}</h2>
+    <h2 class="mt-8 font-serif text-xl font-bold text-ink-900 sm:mt-10 sm:text-2xl">{m.methodology_matching_heading()}</h2>
 
     <p class="mt-3"><Gloss text={m.methodology_matching_body()} {seen} /></p>
 
-    <h2 class="mt-8 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.methodology_mapping_heading()}</h2>
+    <h2 class="mt-8 font-serif text-xl font-bold text-ink-900 sm:mt-10 sm:text-2xl">{m.methodology_mapping_heading()}</h2>
 
     <p class="mt-3"><Gloss text={m.methodology_mapping_body()} {seen} /></p>
     <p class="mt-3"><Gloss text={m.methodology_mapping_statewide()} {seen} /></p>
 
-    <h2 class="mt-8 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.methodology_population_heading()}</h2>
+    <h2 class="mt-8 font-serif text-xl font-bold text-ink-900 sm:mt-10 sm:text-2xl">{m.methodology_population_heading()}</h2>
 
     <p class="mt-3"><Gloss text={m.methodology_population_body_1()} {seen} /></p>
     <p class="mt-3"><Gloss text={m.methodology_population_body_2()} {seen} /></p>
 
-    <h2 class="mt-8 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.methodology_limitations_heading()}</h2>
+    <h2 class="mt-8 font-serif text-xl font-bold text-ink-900 sm:mt-10 sm:text-2xl">{m.methodology_limitations_heading()}</h2>
 
     <ul class="mt-3">
       <li><Gloss text={m.methodology_limitations_li_1()} {seen} /></li>
       <li><Gloss text={m.methodology_limitations_li_2()} {seen} /></li>
     </ul>
 
-    <h2 id="agreements" class="mt-8 scroll-mt-24 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.methodology_moa_heading()}</h2>
+    <h2 id="agreements" class="mt-8 scroll-mt-24 font-serif text-xl font-bold text-ink-900 sm:mt-10 sm:text-2xl">{m.methodology_moa_heading()}</h2>
 
-    <h3 class="mt-6 font-serif text-lg font-bold text-slate-900 sm:mt-8 sm:text-xl">{m.methodology_moa_coverage_heading()}</h3>
+    <h3 class="mt-6 font-serif text-lg font-bold text-ink-900 sm:mt-8 sm:text-xl">{m.methodology_moa_coverage_heading()}</h3>
     <p class="mt-3"><Gloss text={m.methodology_moa_coverage_body()} {seen} /></p>
 
-    <h3 class="mt-6 font-serif text-lg font-bold text-slate-900 sm:mt-8 sm:text-xl">{m.methodology_moa_signers_heading()}</h3>
+    <h3 class="mt-6 font-serif text-lg font-bold text-ink-900 sm:mt-8 sm:text-xl">{m.methodology_moa_signers_heading()}</h3>
     <p class="mt-3"><Gloss text={m.methodology_moa_signers_body()} {seen} /></p>
 
-    <h3 class="mt-6 font-serif text-lg font-bold text-slate-900 sm:mt-8 sm:text-xl">{m.methodology_moa_timeline_heading()}</h3>
+    <h3 class="mt-6 font-serif text-lg font-bold text-ink-900 sm:mt-8 sm:text-xl">{m.methodology_moa_timeline_heading()}</h3>
     <p class="mt-3"><Gloss text={m.methodology_moa_timeline_body_1()} {seen} /></p>
     <p class="mt-3"><Gloss text={m.methodology_moa_timeline_body_2()} {seen} /></p>
 
-    <h3 class="mt-6 font-serif text-lg font-bold text-slate-900 sm:mt-8 sm:text-xl">{m.methodology_moa_caveats_heading()}</h3>
+    <h3 class="mt-6 font-serif text-lg font-bold text-ink-900 sm:mt-8 sm:text-xl">{m.methodology_moa_caveats_heading()}</h3>
     <ul class="mt-3">
       <li><Gloss text={m.methodology_moa_caveats_li_1()} {seen} /></li>
       <li><Gloss text={m.methodology_moa_caveats_li_2()} {seen} /></li>
@@ -99,12 +99,12 @@
       <li><Gloss text={m.methodology_moa_caveats_li_4()} {seen} /></li>
     </ul>
 
-    <h2 id="ai" class="mt-8 scroll-mt-24 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.methodology_ai_heading()}</h2>
+    <h2 id="ai" class="mt-8 scroll-mt-24 font-serif text-xl font-bold text-ink-900 sm:mt-10 sm:text-2xl">{m.methodology_ai_heading()}</h2>
 
     <p class="mt-3"><Gloss text={m.methodology_ai_body_1()} {seen} /></p>
     <p class="mt-3"><Gloss text={m.methodology_ai_body_2()} {seen} /></p>
 
-    <h3 class="mt-6 font-serif text-lg font-bold text-slate-900 sm:mt-8 sm:text-xl">{m.methodology_news_gather_heading()}</h3>
+    <h3 class="mt-6 font-serif text-lg font-bold text-ink-900 sm:mt-8 sm:text-xl">{m.methodology_news_gather_heading()}</h3>
 
     <p class="mt-3"><Gloss text={m.methodology_news_gather_body()} {seen} /></p>
 
@@ -113,7 +113,7 @@
          API, so they are intentionally NOT run through i18n (a Spanish reader sees
          the real query, same as the hardcoded URLs/emails below). [STATE] and
          [AFTER to BEFORE] are the per-state / date-window placeholders. -->
-    <div class="my-4 space-y-3 border-l-2 border-slate-200 pl-4 text-sm italic text-slate-600">
+    <div class="my-4 space-y-3 border-l-2 border-paper-200 pl-4 text-sm italic text-ink-700">
       <p>"Find news [from AFTER to BEFORE] about the ICE 287(g) program in the state of [STATE]: which local law enforcement agencies signed, expanded, or ended 287(g) agreements, and any reporting or controversy about immigration enforcement cooperation with ICE. Name specific agencies and counties, with sources."</p>
       <p>"[AFTER to BEFORE], what are people saying on social media, Substack, blogs, podcasts, YouTube, and from independent content creators, advocates, and local commentators about the ICE 287(g) program in the state of [STATE]? Include 'discourse' beyond mainstream hard news — activist threads, creator commentary, community reaction. Name specific agencies/counties and link sources where possible."</p>
       <p>"[AFTER to BEFORE], are there any lawsuits, court filings, legal challenges, ACLU/advocacy legal actions, or settlements related to the ICE 287(g) program in the state of [STATE]? Name the agencies/counties involved, the nature of the legal action, and cite sources."</p>
@@ -124,35 +124,35 @@
     <p class="mt-3"><Gloss text={m.methodology_news_google_body()} {seen} /></p>
     <!-- Verbatim Google News query variants — literal search strings, not translated. -->
     <div class="my-4 flex flex-wrap gap-2 text-sm">
-      <code class="rounded bg-slate-100 px-2 py-1 font-mono text-slate-700">"287(g)" [STATE]</code>
-      <code class="rounded bg-slate-100 px-2 py-1 font-mono text-slate-700">287g [STATE] ICE</code>
-      <code class="rounded bg-slate-100 px-2 py-1 font-mono text-slate-700">[STATE] sheriff immigration enforcement ICE agreement</code>
-      <code class="rounded bg-slate-100 px-2 py-1 font-mono text-slate-700">[STATE] police 287g immigration</code>
-      <code class="rounded bg-slate-100 px-2 py-1 font-mono text-slate-700">ICE 287(g) [STATE] county jail</code>
-      <code class="rounded bg-slate-100 px-2 py-1 font-mono text-slate-700">[STATE] immigration enforcement local law enforcement ICE</code>
+      <code class="rounded bg-paper-100 px-2 py-1 font-mono text-ink-700">"287(g)" [STATE]</code>
+      <code class="rounded bg-paper-100 px-2 py-1 font-mono text-ink-700">287g [STATE] ICE</code>
+      <code class="rounded bg-paper-100 px-2 py-1 font-mono text-ink-700">[STATE] sheriff immigration enforcement ICE agreement</code>
+      <code class="rounded bg-paper-100 px-2 py-1 font-mono text-ink-700">[STATE] police 287g immigration</code>
+      <code class="rounded bg-paper-100 px-2 py-1 font-mono text-ink-700">ICE 287(g) [STATE] county jail</code>
+      <code class="rounded bg-paper-100 px-2 py-1 font-mono text-ink-700">[STATE] immigration enforcement local law enforcement ICE</code>
     </div>
 
     <p class="mt-3"><Gloss text={m.methodology_news_google_note()} {seen} /></p>
 
-    <h3 class="mt-6 font-serif text-lg font-bold text-slate-900 sm:mt-8 sm:text-xl">{m.methodology_news_relevance_heading()}</h3>
+    <h3 class="mt-6 font-serif text-lg font-bold text-ink-900 sm:mt-8 sm:text-xl">{m.methodology_news_relevance_heading()}</h3>
 
     <p class="mt-3"><Gloss text={m.methodology_news_relevance_body()} {seen} /></p>
 
-    <h3 class="mt-6 font-serif text-lg font-bold text-slate-900 sm:mt-8 sm:text-xl">{m.methodology_news_grounding_heading()}</h3>
+    <h3 class="mt-6 font-serif text-lg font-bold text-ink-900 sm:mt-8 sm:text-xl">{m.methodology_news_grounding_heading()}</h3>
 
     <p class="mt-3"><Gloss text={m.methodology_news_grounding_body()} {seen} /></p>
     <p class="mt-3"><Gloss text={m.methodology_news_legislation_body()} {seen} /></p>
     <p class="mt-3"><Gloss text={m.methodology_news_output_body()} {seen} /></p>
 
-    <h2 class="mt-8 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.methodology_updates_heading()}</h2>
+    <h2 class="mt-8 font-serif text-xl font-bold text-ink-900 sm:mt-10 sm:text-2xl">{m.methodology_updates_heading()}</h2>
 
     <p class="mt-3"><Gloss text={m.methodology_updates_body()} {seen} /></p>
 
-    <h2 class="mt-8 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.methodology_license_heading()}</h2>
+    <h2 class="mt-8 font-serif text-xl font-bold text-ink-900 sm:mt-10 sm:text-2xl">{m.methodology_license_heading()}</h2>
 
     <p class="mt-3"><Gloss text={m.methodology_license_body()} {seen} /></p>
 
-    <h2 class="mt-8 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.contact_heading()}</h2>
+    <h2 class="mt-8 font-serif text-xl font-bold text-ink-900 sm:mt-10 sm:text-2xl">{m.contact_heading()}</h2>
 
     <p class="mt-3">{m.contact_body()}</p>
     <ul class="mt-3">

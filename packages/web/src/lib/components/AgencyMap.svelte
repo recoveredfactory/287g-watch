@@ -7,31 +7,39 @@
   import { toInsetCoords } from "$lib/insetTransforms";
   import { STATE_NAMES } from "$lib/states";
   import { ensurePmtilesProtocol, pmtilesBaseSource, PMTILES_GLYPHS } from "$lib/map/pmtiles";
+  import { setupMapNavigation } from "$lib/map/touchPopup";
+  import { mediaQuery } from "$lib/reactiveMedia";
 
   // Inset territories sit at shifted coords; loading PMTiles over them
   // would draw foreign tiles. Affects 5 agencies total (AK, GU, MP).
   const INSET_STATES = new Set(["AK", "HI", "PR", "VI", "GU", "MP", "AS"]);
 
-  // Dark is the only palette — keeps map tone consistent with the homepage.
-  // The agency view has its own spec because it draws non-current states
-  // distinctly (so the current state pops without dimming neighbors as harshly).
+  // Light "documentary editorial" basemap — matches NationalMap.svelte's
+  // palette (see that file for the fuller design rationale, including why bg
+  // is darkened well below the land fill rather than just a couple of
+  // points lighter). The agency view has its own spec because it draws
+  // non-current states distinctly (so the current state pops without
+  // dimming neighbors as harshly): stateBg here recedes toward the ocean
+  // tone (though not all the way — it should still read as "a US state, not
+  // focused" rather than "outside the country"), stateHighlight pops to
+  // near-white.
   const p = {
-    bg: "#0c1117",
-    stateBg: "#161e27",
-    stateHighlight: "#27323e",
-    stateLines: "#42566c",
+    bg: "#BFC6CF",
+    stateBg: "#D4D8DD",
+    stateHighlight: "#FDFDFD",
+    stateLines: "#656C75",
     stateLineWidth: 0.7,
-    stateHighlightBorder: "#94a3b8",
+    stateHighlightBorder: "#BE6079",
     stateHighlightBorderWidth: 1.8,
-    county: "#1c242e",
-    roadCasing: "#231f1c",
-    roadFill: "#4f463f",
-    roadMedium: "#231f1c",
-    haloFill: "#e8ecf2",
-    dotStroke: "rgba(255,255,255,0.18)",
-    dotStrokeWidth: 0.25,
-    text: "#c2cad4",
-    textHalo: "rgba(8,12,18,0.9)",
+    county: "#DADEE2",
+    roadCasing: "#FDFDFD",
+    roadFill: "#7D8A99",
+    roadMedium: "#7D8A99",
+    haloFill: "#FDFDFD",
+    dotStroke: "rgba(253,253,253,0.55)",
+    dotStrokeWidth: 0.35,
+    text: "#393F46",
+    textHalo: "rgba(253,253,253,0.9)",
   };
 
   export let lat: number | null | undefined = undefined;
@@ -54,7 +62,25 @@
   export let currentSlug: string;
 
   const MODEL_FALLBACK = "#94a3b8";
-  const isMobile = browser && window.matchMedia("(max-width: 640px)").matches;
+  // Reactive (resize/orientation-aware) — see NationalMap.svelte for why this
+  // replaced a one-time matchMedia check.
+  const isMobileStore = mediaQuery("(max-width: 480px)");
+  $: isMobile = $isMobileStore;
+  $: SCALE = isMobile ? 0.7 : 1;
+  const sqrtOfficers = ["sqrt", ["coalesce", ["get", "officer_ct"], 0]];
+  $: contextRadiusExpr = [
+    "interpolate", ["linear"], ["zoom"],
+    4, ["interpolate", ["linear"], sqrtOfficers, 0, 1.2 * SCALE, 18, 5 * SCALE],
+    7, ["interpolate", ["linear"], sqrtOfficers, 0, 2.2 * SCALE, 18, 8 * SCALE],
+    10, ["interpolate", ["linear"], sqrtOfficers, 0, 3.5 * SCALE, 18, 12 * SCALE],
+  ];
+  // Push a live SCALE change (e.g. device rotation) into the already-loaded
+  // map's paint property — reading contextRadiusExpr here (even though the
+  // guard doesn't otherwise need it) is what makes this block re-run when it
+  // changes; Svelte's dependency tracking is syntactic, not transitive.
+  $: if (map && map.getLayer && map.getLayer("context-agencies") && contextRadiusExpr) {
+    map.setPaintProperty("context-agencies", "circle-radius", contextRadiusExpr);
+  }
 
   // us-atlas uses different names for these two territories
   const GJ_NAME_OVERRIDE: Record<string, string> = {
@@ -64,6 +90,7 @@
 
   let container: HTMLDivElement;
   let map: any = null;
+  let resizeObserver: ResizeObserver | null = null;
 
   onMount(async () => {
     if (!browser || !container) return;
@@ -92,6 +119,13 @@
       attributionControl: { compact: true },
     });
     map.addControl(new ml.NavigationControl({ showCompass: false }), "top-right");
+
+    // Container can resize after mount (ExpandableMapFrame's tap-to-expand
+    // toggles this container between a small inline box and a full-viewport
+    // overlay) — without this, the canvas would keep rendering at its
+    // mount-time size inside the new container dimensions.
+    resizeObserver = new ResizeObserver(() => map?.resize());
+    resizeObserver.observe(container);
 
     map.on("load", async () => {
       map.resize();
@@ -227,8 +261,6 @@
           };
         });
       if (contextFeatures.length) {
-        const SCALE = isMobile ? 0.7 : 1;
-        const sqrtOfficers = ["sqrt", ["coalesce", ["get", "officer_ct"], 0]];
         map.addSource("context-agencies", {
           type: "geojson",
           data: { type: "FeatureCollection", features: contextFeatures },
@@ -244,12 +276,7 @@
             "circle-stroke-width": p.dotStrokeWidth,
             "circle-stroke-color": p.dotStroke,
             "circle-stroke-opacity": 1,
-            "circle-radius": [
-              "interpolate", ["linear"], ["zoom"],
-              4, ["interpolate", ["linear"], sqrtOfficers, 0, 1.2 * SCALE, 18, 5 * SCALE],
-              7, ["interpolate", ["linear"], sqrtOfficers, 0, 2.2 * SCALE, 18, 8 * SCALE],
-              10, ["interpolate", ["linear"], sqrtOfficers, 0, 3.5 * SCALE, 18, 12 * SCALE],
-            ],
+            "circle-radius": contextRadiusExpr,
             "circle-opacity": 0.55,
           },
         });
@@ -292,84 +319,33 @@
         });
       }
 
-      // Hover popup + click-to-navigate on the context dots — same UX as
-      // the homepage map so the agency page feels like a focused subset
-      // of the same dataset. Touch devices use a two-tap pattern (first
-      // tap shows the popup, second tap navigates) since they fire
-      // mouseenter and click in the same gesture.
-      const popup = new ml.Popup({
-        closeButton: false,
-        closeOnClick: false,
-        offset: 10,
-        className: "map-popup",
-      });
-      const hasHoverPointer = window.matchMedia("(hover: hover)").matches;
-      let popupSlug: string | null = null;
-
-      const buildPopupHtml = (p: any): string => {
-        const modelBadges = p.models
-          ? p.models.split(", ").map((model: string) => {
+      // Hover popup + tap/click-to-navigate on the context dots — same
+      // shared behavior as the homepage map (single-tap-to-navigate on
+      // touch, long-press for an info popup) via $lib/map/touchPopup, so the
+      // agency page feels like a focused subset of the same dataset.
+      const buildPopupHtml = (props: any): string => {
+        const modelBadges = props.models
+          ? props.models.split(", ").map((model: string) => {
               const bg = MODEL_COLORS[model] ?? "#e2e8f0";
               const fg = MODEL_TEXT_COLORS[model] ?? "#0f172a";
               const label = MODEL_SHORT[model] ?? model;
               return `<span style="display:inline-block;background:${bg};color:${fg};border-radius:3px;padding:1px 7px;font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;">${label}</span>`;
             }).join(" ")
           : "";
-        return `<div class="popup-name">${p.name}</div>` +
-          `<div class="popup-sub">${[p.city, p.state].filter(Boolean).join(", ")}</div>` +
+        return `<div class="popup-name">${props.name}</div>` +
+          `<div class="popup-sub">${[props.city, props.state].filter(Boolean).join(", ")}</div>` +
           (modelBadges ? `<div class="popup-badges">${modelBadges}</div>` : "");
       };
 
-      const showPopupForFeature = (f: any) => {
-        const props = f.properties;
-        popup
-          .setLngLat(f.geometry.coordinates.slice())
-          .setHTML(buildPopupHtml(props))
-          .addTo(map);
-        popupSlug = props.slug;
-        if (!hasHoverPointer && props.slug) {
-          const el = popup.getElement();
-          if (el) {
-            el.style.cursor = "pointer";
-            el.addEventListener(
-              "click",
-              (ev) => { ev.stopPropagation(); goto(localizeHref(`/agency/${props.slug}`)); },
-              { once: true },
-            );
-          }
-        }
-      };
-
-      const dismissPopup = () => {
-        popup.remove();
-        popupSlug = null;
-      };
-
-      map.on("mouseenter", "context-agencies", (e: any) => {
-        if (!hasHoverPointer) return;
-        if (!e.features?.length) return;
-        map.getCanvas().style.cursor = "pointer";
-        showPopupForFeature(e.features[0]);
-      });
-      map.on("mouseleave", "context-agencies", () => {
-        if (!hasHoverPointer) return;
-        map.getCanvas().style.cursor = "";
-        dismissPopup();
-      });
-      map.on("click", "context-agencies", (e: any) => {
-        if (!e.features?.length) return;
-        const f = e.features[0];
-        const slug = f.properties.slug;
-        if (!hasHoverPointer && popupSlug !== slug) {
-          showPopupForFeature(f);
-          return;
-        }
-        if (slug) goto(localizeHref(`/agency/${slug}`));
-      });
-      map.on("click", (e: any) => {
-        if (hasHoverPointer || !popupSlug) return;
-        const feats = map.queryRenderedFeatures(e.point, { layers: ["context-agencies"] });
-        if (feats.length === 0) dismissPopup();
+      setupMapNavigation({
+        map,
+        ml,
+        layerId: "context-agencies",
+        hasHoverPointer: window.matchMedia("(hover: hover)").matches,
+        isFeatureVisible: () => true,
+        buildPopupHtml,
+        getSlug: (props: any) => props.slug,
+        navigate: (slug: string) => goto(localizeHref(`/agency/${slug}`)),
       });
 
       // Place labels — added LAST so they sit on top of dots. Looser
@@ -422,6 +398,7 @@
   });
 
   onDestroy(() => {
+    resizeObserver?.disconnect();
     if (map) { map.remove(); map = null; }
   });
 </script>

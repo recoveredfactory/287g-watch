@@ -43,12 +43,18 @@
   // dots fade to full as the reveal sweeps past them.
   const OLD_OPACITY = 0.65;
 
-  // Dark theme (the expansion graphic): land darkened so the orange reads.
-  $: landFill = dark ? "#182331" : "#eef2f6";
-  $: landStroke = dark ? "#48607f" : "#cbd5e1";
-  $: hwStroke = dark ? "#354661" : "#94a3b8";
-  $: oldDotStroke = dark ? "rgba(10,14,20,0.5)" : "#ffffff";
-  $: newDotStroke = dark ? "rgba(255,214,170,0.65)" : "#ffffff";
+  // Dark theme (the expansion graphic, colorMode="newOld" — bake-only, kept
+  // exactly as published) vs. the default light theme, matching
+  // NationalMap.svelte/AgencyMap.svelte's cool-gray basemap palette. The
+  // light path is currently unused (the /states rebuild dropped this
+  // component's only light-mode consumer; /video/surge always passes
+  // dark) — kept in sync anyway rather than left stale, in case it's
+  // revived.
+  $: landFill = dark ? "#182331" : "#F8F8F9";
+  $: landStroke = dark ? "#48607f" : "#656C75";
+  $: hwStroke = dark ? "#354661" : "#7D8A99";
+  $: oldDotStroke = dark ? "rgba(10,14,20,0.5)" : "#FDFDFD";
+  $: newDotStroke = dark ? "rgba(255,214,170,0.65)" : "#FDFDFD";
 </script>
 
 <svg

@@ -24,18 +24,18 @@
 </svelte:head>
 
 <main id="main-content" class="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
-  <h1 class="text-2xl font-black text-slate-900 sm:text-4xl">{m.about_heading()}</h1>
+  <h1 class="text-2xl font-black text-ink-900 sm:text-4xl">{m.about_heading()}</h1>
 
   <div class="prose-editorial mt-6 sm:mt-8">
     <p><strong>287(g) Watch</strong> <Gloss text={m.about_intro_1_after_name()} {seen} /></p>
 
     <p><Gloss text={m.about_intro_2()} {seen} /></p>
 
-    <h2 class="mt-8 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.about_why_heading()}</h2>
+    <h2 class="mt-8 font-serif text-xl font-bold text-ink-900 sm:mt-10 sm:text-2xl">{m.about_why_heading()}</h2>
 
     <p><Gloss text={m.about_why_1()} {seen} /></p>
 
-    <h2 class="mt-8 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.about_involve_heading()}</h2>
+    <h2 class="mt-8 font-serif text-xl font-bold text-ink-900 sm:mt-10 sm:text-2xl">{m.about_involve_heading()}</h2>
 
     <p><Gloss text={m.about_involve_lead()} {seen} /></p>
 
@@ -54,7 +54,7 @@
       </li>
     </ul>
 
-    <h2 class="mt-8 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.contact_heading()}</h2>
+    <h2 class="mt-8 font-serif text-xl font-bold text-ink-900 sm:mt-10 sm:text-2xl">{m.contact_heading()}</h2>
 
     <p class="mt-3">{m.contact_body()}</p>
     <ul class="mt-3">

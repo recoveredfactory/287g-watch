@@ -25,6 +25,8 @@ export type MuckrockSnapshot = {
 export type AgencyPageData = {
   agency: Agency;
   agencies: Agency[];
+  officerCtRank: number;
+  officerCtRankTotal: number;
   muckrock: {
     requests: MuckrockRequest[];
     multirequest: MuckrockSnapshot["multirequest"];
@@ -76,9 +78,21 @@ export const load = async ({ fetch, params, url }): Promise<AgencyPageData> => {
     console.warn(`muckrock snapshot unreadable, rendering without it: ${e}`);
   }
 
+  // Rank by officer count among active agencies — same sort /states uses for
+  // its own rank numbers (officerCt desc, then name), so the figure matches
+  // what /states shows. 0 (not found) for terminated/pending agencies, which
+  // aren't in the active `agencies` list being ranked.
+  const officerCtRanked = [...agencies].sort(
+    (a, b) => (b.lee?.officer_ct ?? 0) - (a.lee?.officer_ct ?? 0) || a.name.localeCompare(b.name),
+  );
+  const officerCtRank = officerCtRanked.findIndex((a) => a.slug === agency.slug) + 1;
+  const officerCtRankTotal = officerCtRanked.length;
+
   return {
     agency,
     agencies,
+    officerCtRank,
+    officerCtRankTotal,
     muckrock: {
       requests: muckrock?.requests?.filter((r) => r.agency_slug === agency.slug) ?? [],
       multirequest: muckrock?.multirequest ?? {

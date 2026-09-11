@@ -6,6 +6,8 @@
   import { toInsetCoords, INSET_TRANSFORMS } from "$lib/insetTransforms";
   import { STATE_NAMES } from "$lib/states";
   import { ensurePmtilesProtocol, pmtilesBaseSource, PMTILES_GLYPHS } from "$lib/map/pmtiles";
+  import { setupMapNavigation } from "$lib/map/touchPopup";
+  import { mediaQuery } from "$lib/reactiveMedia";
 
   export let selectedStates: Set<string> = new Set();
 
@@ -84,7 +86,24 @@
 
   let container: HTMLDivElement;
   let map: any = null;
-  const isMobile = browser && window.matchMedia("(max-width: 640px)").matches;
+  // Flips true once the "load" callback has finished adding every source/
+  // layer (including the cluster overlay). Needed as an explicit reactive
+  // dependency below: `map` itself only changes once (null → instance,
+  // synchronously in onMount, before "load" fires), so a `$: if (map &&
+  // map.getSource(...))` guard with no other changing dependency may never
+  // get a second chance to re-check once the source actually exists —
+  // Svelte only re-runs a reactive block when one of ITS OWN tracked
+  // dependencies changes, not when some unrelated async callback mutates
+  // the map's internal state.
+  let mapLoaded = false;
+  // Reactive (resize/orientation-aware) — replaces a one-time matchMedia
+  // check that used to freeze at whatever value was true at mount, leaving
+  // dot scale and fit padding stale after a device rotation.
+  const isMobileStore = mediaQuery("(max-width: 480px)");
+  $: isMobile = $isMobileStore;
+  // Snapshot at module init for the synchronous, pre-mount FIT_PADDING/bounds
+  // setup below (onMount's initial fit can't await a store subscription).
+  const isMobileInitial = browser && window.matchMedia("(max-width: 480px)").matches;
 
   // State polygons (inset coords), loaded once the "states" source is ready.
   // fitToSelection prefers these over agency points so a state with a sparse
@@ -92,31 +111,49 @@
   // shape instead of clipping the edges agency points don't reach.
   let statesGeoJson: { features: any[] } | null = null;
 
-  // Dark is the only palette — steely analytical mode, replaces the prior
-  // slate/dark toggle so map tone reads consistently across the site.
-  // Land is lifted to a readable slate (sea stays near-black) so the country
-  // shape separates and the dots read against a lighter ground — the OG cards'
-  // "treatment D" intent (linear(1.7,-8)) ported to the live style, without
-  // touching the dots themselves. See #118, #148.
+  // Light "documentary editorial" basemap — replaced the previous dark
+  // "steely analytical" scheme (#118, #148). Land is lifted lighter than the
+  // ocean/background so the country shape separates clearly, same
+  // relationship the old dark scheme used (there: near-black sea, lighter
+  // slate land) just inverted in tone, not in structure. Model dot colors
+  // are unchanged (load-bearing, fixed) — contrast of the weakest (blue,
+  // ~2.9:1 against the land fill) is close to what it was against the old
+  // dark land fill (~4.4:1); a real-world light-basemap tradeoff, offset by
+  // each dot's own light stroke rim for separation rather than relying on
+  // fill contrast alone. NOTE: this only affects the default "model"
+  // colorMode — colorMode="newOld" (the /video/surge bake-only graphic)
+  // keeps its own separately-set dark fill/line further down, deliberately:
+  // that's a distinct, already-published visual asset.
+  // Cool-gray palette (matches app.css's ink/paper ramp — same hue family,
+  // ~213°, kept here as raw hex since MapLibre paint expressions can't read
+  // CSS custom properties; see app.css's @theme block for the rationale).
+  // bg is darkened well below the land fill (not just a couple of points
+  // lighter) — this map has no other-country geometry at all (the "states"
+  // source is a custom US-only inset), so bg is the only thing separating
+  // "USA" from "not USA"; it needs to read as a clearly different tone at a
+  // glance, not just a subtle shade.
   const C = {
-    bg: "#0c1117",
-    state: "#212e3f",
-    line: "#42566c",
+    bg: "#BFC6CF",
+    state: "#F8F8F9",
+    line: "#656C75",
     lineWidth: 0.7,
-    county: "#283546",
-    roadCasing: "#231f1c",
-    roadFill: "#4f463f",
-    roadMajorCasing: "#221d1a",
-    roadMajorFill: "#4a4139",
-    roadMedium: "#231f1c",
-    dotStroke: "rgba(255,255,255,0.18)",
-    dotStrokeWidth: 0.25,
-    text: "#c2cad4",
-    textHalo: "rgba(8,12,18,0.9)",
+    county: "#DADEE2",
+    roadCasing: "#FDFDFD",
+    roadFill: "#7D8A99",
+    roadMajorCasing: "#FDFDFD",
+    roadMajorFill: "#6A798B",
+    roadMedium: "#7D8A99",
+    dotStroke: "rgba(253,253,253,0.55)",
+    dotStrokeWidth: 0.35,
+    text: "#393F46",
+    textHalo: "rgba(253,253,253,0.9)",
     // Focus mode (focusSelected): the selected state's fill is lifted above the
     // base C.state and ringed with an accent border so it reads as the subject.
-    stateHighlight: "#34475e",
-    highlightLine: "#aab8c9",
+    // Rose accent matches the site's established general-notice/focus color
+    // (homepage geo callout, states-index jump highlight, AgencyMap's own
+    // state-highlight border below).
+    stateHighlight: "#FDFDFD",
+    highlightLine: "#BE6079",
     highlightLineWidth: 1.6,
   };
 
@@ -137,7 +174,10 @@
   //   - Desktop reserves bottom space (bottom: 70) so AK's inset (which
   //     extends to ~18° below the bbox south of 21°) has room on wide
   //     aspect ratios where fitBounds otherwise pins 21° to the edge.
-  const FIT_PADDING: any = isMobile
+  // Uses the synchronous snapshot (isMobileInitial), not the reactive
+  // isMobile store — this const runs once at component init, before mount,
+  // so it can't depend on statement-ordering against a $: assignment.
+  const FIT_PADDING: any = isMobileInitial
     ? { top: 95, bottom: 8, left: 6, right: 6 }
     : { top: 14, bottom: 70, left: 14, right: 14 };
 
@@ -341,6 +381,59 @@
 
   $: if (map) updateSource();
 
+  // ── Dot clustering (dense metros overlap at the national resting view) ──────
+  // Deliberately NOT MapLibre's native `cluster: true` on the live "agencies"
+  // source: that aggregates over the *entire* source dataset regardless of any
+  // layer filter, which can't stay in sync with the timeline scrubber's live
+  // per-dot fade/reveal (a dot isn't filtered out of the source, its opacity/
+  // radius are animated toward 0 — clustering would count it as "there" the
+  // whole time). So the existing "agencies" circle layer is untouched — it
+  // keeps doing 100% of the scrub/fade/reveal work exactly as before, including
+  // for the baked social videos. Clustering is a second, separate source/layer
+  // pair that only takes over the *display* when nothing is actively animating:
+  // zoomed out to the national view, colorMode is the default "model" (never
+  // for the /video/surge bake), and the cursor has been sitting still for a
+  // moment (not mid-drag or mid-playback). The moment either condition stops
+  // holding, the real per-dot layer reappears — cluster membership never needs
+  // to itself be reveal-aware, since it only ever renders once the reveal
+  // animation has already settled.
+  const CLUSTER_MAX_ZOOM = 4.5;
+  let currentZoom = 0;
+  let cursorIdle = true;
+  let idleTimer: ReturnType<typeof setTimeout>;
+  $: {
+    cursorIdx;
+    cursorIdle = false;
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => { cursorIdle = true; }, 500);
+  }
+
+  // Which dots are actually "on" right now, in the same signed/terminated-idx
+  // space the fade expressions use — safe to treat as a hard boolean cutoff
+  // here (rather than replicating the fade curve) because clustering only
+  // ever displays once the fade has finished settling (see cursorIdle above).
+  $: clusterFeatures =
+    colorMode !== "model"
+      ? []
+      : geojson.features.filter((f: any) => {
+          if (cursorIdx == null) return true;
+          const p = f.properties;
+          return p.signed_idx <= cursorIdx && cursorIdx < p.terminated_idx;
+        });
+
+  $: shouldCluster = colorMode === "model" && cursorIdle && currentZoom < CLUSTER_MAX_ZOOM;
+
+  $: if (mapLoaded && map.getSource("agency-clusters")) {
+    map.getSource("agency-clusters").setData({ type: "FeatureCollection", features: clusterFeatures });
+  }
+
+  $: if (mapLoaded && map.getLayer("cluster-circles")) {
+    const vis = shouldCluster ? "visible" : "none";
+    map.setLayoutProperty("cluster-circles", "visibility", vis);
+    map.setLayoutProperty("cluster-count", "visibility", vis);
+    map.setLayoutProperty("agencies", "visibility", shouldCluster ? "none" : "visible");
+  }
+
   // Smooth timeline transitions. Each dot fades + pops in over FADE_WINDOW
   // months after its signing date, so a continuous cursor reveals the data as
   // a gentle wave rather than monthly cliff. Baseline dots (negative
@@ -367,11 +460,33 @@
     "*", BASE_OPACITY, fadeMultiplier(cursor), fadeOutMultiplier(cursor),
   ];
 
+  // Dot radius scales by sqrt of the officer count so big departments read
+  // visibly heavier than rural sheriff's offices, without erasing the small
+  // ones. Mobile gets a tighter scale — reactive to isMobile (not a one-time
+  // check) so rotating a device or crossing the breakpoint after mount
+  // rescales the dots instead of leaving them frozen at the mount-time size.
+  // Domain ceiling = ~1,000 officers (between p99 and the dozen-or-so 1k+
+  // outliers like Las Vegas Metro) → sqrt ≈ 31.6.
+  $: SCALE = (isMobile ? 0.7 : 1) * dotScale;
+  const sizeExpr: any = ["sqrt", ["coalesce", ["get", "officer_ct"], 0]];
+  const sizeDomainMax = 32;
+  // dotBump is added at BOTH endpoints, so the linear interpolation lifts
+  // every dot by the same flat pixel amount regardless of officer count.
+  $: radiusFn = (low: number, high: number) => [
+    "interpolate", ["linear"], sizeExpr,
+    0, low * SCALE + dotBump,
+    sizeDomainMax, high * SCALE + dotBump,
+  ];
   // MapLibre rule: ["zoom"] can only appear as the direct input of a top-level
   // interpolate/step, never nested. So instead of wrapping the existing radius
   // expression in ["*", fade, ...], we keep `interpolate(linear, [zoom], ...)`
   // at the top and multiply fade INTO each per-zoom stop's output.
-  let radiusStops: Array<[number, any]> = [];
+  $: radiusStops = [
+    [3, radiusFn(0.8, 9)],
+    [6, radiusFn(2.4, 16)],
+    [10, radiusFn(5, 30)],
+    [13, radiusFn(8, 40)],
+  ] as Array<[number, any]>;
   const baseRadiusExpression = (): any => {
     if (!radiusStops.length) return 1;
     return ["interpolate", ["linear"], ["zoom"], ...radiusStops.flat()];
@@ -406,6 +521,13 @@
   const NEWOLD_STATE_FILL = "#1e2a39";
   const NEWOLD_STATE_LINE = "#4f6a89";
   const NEWOLD_LINE_WIDTH = 0.9;
+  // The ocean/background layer isn't gated by colorMode the way state fill/line
+  // are (it's set once at map construction, before the reactive newOld* vars
+  // exist) — without its own override it would silently inherit C.bg's new
+  // light tone even in newOld mode, putting a light ocean behind this dark
+  // navy state fill. Keep the surge graphic's original near-black ocean.
+  const NEWOLD_BG = "#0c1117";
+  const backgroundColor = colorMode === "newOld" ? NEWOLD_BG : C.bg;
   $: newOldStateFill = colorMode === "newOld" ? NEWOLD_STATE_FILL : C.state;
   $: newOldStateLine = colorMode === "newOld" ? NEWOLD_STATE_LINE : C.line;
   const localRevealExpr = (progress: number): any => {
@@ -439,7 +561,11 @@
     return ["interpolate", ["linear"], ["zoom"], ...flat];
   };
 
-  $: if (map && map.getLayer && map.getLayer("agencies")) {
+  // `radiusStops` is read here (even though it's only used indirectly, via
+  // the functions below that close over it) purely so Svelte's dependency
+  // tracker re-runs this block when it changes — e.g. isMobile flipping
+  // after a device rotation — and pushes the new radius into the live map.
+  $: if (map && map.getLayer && map.getLayer("agencies") && radiusStops) {
     if (colorMode === "newOld") {
       map.setPaintProperty("agencies", "circle-opacity", ["*", newOldOpacityExpr(revealProgress), dimExpr]);
       map.setPaintProperty("agencies", "circle-stroke-opacity", newOldStrokeOpacityExpr(revealProgress));
@@ -482,7 +608,7 @@
         glyphs: PMTILES_GLYPHS,
         projection: { type: "mercator" },
         layers: [
-          { id: "background", type: "background", paint: { "background-color": C.bg } },
+          { id: "background", type: "background", paint: { "background-color": backgroundColor } },
         ],
       } as any,
       // Inset layout: continental US + territory insets all fit in this window
@@ -814,29 +940,9 @@
         data: geojson,
       });
 
-      // Agency dots — on top of city labels. Radius scales by sqrt of the
-      // officer count so big departments read visibly heavier than rural
-      // sheriff's offices, without erasing the small ones. Mobile gets a
-      // tighter scale. Domain ceiling = ~1,000 officers (between p99 and the
-      // dozen-or-so 1k+ outliers like Las Vegas Metro) → sqrt ≈ 31.6.
-      const SCALE = (isMobile ? 0.7 : 1) * dotScale;
-      const sizeExpr: any = ["sqrt", ["coalesce", ["get", "officer_ct"], 0]];
-      const sizeDomainMax = 32;
-      // dotBump is added at BOTH endpoints, so the linear interpolation lifts
-      // every dot by the same flat pixel amount regardless of officer count.
-      const radius = (low: number, high: number) => [
-        "interpolate", ["linear"], sizeExpr,
-        0, low * SCALE + dotBump,
-        sizeDomainMax, high * SCALE + dotBump,
-      ];
-      // Captured so the timeline cursor's paint updates can rebuild the radius
-      // interpolation each frame with the fade multiplier applied per-stop.
-      radiusStops = [
-        [3, radius(0.8, 9)],
-        [6, radius(2.4, 16)],
-        [10, radius(5, 30)],
-        [13, radius(8, 40)],
-      ];
+      // Agency dot radius: radiusStops (reactive, computed at the top of this
+      // script from SCALE/dotScale/dotBump) is guaranteed set by the time this
+      // async "load" callback runs, since it's set up before component mount.
       const initialRadius =
         colorMode === "newOld"
           ? newOldRadiusExpr(revealProgress)
@@ -885,22 +991,72 @@
         },
       });
 
-      // Popup
-      const popup = new ml.Popup({
-        closeButton: false,
-        closeOnClick: false,
-        offset: 10,
-        className: "map-popup",
-      });
+      // Cluster overlay — see the "Dot clustering" block above for why this is
+      // a wholly separate source/layer pair rather than `cluster: true` on the
+      // live "agencies" source. Starts empty; populated + shown by the
+      // reactive blocks above once shouldCluster is true. Colored neutral
+      // (not model-colored — a cluster mixes models) so it reads clearly as
+      // "zoom in to see what's here," not as a fourth model color.
+      if (colorMode === "model") {
+        map.addSource("agency-clusters", {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+          cluster: true,
+          clusterRadius: 44,
+          clusterMaxZoom: 6,
+          clusterProperties: {
+            officer_sum: ["+", ["coalesce", ["get", "officer_ct"], 0]],
+          },
+        });
 
-      // Touch devices have no hover, so the existing mouseenter→click chain
-      // fires the popup and the navigation in the same gesture and the user
-      // never sees the tooltip. Gate hover handlers to real hover devices;
-      // touch uses a two-tap pattern: first tap shows the popup, second tap
-      // on the same dot (or on the popup itself) navigates.
-      const hasHoverPointer = window.matchMedia("(hover: hover)").matches;
-      let popupSlug: string | null = null;
+        map.addLayer({
+          id: "cluster-circles",
+          type: "circle",
+          source: "agency-clusters",
+          filter: ["has", "point_count"],
+          layout: { visibility: "none" },
+          paint: {
+            "circle-color": C.text,
+            "circle-opacity": 0.88,
+            "circle-stroke-width": 2,
+            "circle-stroke-color": C.roadCasing,
+            "circle-radius": ["step", ["get", "point_count"], 13, 10, 18, 50, 24, 200, 30],
+          },
+        });
 
+        map.addLayer({
+          id: "cluster-count",
+          type: "symbol",
+          source: "agency-clusters",
+          filter: ["has", "point_count"],
+          layout: {
+            "text-field": ["get", "point_count_abbreviated"],
+            "text-font": ["Noto Sans Regular"],
+            "text-size": 12,
+            visibility: "none",
+          },
+          paint: { "text-color": C.roadCasing },
+        });
+
+        map.on("mouseenter", "cluster-circles", () => { map.getCanvas().style.cursor = "pointer"; });
+        map.on("mouseleave", "cluster-circles", () => { map.getCanvas().style.cursor = ""; });
+        map.on("click", "cluster-circles", async (e: any) => {
+          const feature = e.features?.[0];
+          if (!feature) return;
+          const clusterId = feature.properties.cluster_id;
+          const src = map.getSource("agency-clusters");
+          const expansionZoom = await src.getClusterExpansionZoom(clusterId);
+          map.easeTo({ center: feature.geometry.coordinates, zoom: expansionZoom });
+        });
+
+        map.on("zoom", () => { currentZoom = map.getZoom(); });
+        currentZoom = map.getZoom();
+      }
+
+      // Popup + tap/hover navigation — shared with AgencyMap.svelte via
+      // $lib/map/touchPopup (see that module for the touch-interaction
+      // rationale: single-tap-to-navigate + long-press-for-info, replacing
+      // the old two-tap dance).
       const isFeatureVisible = (p: any): boolean => {
         if (cursorIdx == null) return true;
         const idx = Number(p.signed_idx);
@@ -922,67 +1078,21 @@
           (modelBadges ? `<div class="popup-badges">${modelBadges}</div>` : "");
       };
 
-      const showPopupForFeature = (f: any) => {
-        const p = f.properties;
-        popup
-          .setLngLat(f.geometry.coordinates.slice())
-          .setHTML(buildPopupHtml(p))
-          .addTo(map);
-        popupSlug = p.slug;
-        if (!hasHoverPointer && p.slug) {
-          const el = popup.getElement();
-          if (el) {
-            el.style.cursor = "pointer";
-            el.addEventListener(
-              "click",
-              (ev) => { ev.stopPropagation(); goto(`/agency/${p.slug}`); },
-              { once: true },
-            );
-          }
-        }
-      };
-
-      const dismissPopup = () => {
-        popup.remove();
-        popupSlug = null;
-      };
-
-      map.on("mouseenter", "agencies", (e: any) => {
-        if (!hasHoverPointer) return;
-        if (!e.features?.length) return;
-        const f = e.features[0];
-        if (!isFeatureVisible(f.properties)) return;
-        map.getCanvas().style.cursor = "pointer";
-        showPopupForFeature(f);
+      setupMapNavigation({
+        map,
+        ml,
+        layerId: "agencies",
+        hasHoverPointer: window.matchMedia("(hover: hover)").matches,
+        isFeatureVisible,
+        buildPopupHtml,
+        getSlug: (p: any) => p.slug,
+        navigate: (slug: string) => goto(`/agency/${slug}`),
       });
 
-      map.on("mouseleave", "agencies", () => {
-        if (!hasHoverPointer) return;
-        map.getCanvas().style.cursor = "";
-        dismissPopup();
-      });
-
-      map.on("click", "agencies", (e: any) => {
-        if (!e.features?.length) return;
-        const f = e.features[0];
-        if (!isFeatureVisible(f.properties)) return;
-        const slug = f.properties.slug;
-        // Touch: first tap on a new dot opens the popup; second tap on the
-        // same dot navigates. Hover devices navigate immediately as before.
-        if (!hasHoverPointer && popupSlug !== slug) {
-          showPopupForFeature(f);
-          return;
-        }
-        if (slug) goto(`/agency/${slug}`);
-      });
-
-      // Touch: tap on empty map dismisses the popup. Hover devices already
-      // handle dismissal via mouseleave.
-      map.on("click", (e: any) => {
-        if (hasHoverPointer || !popupSlug) return;
-        const feats = map.queryRenderedFeatures(e.point, { layers: ["agencies"] });
-        if (feats.length === 0) dismissPopup();
-      });
+      // Every source/layer (including the cluster overlay) is set up by this
+      // point — see the note on the `mapLoaded` declaration above for why the
+      // clustering reactive blocks need this as an explicit dependency.
+      mapLoaded = true;
 
       // Snapshot signal for the OG bake (scripts/bake-og.mjs). Set after
       // the first idle fires past initial render so a Playwright snapshot

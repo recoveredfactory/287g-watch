@@ -97,7 +97,7 @@
 </svelte:head>
 
 <main id="main-content" class="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
-  <h1 class="text-2xl font-black text-slate-900 sm:text-4xl">{m.usemap_heading()}</h1>
+  <h1 class="text-2xl font-black text-ink-900 sm:text-4xl">{m.usemap_heading()}</h1>
 
   <div class="prose-editorial mt-6 sm:mt-8">
     <p>{m.usemap_intro()}</p>
@@ -108,12 +108,12 @@
        (VISIBLE_CUTS = the published ones; see the CUTS table above) -->
   {#each VISIBLE_CUTS as cut}
     <section class="mt-10 sm:mt-12">
-      <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">{cut.heading()}</h2>
-      <p class="mt-2 text-sm text-slate-500">{cut.note()}</p>
+      <h2 class="font-serif text-xl font-bold text-ink-900 sm:text-2xl">{cut.heading()}</h2>
+      <p class="mt-2 text-sm text-ink-500">{cut.note()}</p>
 
       <figure class="mt-4">
         <video
-          class="{cut.previewClass} rounded-lg border border-slate-200 shadow-sm"
+          class="{cut.previewClass} rounded-lg border border-paper-200 shadow-sm"
           src={asset(cut.prefix, "mp4", previewLang)}
           autoplay
           loop
@@ -126,15 +126,15 @@
       <div class="mt-4 space-y-4">
         {#each DOWNLOAD_LANGS as { lang, label }}
           <div>
-            <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</p>
+            <p class="text-xs font-semibold uppercase tracking-wider text-ink-500">{label}</p>
             <div class="mt-2 flex flex-wrap gap-3">
               {#each cut.formats as fmt}
                 <a
                   href={asset(cut.prefix, fmt.ext, lang)}
                   download
                   class={fmt.ext === "mp4"
-                    ? "inline-flex items-center gap-2 rounded bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
-                    : "inline-flex items-center gap-2 rounded border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-900 hover:border-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"}
+                    ? "inline-flex items-center gap-2 rounded bg-ink-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-ink-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink-500"
+                    : "inline-flex items-center gap-2 rounded border border-paper-200 bg-paper-50 px-5 py-2.5 text-sm font-semibold text-ink-900 hover:border-ink-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink-500"}
                 >
                   {fmt.label()}
                 </a>
@@ -147,16 +147,16 @@
   {/each}
 
   <div class="mt-8">
-    <p class="text-sm text-slate-500">{m.usemap_download_note()}</p>
-    <p class="mt-2 text-sm text-slate-500">{m.usemap_aspect_note()}</p>
+    <p class="text-sm text-ink-500">{m.usemap_download_note()}</p>
+    <p class="mt-2 text-sm text-ink-500">{m.usemap_aspect_note()}</p>
     {#if asOf}
-      <p class="mt-2 text-xs italic text-slate-400">{m.usemap_asof({ date: asOf })}</p>
+      <p class="mt-2 text-xs italic text-ink-500">{m.usemap_asof({ date: asOf })}</p>
     {/if}
   </div>
 
   <!-- License -->
   <div class="prose-editorial mt-8 sm:mt-10">
-    <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">{m.usemap_license_heading()}</h2>
+    <h2 class="font-serif text-xl font-bold text-ink-900 sm:text-2xl">{m.usemap_license_heading()}</h2>
     <p class="mt-3">
       {m.usemap_license_body_prefix()}
       <a href={LICENSE_URL} target="_blank" rel="noreferrer">{m.usemap_license_link()}</a>
@@ -164,7 +164,7 @@
     </p>
     <p class="mt-3">{m.usemap_license_ask()}</p>
 
-    <h2 class="mt-8 font-serif text-xl font-bold text-slate-900 sm:mt-10 sm:text-2xl">{m.usemap_custom_heading()}</h2>
+    <h2 class="mt-8 font-serif text-xl font-bold text-ink-900 sm:mt-10 sm:text-2xl">{m.usemap_custom_heading()}</h2>
     <p class="mt-3">
       {m.usemap_custom_body_prefix()}
       <a href="mailto:{LICENSE_EMAIL}">{m.usemap_custom_link()}</a>
@@ -173,6 +173,6 @@
   </div>
 
   <p class="mt-10">
-    <a href={localizeHref("/")} class="text-sm font-semibold text-slate-900 hover:underline">{m.usemap_back_to_map()}</a>
+    <a href={localizeHref("/")} class="text-sm font-semibold text-ink-900 hover:underline">{m.usemap_back_to_map()}</a>
   </p>
 </main>

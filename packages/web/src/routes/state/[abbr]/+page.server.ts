@@ -11,6 +11,8 @@ export type TrendSeries = { jail: number[]; taskforce: number[]; wso: number[] }
 export type StatePageData = {
   abbr: string;
   stateName: string;
+  agencyCountRank: number;
+  agencyCountRankTotal: number;
   agencies: Agency[];
   // Slim, national, map-only list (every active agency). The map shows the
   // whole footprint and dims dots outside the selected state; `agencies` above
@@ -221,6 +223,22 @@ export const load = async ({ fetch, params }): Promise<StatePageData> => {
     }
   }
 
+  // This state's rank by agency count among all navigable states — same
+  // sort (agencyCount desc, then name) /states uses for its own rank
+  // numbers, computed here from the same national roster already fetched
+  // above (no extra request), so the number matches what /states shows.
+  const agencyCountByState = new Map<string, number>();
+  for (const a of allAgencies) {
+    agencyCountByState.set(a.state, (agencyCountByState.get(a.state) ?? 0) + 1);
+  }
+  const rankedStateAbbrs = Object.keys(NAVIGABLE_STATES).sort(
+    (a, b) =>
+      (agencyCountByState.get(b) ?? 0) - (agencyCountByState.get(a) ?? 0) ||
+      NAVIGABLE_STATES[a].localeCompare(NAVIGABLE_STATES[b]),
+  );
+  const agencyCountRank = rankedStateAbbrs.indexOf(abbr) + 1;
+  const agencyCountRankTotal = rankedStateAbbrs.length;
+
   // ── Trend computation ────────────────────────────────────────────────────────
   const TREND_START = "2024-12";
   const stateForTrend = [
@@ -286,7 +304,7 @@ export const load = async ({ fetch, params }): Promise<StatePageData> => {
   const news = pickNews(newsRaw, agencies.map((a) => ({ name: a.name, slug: a.slug })));
 
   return {
-    abbr, stateName, agencies, mapAgencies, stateMeta, snapshotDate, modelCounts, agencyTypeCounts,
+    abbr, stateName, agencyCountRank, agencyCountRankTotal, agencies, mapAgencies, stateMeta, snapshotDate, modelCounts, agencyTypeCounts,
     timeline: buildTimeline([
       ...agencies,
       ...terminatedRaw.filter((a) => a.state === abbr),

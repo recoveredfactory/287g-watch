@@ -1,39 +1,113 @@
-@import url("https://fonts.googleapis.com/css2?family=Bitter:wght@700;900&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap");
+/* IBM Plex Mono is only needed by the pixel-fixed /video/surge bake route
+   (routes/video/surge/+page.svelte) — not self-hosted since it's a single,
+   narrowly-scoped consumer. Bitter/Inter (used sitewide) are self-hosted below
+   via @fontsource instead of Google Fonts, so the main site doesn't take a
+   third-party font request. */
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap");
+@import "@fontsource/bitter/700.css";
+@import "@fontsource/bitter/900.css";
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
 @import "maplibre-gl/dist/maplibre-gl.css";
 @import "tailwindcss";
 
 @theme {
   --font-serif: "Bitter", Georgia, serif;
+
+  /* Breakpoints — deliberate 4-step set replacing the old single sm:640px.
+     sm moves to 480px (small/large phone split); this is a global-blast-radius
+     change from the previous default, since every existing sm: usage in the
+     codebase now triggers 160px earlier. */
+  --breakpoint-sm: 30rem; /* 480px */
+  --breakpoint-md: 48rem; /* 768px */
+  --breakpoint-lg: 64rem; /* 1024px */
+  --breakpoint-xl: 80rem; /* 1280px */
+
+  /* Fluid type scale — clamp()-based so headline/body sizes step smoothly
+     across the 360-430px phone-width range instead of jumping once at a
+     single breakpoint. */
+  --text-display: clamp(2rem, 1.5rem + 2.2vw, 3.5rem);
+  --text-h1: clamp(1.5rem, 1.3rem + 0.9vw, 2.25rem);
+  --text-h2: clamp(1.25rem, 1.15rem + 0.5vw, 1.625rem);
+  --text-h3: 1.125rem;
+  --text-body-lg: 1.0625rem;
+  --text-body: 0.9375rem;
+  --text-caption: 0.8125rem;
+
+  /* Cool neutral ramp — replaced the original warm "documentary editorial"
+     tan/beige ramp (paper-50 #fdfdfd/paper-100 #FAF9F7/paper-200 #F3F0EC,
+     ink-900 #241f16/ink-700 #4a4335/ink-500 #7a7160) after direct feedback
+     that the warm tone "wasn't working." Same lightness steps as the warm
+     ramp (so spacing/hierarchy is unchanged), hue rotated to ~213° (a calm
+     blue-gray) at a low, consistent saturation (~7–15%) rather than a warm
+     ~35–40° hue — genuinely neutral/cool, not just "less yellow." The three
+     model colors (rose/blue/green, lib/colors.ts) are unaffected — this is
+     the ambient/neutral palette only.
+     Contrast checked against --color-paper-50 (WCAG AA, 4.5:1 normal text):
+     ink-900 16.7:1, ink-700 10.5:1 — safe for any text size, any paper-*
+     background. ink-500 is 5.22:1 on paper-50, 5.00:1 on paper-100, 4.61:1
+     on paper-200 — all pass now (the warm ramp's ink-500 was borderline on
+     paper-100/200; this one clears with more room). --color-paper-200 is a
+     *decorative* hairline only (well under the 3:1 non-text-contrast
+     guidance for meaningful UI boundaries); functional element borders
+     (inputs, buttons, card outlines that need to read as identifiable
+     controls) should use ink-500 at reduced opacity instead, e.g.
+     color-mix(in srgb, var(--color-ink-500) 45%, transparent). */
+  --color-paper-50: #FDFDFD;
+  --color-paper-100: #F8F8F9;
+  --color-paper-200: #EEEFF1;
+  --color-ink-900: #191D21;
+  --color-ink-700: #393F46;
+  --color-ink-500: #656C75;
+
+  /* No separate "accent" hue site-wide, by design: highlight/link color
+     defaults to deep ink (--color-ink-900/700) everywhere. The exception is
+     model-themed content (/model/[slug], /agency/[slug]) which already uses
+     that page's own model color (rose/blue/green, from lib/colors.ts) for
+     its accents — that's the *only* place a hue other than ink appears as a
+     highlight. No invented "brand accent" color exists in this system. */
 }
 
 @layer base {
   :root {
     --site-header-height: 5rem; /* mobile: logo+lang row + nav row (~80px) */
     --staging-banner-height: 0px; /* overridden inline on non-prod stages */
-    --color-navy: #1e3a5f;
-    --color-navy-light: #2d5282;
-    --color-model-jail: #BE6079;
-    --color-model-taskforce: #3C97E2;
-    --color-model-wso: #5E9148;
+    /* KEEP IN SYNC WITH packages/web/src/lib/colors.ts (MODEL_COLORS) — that
+       file is the authoritative source (also consumed by MapLibre paint
+       expressions and Satori bake scripts, which can't read CSS custom
+       properties), these three mirror it for Tailwind/CSS usage. */
+    --color-model-jail: #C87899;
+    --color-model-taskforce: #59A7E6;
+    --color-model-wso: #70A263;
     /* News reading text is set in a classic transitional serif (system-safe, no
        font load) — pairs with the Bitter slab headings for an editorial feel. */
     --font-news-serif: Georgia, "Times New Roman", serif;
   }
 
-  @media (min-width: 640px) {
+  @media (min-width: 480px) {
     :root {
       --site-header-height: 3.5rem; /* desktop: single row = 56px */
     }
   }
 
   body {
-    @apply bg-stone-50 font-sans text-slate-900 antialiased;
+    @apply font-sans antialiased;
+    background-color: var(--color-paper-50);
+    color: var(--color-ink-900);
     font-family: "Inter", system-ui, sans-serif;
     overflow-x: hidden;
   }
 
+  @media (prefers-reduced-motion: reduce) {
+    .page-fade,
+    .page-fade--loading {
+      animation-duration: 0.001ms !important;
+    }
+  }
+
   input, select, textarea {
-    accent-color: #475569; /* slate-600 — prevents model pink leaking into native form controls */
+    accent-color: var(--color-ink-700); /* prevents model pink leaking into native form controls */
   }
 
   h1, h2, h3 {
@@ -41,15 +115,21 @@
   }
 
   a {
-    @apply font-semibold text-slate-600 underline decoration-slate-300 underline-offset-2;
+    @apply font-semibold underline underline-offset-2;
+    color: var(--color-ink-700);
+    text-decoration-color: var(--color-paper-200);
   }
 
   a:hover {
-    @apply text-slate-900 decoration-slate-500;
+    color: var(--color-ink-900);
+    text-decoration-color: var(--color-ink-500);
   }
 
   a:focus-visible {
-    @apply outline-none ring-2 ring-slate-500 ring-offset-2;
+    @apply outline-none ring-2 ring-offset-2;
+    /* --color-ink-700 on --color-paper-50 checks ~10.5:1 — comfortably
+       clears WCAG AA for a focus indicator. */
+    --tw-ring-color: var(--color-ink-700);
   }
 
   /* Header and footer links override the global blue */
@@ -85,7 +165,7 @@
 
 @layer components {
   .prose-editorial {
-    @apply text-base leading-relaxed text-slate-700 sm:text-lg;
+    @apply text-base leading-relaxed text-ink-700 sm:text-lg;
   }
 
   .prose-editorial p {
@@ -93,15 +173,15 @@
   }
 
   .prose-editorial strong {
-    @apply font-semibold text-slate-900;
+    @apply font-semibold text-ink-900;
   }
 
   .prose-editorial a {
-    @apply text-slate-900 decoration-1 underline decoration-slate-400 underline-offset-2;
+    @apply text-ink-900 decoration-1 underline decoration-ink-500 underline-offset-2;
   }
 
   .prose-editorial a:hover {
-    @apply decoration-slate-700;
+    @apply decoration-ink-900;
   }
 
   .prose-editorial ul,
@@ -123,20 +203,23 @@
      .prose-editorial so the news measure can stay tight while the map/chart
      above it use the full content width. Shared inline element styling: */
   .news-prose strong {
-    @apply font-semibold text-slate-900;
+    @apply font-semibold text-ink-900;
   }
   .news-prose a {
     /* font-normal overrides the global semibold link weight — with this many
        inline citations, bold links read as noise. The pop comes from the
-       underline instead: a navy hairline at 2px, set just under the text, that
-       deepens to full navy on hover. Reads clearly as a link without shouting. */
-    @apply font-normal text-slate-900 underline underline-offset-2 transition-colors duration-150;
-    text-decoration-color: var(--color-navy-light);
+       underline instead: a deep-ink hairline at 2px, set just under the text,
+       that deepens further on hover. Reads clearly as a link without shouting
+       or reaching for a hue — state pages mix multiple models, so there's no
+       single model color to theme these links by (see the model/agency pages
+       for where model-color accents apply instead). */
+    @apply font-normal underline underline-offset-2 transition-colors duration-150;
+    color: var(--color-ink-900);
+    text-decoration-color: var(--color-ink-500);
     text-decoration-thickness: 2px;
   }
   .news-prose a:hover {
-    color: var(--color-navy);
-    text-decoration-color: var(--color-navy);
+    text-decoration-color: var(--color-ink-900);
   }
   .news-prose ul,
   .news-prose ol {
@@ -157,23 +240,23 @@
      in the news serif at a comfortable 16px with open leading. */
   .news-tldr {
     font-family: var(--font-news-serif);
-    @apply text-lg italic leading-[1.7] text-slate-700;
+    @apply text-lg italic leading-[1.7] text-ink-700;
   }
 
   /* Expanded body: same size as the TL;DR but darker and roman — the main read.
      Serif + open leading for a classic, newspaper-like reading rhythm. */
   .news-body {
     font-family: var(--font-news-serif);
-    @apply text-base leading-[1.8] text-slate-800;
+    @apply text-base leading-[1.8] text-ink-900;
   }
   .news-body h2 {
-    @apply mt-6 font-serif text-lg font-bold text-slate-900;
+    @apply mt-6 font-serif text-lg font-bold text-ink-900;
   }
   .news-body h3 {
-    @apply mt-5 font-serif text-[15px] font-bold text-slate-800;
+    @apply mt-5 font-serif text-[15px] font-bold text-ink-900;
   }
   .news-body h4 {
-    @apply mt-4 text-sm font-semibold text-slate-800;
+    @apply mt-4 text-sm font-semibold text-ink-900;
   }
 
   /* Expand/collapse trigger — a centered pill flanked by hairline rules
@@ -182,11 +265,11 @@
     @apply flex max-w-prose items-center gap-3;
   }
   .news-rule {
-    @apply h-px flex-1 bg-slate-200;
+    @apply h-px flex-1 bg-paper-200;
   }
   .news-toggle {
-    @apply inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5
-      text-sm font-medium text-slate-700 transition-colors hover:bg-slate-200;
+    @apply inline-flex items-center gap-1.5 rounded-full bg-paper-100 px-3 py-1.5
+      text-sm font-medium text-ink-700 transition-colors hover:bg-paper-200;
   }
   .news-chev {
     @apply text-[0.7rem] leading-none transition-transform duration-200;
@@ -196,45 +279,49 @@
      container (.news-articles wrapper sets max-height + overflow). The header
      sticks so columns stay labeled while the long list scrolls. */
   .news-articles-table {
-    @apply w-full border-collapse text-left text-xs text-slate-600;
+    @apply w-full border-collapse text-left text-xs text-ink-700;
   }
   .news-articles-table th {
-    @apply sticky top-0 z-10 whitespace-nowrap border-b border-slate-300 bg-slate-50
-      px-2 py-2 text-left align-bottom font-semibold text-slate-700;
+    @apply sticky top-0 z-10 whitespace-nowrap border-b border-paper-200 bg-paper-100
+      px-2 py-2 text-left align-bottom font-semibold text-ink-700;
   }
   .news-articles-table td {
-    @apply border-b border-slate-100 px-2 py-1.5 align-top;
+    @apply border-b border-paper-100 px-2 py-1.5 align-top;
   }
   .news-articles-table a {
-    /* Article titles read as a news index: navy link with a faint hairline
-       underline (the dense table can't take a heavy rule) that fills in on
-       hover. */
+    /* Article titles read as a news index: deep-ink link with a faint
+       hairline underline (the dense table can't take a heavy rule) that
+       fills in on hover. */
     @apply font-medium underline underline-offset-2 transition-colors;
-    color: var(--color-navy-light);
-    text-decoration-color: color-mix(in srgb, var(--color-navy-light) 22%, transparent);
+    color: var(--color-ink-700);
+    text-decoration-color: color-mix(in srgb, var(--color-ink-500) 35%, transparent);
     text-decoration-thickness: 1px;
   }
   .news-articles-table a:hover {
-    color: var(--color-navy);
-    text-decoration-color: color-mix(in srgb, var(--color-navy) 55%, transparent);
+    color: var(--color-ink-900);
+    text-decoration-color: color-mix(in srgb, var(--color-ink-900) 55%, transparent);
   }
 
   .model-badge {
     @apply inline-block rounded px-2 py-0.5 text-xs font-semibold uppercase tracking-wide;
   }
 
+  /* Warm near-black, not white — white text on these three backgrounds
+     fails WCAG AA. This clears AA on all three of the current MODEL_COLORS:
+     6.04:1 (jail), 7.41:1 (taskforce), 6.44:1 (wso). Mirrors
+     MODEL_TEXT_COLORS in $lib/colors.ts — keep the two in sync. */
   .model-badge--jail {
     background: var(--color-model-jail);
-    color: #ffffff;
+    color: #120e09;
   }
 
   .model-badge--taskforce {
     background: var(--color-model-taskforce);
-    color: #ffffff;
+    color: #120e09;
   }
 
   .model-badge--wso {
     background: var(--color-model-wso);
-    color: #ffffff;
+    color: #120e09;
   }
 }

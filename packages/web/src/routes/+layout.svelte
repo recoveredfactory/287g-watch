@@ -3,6 +3,8 @@
   import { navigating, page } from "$app/stores";
   import { onMount } from "svelte";
   import { m } from "$lib/paraglide/messages.js";
+  import LanguageSwitcher from "$lib/components/LanguageSwitcher.svelte";
+  import CommandPalette from "$lib/components/CommandPalette.svelte";
   import {
     getLocale,
     locales,
@@ -182,7 +184,7 @@
 
 <a
   href="#main-content"
-  class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:shadow-lg focus:ring-2 focus:ring-blue-600"
+  class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded focus:bg-paper-50 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:shadow-lg focus:ring-2 focus:ring-ink-900"
 >
   {m.skip_to_main()}
 </a>
@@ -205,7 +207,8 @@
   {/if}
   {#if mismatchTarget && !isVideoRoute}
     <div
-      class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-blue-200 bg-blue-50 px-4 py-2 text-center text-sm text-blue-950"
+      class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b px-4 py-2 text-center text-sm"
+      style="border-color: var(--color-paper-200); background: var(--color-paper-100); color: var(--color-ink-900);"
       role="region"
       aria-label={mismatchTarget === "es" ? "Sugerencia de idioma" : "Language suggestion"}
     >
@@ -215,12 +218,14 @@
           href={hrefFor("es")}
           on:click={() => rememberLocale("es")}
           data-sveltekit-reload
-          class="font-semibold text-blue-900 underline underline-offset-2 hover:text-blue-700"
+          class="font-semibold underline underline-offset-2"
+          style="color: var(--color-ink-900);"
         >Sí, cambiar</a>
         <button
           type="button"
           on:click={dismissMismatch}
-          class="text-xs text-blue-700/70 underline underline-offset-2 hover:text-blue-700"
+          class="text-xs underline underline-offset-2"
+          style="color: var(--color-ink-500);"
         >No, gracias</button>
       {:else}
         <span>Prefer this page in English?</span>
@@ -228,12 +233,14 @@
           href={hrefFor("en")}
           on:click={() => rememberLocale("en")}
           data-sveltekit-reload
-          class="font-semibold text-blue-900 underline underline-offset-2 hover:text-blue-700"
+          class="font-semibold underline underline-offset-2"
+          style="color: var(--color-ink-900);"
         >Yes, switch</a>
         <button
           type="button"
           on:click={dismissMismatch}
-          class="text-xs text-blue-700/70 underline underline-offset-2 hover:text-blue-700"
+          class="text-xs underline underline-offset-2"
+          style="color: var(--color-ink-500);"
         >No thanks</button>
       {/if}
     </div>
@@ -241,7 +248,7 @@
   {#if daybookPromoVisible && !isVideoRoute}
     <div
       class="flex items-center justify-center gap-2 px-4 py-2 text-center text-sm text-white sm:gap-3"
-      style="background-color: #2c2c2c;"
+      style="background-color: var(--color-ink-900);"
       role="region"
       aria-label={m.daybook_promo_aria()}
     >
@@ -271,82 +278,68 @@
   {/if}
   {#if !isVideoRoute}
   <header
-    class="sticky z-50 border-b border-black/20 backdrop-blur"
-    style="top: var(--staging-banner-height); background-color: #191919;"
+    class="sticky z-50 border-b backdrop-blur"
+    style="top: var(--staging-banner-height); background-color: var(--color-paper-100); border-color: var(--color-paper-200);"
   >
     <div class="mx-auto max-w-6xl px-4 sm:px-6">
-      <!-- Mobile: two rows (logo+lang / nav links). Desktop: single row. -->
+      <!-- Mobile: two rows (logo+lang / nav links). Desktop: single row.
+           The language-switcher markup itself lives once, in
+           lib/components/LanguageSwitcher.svelte — rendered at both
+           positions below so there's one source of truth for the links even
+           though the layout needs two different visual slots for it across
+           breakpoints. (A local {#snippet} would be the more idiomatic
+           Svelte 5 way to do this, but this file still uses the legacy
+           <slot/> API for its own children, and the two can't mix in one
+           component — a real subcomponent sidesteps that without forcing a
+           full runes-mode migration of this already-large layout file.) -->
       <div class="py-3 sm:flex sm:h-14 sm:items-center sm:py-0">
 
-        <!-- Row 1 on mobile: logo + lang switcher -->
-        <div class="flex items-center justify-between sm:contents">
+        <!-- Row 1 on mobile: logo + inline search + lang switcher (lang
+             switcher uses ml-auto to push right now that there are 3 items —
+             justify-between doesn't work cleanly with 3 children, it'd float
+             the middle one away from the logo instead of clustering left). -->
+        <div class="flex items-center sm:contents">
           <a
             href={localizeHref("/")}
-            class="font-serif text-base font-bold tracking-tight text-white no-underline hover:no-underline sm:text-lg"
+            class="shrink-0 font-serif text-base font-bold tracking-tight no-underline hover:no-underline sm:text-lg"
+            style="color: var(--color-ink-900);"
           >
             {siteName}
           </a>
-          <!-- Lang switcher — visible on mobile in this row; hidden on sm+ (re-appears in nav) -->
-          <div class="flex items-center gap-2 pl-4 text-xs uppercase tracking-wider text-white sm:hidden" aria-label={m.lang_toggle_aria()}>
-            {#each locales as l, i}
-              {#if i > 0}<span aria-hidden="true" class="text-white/30">·</span>{/if}
-              <a
-                href={hrefFor(l)}
-                on:click={() => rememberLocale(l)}
-                class={l === locale ? "font-semibold text-white no-underline" : "text-white/50 no-underline hover:text-white"}
-                aria-current={l === locale ? "true" : undefined}
-                hreflang={l}
-                rel="alternate"
-                data-sveltekit-reload
-              >{l === "en" ? m.lang_en() : m.lang_es()}</a>
-            {/each}
-          </div>
+          <CommandPalette />
+          <LanguageSwitcher {hrefFor} extraClass="ml-auto pl-4 sm:hidden" />
         </div>
 
         <!-- Row 2 on mobile / middle+right on desktop -->
         <div class="mt-2.5 flex items-center sm:mt-0 sm:flex-1">
           <nav class="flex items-center gap-5 text-sm font-semibold sm:ml-8">
             <a
-              href={localizeHref("/")}
-              class="no-underline {isNavActive('/', basePath) ? 'text-white underline underline-offset-4 decoration-2' : 'text-white/60 hover:text-white'}"
-              aria-current={isNavActive('/', basePath) ? 'page' : undefined}
-            ><span class="sm:hidden">{m.nav_map_short()}</span><span class="hidden sm:inline">{m.nav_map()}</span></a>
-            <a
               href={localizeHref("/states")}
-              class="no-underline {isNavActive('/states', basePath) ? 'text-white underline underline-offset-4 decoration-2' : 'text-white/60 hover:text-white'}"
+              class="no-underline {isNavActive('/states', basePath) ? 'text-ink-900 underline underline-offset-4 decoration-2' : 'text-ink-700 hover:text-ink-900'}"
               aria-current={isNavActive('/states', basePath) ? 'page' : undefined}
-            >{m.nav_states()}</a>
+            >{m.nav_explore()}</a>
+            <a
+              href={localizeHref("/timeline")}
+              class="no-underline {isNavActive('/timeline', basePath) ? 'text-ink-900 underline underline-offset-4 decoration-2' : 'text-ink-700 hover:text-ink-900'}"
+              aria-current={isNavActive('/timeline', basePath) ? 'page' : undefined}
+            >{m.nav_timeline()}</a>
             <a
               href={localizeHref("/glossary")}
-              class="no-underline {isNavActive('/glossary', basePath) ? 'text-white underline underline-offset-4 decoration-2' : 'text-white/60 hover:text-white'}"
+              class="no-underline {isNavActive('/glossary', basePath) ? 'text-ink-900 underline underline-offset-4 decoration-2' : 'text-ink-700 hover:text-ink-900'}"
               aria-current={isNavActive('/glossary', basePath) ? 'page' : undefined}
             >{m.nav_glossary()}</a>
             <a
               href={localizeHref("/methodology")}
-              class="no-underline {isNavActive('/methodology', basePath) ? 'text-white underline underline-offset-4 decoration-2' : 'text-white/60 hover:text-white'}"
+              class="no-underline {isNavActive('/methodology', basePath) ? 'text-ink-900 underline underline-offset-4 decoration-2' : 'text-ink-700 hover:text-ink-900'}"
               aria-current={isNavActive('/methodology', basePath) ? 'page' : undefined}
             >{m.nav_methodology()}</a>
             <a
               href={localizeHref("/about")}
-              class="no-underline {isNavActive('/about', basePath) ? 'text-white underline underline-offset-4 decoration-2' : 'text-white/60 hover:text-white'}"
+              class="no-underline {isNavActive('/about', basePath) ? 'text-ink-900 underline underline-offset-4 decoration-2' : 'text-ink-700 hover:text-ink-900'}"
               aria-current={isNavActive('/about', basePath) ? 'page' : undefined}
             >{m.nav_about()}</a>
           </nav>
-          <!-- Lang switcher — hidden on mobile; visible on desktop -->
-          <div class="ml-auto hidden items-center gap-2 border-l border-white/20 pl-5 text-xs uppercase tracking-wider sm:flex" aria-label={m.lang_toggle_aria()}>
-            {#each locales as l, i}
-              {#if i > 0}<span aria-hidden="true" class="text-white/30">·</span>{/if}
-              <a
-                href={hrefFor(l)}
-                on:click={() => rememberLocale(l)}
-                class={l === locale ? "font-semibold text-white no-underline" : "text-white/50 no-underline hover:text-white"}
-                aria-current={l === locale ? "true" : undefined}
-                hreflang={l}
-                rel="alternate"
-                data-sveltekit-reload
-              >{l === "en" ? m.lang_en() : m.lang_es()}</a>
-            {/each}
-          </div>
+          <LanguageSwitcher {hrefFor} extraClass="ml-auto hidden border-l border-paper-200 pl-5 sm:flex" />
         </div>
 
       </div>
@@ -356,38 +349,41 @@
 
   {#if isEs && !isVideoRoute}
     <p
-      class="mx-auto max-w-6xl px-4 py-2 text-xs italic text-slate-500 sm:px-6"
+      class="mx-auto max-w-6xl px-4 py-2 text-xs italic sm:px-6"
+      style="color: var(--color-ink-700);"
       role="note"
     >
       {m.source_material_notice()}
-      <a href={localizeHref("/methodology")} class="text-slate-600 underline">{m.nav_methodology()}</a>.
+      <a href={localizeHref("/methodology")} class="underline" style="color: var(--color-ink-900);">{m.nav_methodology()}</a>.
     </p>
   {/if}
 
   <slot />
 
   {#if !isVideoRoute}
-  <footer class="mt-16 border-t border-black/20 px-4 py-8 text-sm" style="background-color: #191919; color: rgba(255,255,255,0.6);">
+  <footer class="mt-16 border-t px-4 py-8 text-sm" style="background-color: var(--color-paper-100); border-color: var(--color-paper-200); color: var(--color-ink-700);">
     <div class="mx-auto max-w-6xl space-y-3 text-left sm:text-center">
       <p>
-        <span class="font-semibold text-white">{siteName}</span>
+        <span class="font-semibold" style="color: var(--color-ink-900);">{siteName}</span>
         {m.footer_tagline_after_name()}
       </p>
       <p>
-        <a href={localizeHref("/")} class="text-white/60 hover:text-white">{m.nav_map()}</a>
-        <span class="mx-1.5 text-white/30">·</span>
-        <a href={localizeHref("/glossary")} class="text-white/60 hover:text-white">{m.nav_glossary()}</a>
-        <span class="mx-1.5 text-white/30">·</span>
-        <a href={localizeHref("/methodology")} class="text-white/60 hover:text-white">{m.footer_methodology()}</a>
-        <span class="mx-1.5 text-white/30">·</span>
-        <a href={localizeHref("/about")} class="text-white/60 hover:text-white">{m.footer_about()}</a>
+        <a href={localizeHref("/states")} class="text-ink-700 hover:text-ink-900">{m.nav_explore()}</a>
+        <span class="mx-1.5 text-ink-500">·</span>
+        <a href={localizeHref("/timeline")} class="text-ink-700 hover:text-ink-900">{m.nav_timeline()}</a>
+        <span class="mx-1.5 text-ink-500">·</span>
+        <a href={localizeHref("/glossary")} class="text-ink-700 hover:text-ink-900">{m.nav_glossary()}</a>
+        <span class="mx-1.5 text-ink-500">·</span>
+        <a href={localizeHref("/methodology")} class="text-ink-700 hover:text-ink-900">{m.footer_methodology()}</a>
+        <span class="mx-1.5 text-ink-500">·</span>
+        <a href={localizeHref("/about")} class="text-ink-700 hover:text-ink-900">{m.footer_about()}</a>
       </p>
-      <p class="text-xs" style="color: rgba(255,255,255,0.35);">
+      <p class="text-xs" style="color: var(--color-ink-500);">
         {m.footer_credit_prefix()}
-        <a href="https://vsr.recoveredfactory.net/en" target="_blank" rel="noreferrer" class="hover:text-white/60" style="color: rgba(255,255,255,0.45);">{m.footer_credit_org_name()}</a>.
+        <a href="https://vsr.recoveredfactory.net/en" target="_blank" rel="noreferrer" class="hover:text-ink-900" style="color: var(--color-ink-700);">{m.footer_credit_org_name()}</a>.
         {m.footer_credit_suffix()}
       </p>
-      <p class="text-xs" style="color: rgba(255,255,255,0.3);">
+      <p class="text-xs" style="color: var(--color-ink-500);">
         {m.footer_build()} {buildStamp}
       </p>
     </div>
@@ -398,7 +394,7 @@
 {#if bannerVisible && !isVideoRoute}
   <div
     class="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between gap-4 px-4 py-4 sm:px-6"
-    style="background-color: #2c2c2c;"
+    style="background-color: var(--color-ink-900);"
     role="complementary"
     aria-label="Support Recovered Factory"
   >

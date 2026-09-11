@@ -6,6 +6,7 @@
   import { localizeHref, getLocale } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
   import NationalMap from "$lib/components/NationalMap.svelte";
+  import ExpandableMapFrame from "$lib/components/ExpandableMapFrame.svelte";
   import TrendCharts from "$lib/components/TrendCharts.svelte";
   import ModelLink from "$lib/components/ModelLink.svelte";
   import NewsAiWarning from "$lib/components/NewsAiWarning.svelte";
@@ -15,7 +16,7 @@
 
   export let data: PageData;
 
-  $: ({ abbr, stateName, agencies, stateMeta, snapshotDate, modelCounts, agencyTypeCounts, trendMonths, trend } = data);
+  $: ({ abbr, stateName, agencyCountRank, agencyCountRankTotal, agencies, stateMeta, snapshotDate, modelCounts, agencyTypeCounts, trendMonths, trend } = data);
 
   // Shared by <title>/description and the og:/twitter: tags so a share preview
   // can never drift from the page itself.
@@ -191,23 +192,26 @@
 
   <!-- ── Header ──────────────────────────────────────────────────────────────── -->
   <header>
-    <p class="text-xs font-semibold uppercase tracking-widest text-slate-400">
+    <p class="text-xs font-semibold uppercase tracking-widest text-ink-500">
       {m.state_eyebrow()}
     </p>
-    <h1 class="mt-1 text-2xl font-black text-slate-900 sm:text-3xl">
+    <h1 class="mt-1 text-2xl font-black text-ink-900 sm:text-3xl">
       {stateName}
     </h1>
-    <div class="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-slate-600">
+    <div class="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-ink-700">
       {#if SHOW_LEGISLATION_STANCE && data.news?.legislation}
         <LegislationBadge legislation={data.news.legislation} />
       {/if}
       <span>
-        <span class="font-semibold text-slate-900">{intFmt.format(agencies.length)}</span>
+        <span class="font-semibold text-ink-900">{intFmt.format(agencies.length)}</span>
         {agencies.length === 1 ? m.state_agency_one() : m.state_agency_other()}
+        {#if agencyCountRank > 0}
+          <span class="font-mono text-xs text-ink-500">{m.state_rank_of({ rank: agencyCountRank, total: agencyCountRankTotal })}</span>
+        {/if}
       </span>
       {#if localLePct !== null}
         <span>
-          <span class="font-semibold text-slate-900">{localLePct}%</span>
+          <span class="font-semibold text-ink-900">{localLePct}%</span>
           {m.state_local_le_pct()}
         </span>
       {/if}
@@ -215,41 +219,46 @@
         {#if modelCounts[model]}
           <span class="flex items-center gap-1.5">
             <span class="inline-block h-2 w-2 rounded-full" style="background: {MODEL_COLORS[model]};"></span>
-            <span class="font-semibold text-slate-900">{modelCounts[model]}</span>
+            <span class="font-semibold text-ink-900">{modelCounts[model]}</span>
             {MODEL_SHORT[model]}
           </span>
         {/if}
       {/each}
       {#if stateMeta?.population_served}
         <span>
-          <span class="font-semibold text-slate-900">{popFmt.format(stateMeta.population_served)}</span>
+          <span class="font-semibold text-ink-900">{popFmt.format(stateMeta.population_served)}</span>
           {m.state_covered()}
         </span>
       {/if}
     </div>
-    {#if snapshotDate}
-      <p class="mt-2 text-xs italic text-slate-400">
-        {m.state_as_of({ date: dateFmt.format(new Date(snapshotDate)) })}
-      </p>
-    {/if}
+    <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+      {#if snapshotDate}
+        <p class="text-xs italic text-ink-500">
+          {m.state_as_of({ date: dateFmt.format(new Date(snapshotDate)) })}
+        </p>
+      {/if}
+      <a
+        href={localizeHref(`/states?sel=state:${abbr}`)}
+        class="text-xs font-semibold text-ink-900 underline underline-offset-2 hover:text-ink-700"
+      >{m.state_compare_cta()} →</a>
+    </div>
   </header>
 
   <!-- ── Map ──────────────────────────────────────────────────────────────── -->
   <section class="mt-8">
-    <h2 class="font-serif text-lg font-bold text-slate-900 sm:text-xl">{m.state_map_heading()}</h2>
-    <div
-      class="relative mt-3 h-[260px] overflow-hidden rounded-lg border border-slate-200 shadow-sm sm:h-[320px]"
-      aria-label={m.state_map_aria({ state: stateName })}
-    >
-      <NationalMap
-        agencies={data.mapAgencies}
-        terminatedAgencies={[]}
-        {selectedStates}
-        focusSelected
-        focusPadding={24}
-        focusMaxZoom={7}
-        cursorIdx={null}
-      />
+    <h2 class="font-serif text-lg font-bold text-ink-900 sm:text-xl">{m.state_map_heading()}</h2>
+    <div class="relative mt-3">
+      <ExpandableMapFrame ariaLabel={m.state_map_aria({ state: stateName })}>
+        <NationalMap
+          agencies={data.mapAgencies}
+          terminatedAgencies={[]}
+          {selectedStates}
+          focusSelected
+          focusPadding={24}
+          focusMaxZoom={7}
+          cursorIdx={null}
+        />
+      </ExpandableMapFrame>
     </div>
   </section>
 
@@ -263,14 +272,14 @@
   <!-- ── News summary ─────────────────────────────────────────────────────── -->
   {#if data.news}
     <section id="news" class="mt-10" bind:this={newsSection}>
-      <h2 class="font-serif text-lg font-bold text-slate-900 sm:text-xl">
+      <h2 class="font-serif text-lg font-bold text-ink-900 sm:text-xl">
         {m.news_heading({ state: stateName })}
       </h2>
 
       <!-- Real last-built date, ahead of the summary (the stance pill rides up in
            the header's topline figures). -->
       <!-- Just the date — the PromptQL credit lives in the warning right below. -->
-      <p class="mt-1.5 text-xs italic text-slate-400">
+      <p class="mt-1.5 text-xs italic text-ink-500">
         {m.news_updated({ date: newsUpdatedDate })}
       </p>
 
@@ -328,10 +337,15 @@
             {#if data.news.articles?.length}
               <!-- Source-article list: fixed-height scroll, sticky header, newest
                    first (sorted server-side). Title links out (a gnews redirect
-                   unless it resolved); Link/Relevant/Found-Via columns dropped. -->
+                   unless it resolved); Link/Relevant/Found-Via columns dropped.
+                   Table at md:+; below that, one citation card per article —
+                   this data is citation-shaped (title/byline/tags), not
+                   agency-row-shaped, so it gets its own bespoke card rather
+                   than reusing the agency table's card layout. -->
               <div
                 id="news-articles"
-                class="news-articles mt-6 max-h-[28rem] overflow-auto rounded-lg border border-slate-200"
+                class="news-articles mt-6 hidden max-h-[28rem] overflow-auto rounded-lg border md:block"
+                style="border-color: var(--color-paper-200);"
               >
                 <table class="news-articles-table">
                   <thead>
@@ -362,6 +376,30 @@
                   </tbody>
                 </table>
               </div>
+
+              <div class="mt-6 grid max-h-[28rem] gap-2.5 overflow-auto md:hidden">
+                {#each data.news.articles as a}
+                  <div class="rounded-lg border p-3 text-xs" style="border-color: var(--color-paper-200); background: var(--color-paper-50);">
+                    <p class="text-sm font-medium leading-snug">
+                      {#if a.url}
+                        <a href={a.url} target="_blank" rel="noopener noreferrer" class="underline underline-offset-2" style="color: var(--color-ink-900); text-decoration-color: var(--color-ink-500);">{a.title}</a>
+                      {:else}
+                        <span style="color: var(--color-ink-900);">{a.title}</span>
+                      {/if}
+                    </p>
+                    <p class="mt-1" style="color: var(--color-ink-500);">
+                      {a.publication}<span class="mx-1">·</span>{fmtArticleDate(a.date)}
+                    </p>
+                    {#if a.agencies?.length || a.counties}
+                      <p class="mt-1.5" style="color: var(--color-ink-700);">
+                        {#if a.agencies?.length}{#each a.agencies as ag, i}{#if i > 0}, {/if}{#if ag.slug}<a href={localizeHref(`/agency/${ag.slug}`)} class="underline underline-offset-2" style="text-decoration-color: var(--color-ink-500);">{ag.name}</a>{:else}{ag.name}{/if}{/each}{/if}
+                        {#if a.agencies?.length && a.counties} · {/if}
+                        {a.counties ?? ""}
+                      </p>
+                    {/if}
+                  </div>
+                {/each}
+              </div>
             {/if}
           </div>
 
@@ -380,13 +418,13 @@
       <!-- Reuse license for the summary prose: CC BY 4.0. Always visible (even in
            the collapsed TL;DR view) so the terms travel with the summary. Covers
            our prose, not the cited third-party articles. -->
-      <p class="mt-6 max-w-prose text-xs italic text-slate-400">
+      <p class="mt-6 max-w-prose text-xs italic text-ink-500">
         {m.news_license_prefix()}
         <a
           href="https://creativecommons.org/licenses/by/4.0/"
           target="_blank"
           rel="license noopener noreferrer"
-          class="font-semibold underline decoration-slate-300 underline-offset-2 hover:text-slate-600 hover:decoration-slate-500"
+          class="font-semibold underline decoration-paper-200 underline-offset-2 hover:text-ink-700 hover:decoration-ink-500"
         >{m.news_license_link()}</a>
         {m.news_license_suffix()}
       </p>
@@ -396,7 +434,7 @@
   <!-- ── Agency list ──────────────────────────────────────────────────────── -->
   <section id="agencies" class="mt-10 scroll-mt-24">
     <div>
-      <h2 class="font-serif text-lg font-bold text-slate-900 sm:text-xl">
+      <h2 class="font-serif text-lg font-bold text-ink-900 sm:text-xl">
         {m.state_agencies_heading({ state: stateName })}
       </h2>
 
@@ -412,8 +450,8 @@
               aria-pressed={active}
               class="rounded border px-3 py-1.5 text-xs font-semibold transition-colors"
               style={active
-                ? `background: ${MODEL_COLORS[model]}; border-color: ${MODEL_COLORS[model]}; color: ${MODEL_TEXT_COLORS[model] ?? "#fff"};`
-                : `background: ${MODEL_COLORS[model]}22; border-color: ${MODEL_COLORS[model]}88; color: ${MODEL_DARK_COLORS[model] ?? "#334155"};`}
+                ? `background: ${MODEL_COLORS[model]}; border-color: ${MODEL_COLORS[model]}; color: ${MODEL_TEXT_COLORS[model] ?? "var(--color-ink-900)"};`
+                : `background: ${MODEL_COLORS[model]}22; border-color: ${MODEL_COLORS[model]}88; color: ${MODEL_DARK_COLORS[model] ?? "var(--color-ink-700)"};`}
             >
               {MODEL_SHORT[model]}
               <span class="ml-1 tabular-nums opacity-70">{modelCounts[model]}</span>
@@ -431,12 +469,12 @@
               on:click={() => toggleType(type)}
               aria-pressed={activeTypes.has(type)}
               class="rounded border px-3 py-1 text-xs transition-colors"
-              class:bg-slate-800={activeTypes.has(type)}
+              class:bg-ink-900={activeTypes.has(type)}
               class:text-white={activeTypes.has(type)}
-              class:border-slate-800={activeTypes.has(type)}
-              class:text-slate-600={!activeTypes.has(type)}
-              class:border-slate-300={!activeTypes.has(type)}
-              class:hover:border-slate-500={!activeTypes.has(type)}
+              class:border-ink-900={activeTypes.has(type)}
+              class:text-ink-700={!activeTypes.has(type)}
+              class:border-paper-200={!activeTypes.has(type)}
+              class:hover:border-ink-500={!activeTypes.has(type)}
             >
               {type}
               <span class="ml-1 tabular-nums opacity-60">{agencyTypeCounts[type]}</span>
@@ -448,17 +486,17 @@
       <!-- Search + MOA toggle row -->
       <div class="mt-3 flex flex-wrap items-center gap-3">
         <div class="relative flex-1" style="min-width: 200px; max-width: 360px;">
-          <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
           </svg>
           <input
             type="search"
             bind:value={searchQuery}
             placeholder={m.state_search_placeholder()}
-            class="w-full rounded-md border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            class="w-full rounded-md border border-paper-200 bg-paper-50 py-2 pl-9 pr-3 text-sm text-ink-900 placeholder:text-ink-500 focus:border-ink-700 focus:outline-none focus:ring-1 focus:ring-ink-700"
           />
         </div>
-        <label class="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+        <label class="flex cursor-pointer items-center gap-2 text-sm text-ink-700">
           <input type="checkbox" bind:checked={moaOnly} class="rounded" />
           {m.state_moa_only()}
         </label>
@@ -466,13 +504,13 @@
           <button
             type="button"
             on:click={clearFilters}
-            class="text-sm text-slate-500 underline underline-offset-2 hover:text-slate-900"
+            class="text-sm text-ink-500 underline underline-offset-2 hover:text-ink-900"
           >{m.home_search_clear_filters()}</button>
         {/if}
       </div>
 
       <!-- Result count -->
-      <p class="mt-3 text-sm text-slate-500">
+      <p class="mt-3 text-sm text-ink-500">
         {#if hasFilters}
           {m.state_result_count({ filtered: intFmt.format(filteredAgencies.length), total: intFmt.format(agencies.length) })}
         {:else}
@@ -482,52 +520,63 @@
 
       <!-- Table -->
       {#if sortedAgencies.length === 0}
-        <div class="mt-4 rounded-lg border border-slate-200 bg-white px-6 py-10 text-center">
-          <p class="text-sm font-medium text-slate-700">{m.state_no_match()}</p>
+        <div class="mt-4 rounded-lg border border-paper-200 bg-paper-50 px-6 py-10 text-center">
+          <p class="text-sm font-medium text-ink-700">{m.state_no_match()}</p>
           <button
             type="button"
             on:click={clearFilters}
-            class="mt-2 text-sm text-slate-500 underline underline-offset-2 hover:text-slate-900"
+            class="mt-2 text-sm text-ink-500 underline underline-offset-2 hover:text-ink-900"
           >{m.home_search_clear_filters()}</button>
         </div>
       {:else}
-        <div class="mt-4 overflow-x-auto rounded-lg border border-slate-200">
+        <!-- Table at md:+ (768px); below that, one card per agency (§ mobile
+             card fallback — kept as bespoke markup rather than routed through
+             ResponsiveDataTable, since that component pulls in virtualization
+             via svelte-virtuallists, which isn't warranted for a per-state
+             list — most states are well under a hundred agencies, and a fixed-
+             height virtualized scroll box would be worse UX here than the
+             page just flowing naturally). Sort-by-column only applies to the
+             table (card mode has no header row to click); both views read
+             from the same sortedAgencies array, so a sort chosen at md:+
+             carries over if the viewport narrows. -->
+        <div class="mt-4 hidden overflow-x-auto rounded-lg border md:block" style="border-color: var(--color-paper-200);">
           <table class="w-full text-sm">
             <thead>
-              <tr class="border-b border-slate-200 bg-slate-50 text-left">
-                <th class="px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 sm:px-4 sm:py-3" aria-sort={sortCol === "name" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
-                  <button type="button" on:click={() => setSort("name")} class="flex items-center gap-1 hover:text-slate-900">
+              <tr class="border-b text-left" style="border-color: var(--color-paper-200); background: var(--color-paper-100);">
+                <th class="px-3 py-2 text-xs font-bold uppercase tracking-wider sm:px-4 sm:py-3" style="color: var(--color-ink-700);" aria-sort={sortCol === "name" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
+                  <button type="button" on:click={() => setSort("name")} class="flex items-center gap-1 hover:text-ink-900">
                     {m.state_th_agency()} {sortIcon("name")}
                   </button>
                 </th>
-                <th class="px-2 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 sm:px-3 sm:py-3" aria-sort={sortCol === "type" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
-                  <button type="button" on:click={() => setSort("type")} class="flex items-center gap-1 hover:text-slate-900">
+                <th class="px-2 py-2 text-xs font-bold uppercase tracking-wider sm:px-3 sm:py-3" style="color: var(--color-ink-700);" aria-sort={sortCol === "type" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
+                  <button type="button" on:click={() => setSort("type")} class="flex items-center gap-1 hover:text-ink-900">
                     {m.state_th_type()} {sortIcon("type")}
                   </button>
                 </th>
-                <th class="px-2 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 sm:px-3 sm:py-3">{m.state_th_models()}</th>
-                <th class="px-2 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 sm:px-3 sm:py-3" aria-sort={sortCol === "signed" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
-                  <button type="button" on:click={() => setSort("signed")} class="flex items-center gap-1 hover:text-slate-900">
+                <th class="px-2 py-2 text-xs font-bold uppercase tracking-wider sm:px-3 sm:py-3" style="color: var(--color-ink-700);">{m.state_th_models()}</th>
+                <th class="px-2 py-2 text-xs font-bold uppercase tracking-wider sm:px-3 sm:py-3" style="color: var(--color-ink-700);" aria-sort={sortCol === "signed" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
+                  <button type="button" on:click={() => setSort("signed")} class="flex items-center gap-1 hover:text-ink-900">
                     {m.state_th_signed()} {sortIcon("signed")}
                   </button>
                 </th>
-                <th class="hidden px-2 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 sm:table-cell sm:px-3 sm:py-3">{m.state_th_population()}</th>
-                <th class="px-2 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 sm:px-3 sm:py-3">{m.state_th_moa()}</th>
+                <th class="px-2 py-2 text-xs font-bold uppercase tracking-wider sm:px-3 sm:py-3" style="color: var(--color-ink-700);">{m.state_th_population()}</th>
+                <th class="px-2 py-2 text-xs font-bold uppercase tracking-wider sm:px-3 sm:py-3" style="color: var(--color-ink-700);">{m.state_th_moa()}</th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-slate-100">
+            <tbody class="divide-y" style="border-color: var(--color-paper-100);">
               {#each sortedAgencies as agency (agency.slug)}
-                <tr class="hover:bg-slate-50">
+                <tr class="agency-row-hover">
                   <td class="px-3 py-2 sm:px-4 sm:py-3">
                     <a
                       href={localizeHref(`/agency/${agency.slug}`)}
-                      class="font-semibold leading-snug text-slate-900 no-underline hover:underline"
+                      class="font-semibold leading-snug no-underline hover:underline"
+                      style="color: var(--color-ink-900);"
                     >{agency.name}</a>
                     {#if agency.city || agency.county}
-                      <p class="text-xs text-slate-500">{[agency.city, agency.county].filter(Boolean).join(", ")}</p>
+                      <p class="text-xs" style="color: var(--color-ink-500);">{[agency.city, agency.county].filter(Boolean).join(", ")}</p>
                     {/if}
                   </td>
-                  <td class="px-2 py-2 text-xs text-slate-600 sm:px-3 sm:py-3">{agency.agency_type ?? "—"}</td>
+                  <td class="px-2 py-2 text-xs sm:px-3 sm:py-3" style="color: var(--color-ink-700);">{agency.agency_type ?? "—"}</td>
                   <td class="px-2 py-2 sm:px-3 sm:py-3">
                     <div class="flex flex-wrap gap-1">
                       {#each agency.models as model}
@@ -538,17 +587,17 @@
                       {/each}
                     </div>
                   </td>
-                  <td class="px-2 py-2 tabular-nums text-slate-600 sm:px-3 sm:py-3">
+                  <td class="px-2 py-2 tabular-nums sm:px-3 sm:py-3" style="color: var(--color-ink-700);">
                     {agency.signed_date ? agency.signed_date.slice(0, 4) : "—"}
                   </td>
-                  <td class="hidden px-2 py-2 tabular-nums text-slate-600 sm:table-cell sm:px-3 sm:py-3">
+                  <td class="px-2 py-2 tabular-nums sm:px-3 sm:py-3" style="color: var(--color-ink-700);">
                     {agency.population ? popFmt.format(agency.population) : "—"}
                   </td>
                   <td class="px-2 py-2 sm:px-3 sm:py-3">
                     {#if agency.moa_url}
                       <a href={agency.moa_url} target="_blank" rel="noreferrer" class="text-xs font-semibold no-underline hover:underline">↗</a>
                     {:else}
-                      <span class="text-slate-300 text-xs">—</span>
+                      <span class="text-xs" style="color: var(--color-paper-200);">—</span>
                     {/if}
                   </td>
                 </tr>
@@ -556,21 +605,61 @@
             </tbody>
           </table>
         </div>
+
+        <div class="mt-4 grid gap-3 md:hidden">
+          {#each sortedAgencies as agency (agency.slug)}
+            <div class="rounded-lg border p-3" style="border-color: var(--color-paper-200); background: var(--color-paper-50);">
+              <a
+                href={localizeHref(`/agency/${agency.slug}`)}
+                class="font-semibold leading-snug no-underline hover:underline"
+                style="color: var(--color-ink-900);"
+              >{agency.name}</a>
+              {#if agency.city || agency.county}
+                <p class="text-xs" style="color: var(--color-ink-500);">{[agency.city, agency.county].filter(Boolean).join(", ")}</p>
+              {/if}
+              <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs" style="color: var(--color-ink-700);">
+                <div class="flex flex-wrap gap-1">
+                  {#each agency.models as model}
+                    <span class="model-badge model-badge--{MODEL_SLUG[model]}">
+                      <ModelLink {model} underline={false}>{MODEL_MINI[model] ?? model}</ModelLink>
+                    </span>
+                  {/each}
+                </div>
+                {#if agency.agency_type}
+                  <span>{agency.agency_type}</span>
+                {/if}
+                <span>
+                  <span class="opacity-60">{m.state_th_signed()}</span>
+                  <span class="tabular-nums font-medium">{agency.signed_date ? agency.signed_date.slice(0, 4) : "—"}</span>
+                </span>
+                {#if agency.population}
+                  <span>
+                    <span class="opacity-60">{m.state_th_population()}</span>
+                    <span class="tabular-nums font-medium">{popFmt.format(agency.population)}</span>
+                  </span>
+                {/if}
+                {#if agency.moa_url}
+                  <a href={agency.moa_url} target="_blank" rel="noreferrer" class="font-semibold no-underline hover:underline">{m.state_th_moa()} ↗</a>
+                {/if}
+              </div>
+            </div>
+          {/each}
+        </div>
       {/if}
       {:else}
         <!-- Non-participating state: no signed 287(g) agreement on the current
              roster. A deliberately-empty state (the "why" lives in the news
              summary above when present) — not a data-missing error. -->
-        <div class="mt-4 rounded-lg border border-slate-200 bg-white px-6 py-10 text-center">
-          <p class="text-base font-semibold text-slate-800">
+        <div class="mt-4 rounded-lg border border-paper-200 bg-paper-50 px-6 py-10 text-center">
+          <p class="text-base font-semibold text-ink-900">
             {m.state_no_agencies_title({ state: stateName })}
           </p>
-          <p class="mx-auto mt-2 max-w-prose text-sm leading-relaxed text-slate-600">
+          <p class="mx-auto mt-2 max-w-prose text-sm leading-relaxed text-ink-700">
             {m.state_no_agencies_body({ state: stateName })}
           </p>
           <a
             href={localizeHref("/")}
-            class="mt-4 inline-block text-sm font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900"
+            class="mt-4 inline-block text-sm font-medium text-ink-900 underline underline-offset-2 hover:text-ink-700"
           >{m.state_no_agencies_cta()}</a>
         </div>
       {/if}
@@ -578,3 +667,9 @@
   </section>
 
 </main>
+
+<style>
+  .agency-row-hover:hover {
+    background: var(--color-paper-100);
+  }
+</style>

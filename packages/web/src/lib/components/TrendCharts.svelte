@@ -83,10 +83,10 @@
   $: totalAgencies = scoped.length;
   // Bold figures composed into the translated summary line (rendered via {@html}).
   $: agreementsPhrase = (totalAgreements === 1 ? m.trend_count_agreements_one : m.trend_count_agreements_other)({
-    count: `<span class="font-semibold text-slate-900">${nf.format(totalAgreements)}</span>`,
+    count: `<span class="font-semibold" style="color: var(--color-ink-900);">${nf.format(totalAgreements)}</span>`,
   });
   $: agenciesPhrase = (totalAgencies === 1 ? m.trend_count_agencies_one : m.trend_count_agencies_other)({
-    count: `<span class="font-semibold text-slate-900">${nf.format(totalAgencies)}</span>`,
+    count: `<span class="font-semibold" style="color: var(--color-ink-900);">${nf.format(totalAgencies)}</span>`,
   });
   $: summaryHtml = hideSelector
     ? m.trend_summary_plain({ agreements: agreementsPhrase })
@@ -180,19 +180,20 @@
   })();
 </script>
 
-<section class={embedded ? "" : "border-b border-slate-200 bg-white px-4 py-10 sm:px-6 sm:py-12"}>
+<section class={embedded ? "" : "border-b px-4 py-16 sm:px-6 sm:py-20"} style={embedded ? "" : "border-color: var(--color-paper-200); background: var(--color-paper-50);"}>
   <div class={embedded ? "" : "mx-auto max-w-[720px]"}>
     <!-- Headline stays plain text; the scope control is an ordinary select on the header row -->
     <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
-      <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">
+      <h2 class="font-serif text-[length:var(--text-h2)] font-bold" style="color: var(--color-ink-900);">
         {m.trend_heading()}
       </h2>
       {#if !hideSelector}
-      <label class="flex items-center gap-2 text-sm text-slate-600">
+      <label class="flex items-center gap-2 text-sm" style="color: var(--color-ink-700);">
         <span>{m.trend_scope_label()}</span>
         <select
           bind:value={selectedState}
-          class="cursor-pointer rounded border border-slate-300 bg-white px-2 py-1 text-sm text-slate-800 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-300"
+          class="cursor-pointer rounded border px-2 py-1 text-sm focus:outline-none focus:ring-1"
+          style="border-color: var(--color-paper-200); background: var(--color-paper-50); color: var(--color-ink-900);"
         >
           <option value="">{m.trend_scope_national({ count: nf.format(agencies.length) })}</option>
           {#each stateOptions as st}
@@ -202,20 +203,20 @@
       </label>
       {/if}
     </div>
-    <p class="mt-1 text-sm text-slate-600">
+    <p class="mt-1 text-sm" style="color: var(--color-ink-700);">
       {hideSelector ? m.trend_subtitle_plain() : m.trend_subtitle_scoped({ scope: scopeLabel })}
     </p>
     <!-- Distinct figures: an agency can hold more than one model -->
-    <p class="mt-2 text-sm text-slate-500">{@html summaryHtml}</p>
+    <p class="mt-2 text-sm" style="color: var(--color-ink-500);">{@html summaryHtml}</p>
 
     <!-- Legend (full names; mini codes match the in-chart labels) -->
     <div class="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-sm">
       {#each series as s}
-        <span class="inline-flex items-center gap-1.5 text-slate-700">
+        <span class="inline-flex items-center gap-1.5" style="color: var(--color-ink-700);">
           <span class="inline-block h-2.5 w-2.5 rounded-sm" style="background: {MODEL_COLORS[s.model]};"></span>
           <ModelLink model={s.model} />
-          <span class="text-slate-400">{MODEL_MINI[s.model] ?? ""}</span>
-          <span class="font-semibold text-slate-900">{nf.format(s.final)}</span>
+          <span style="color: var(--color-ink-500);">{MODEL_MINI[s.model] ?? ""}</span>
+          <span class="font-semibold" style="color: var(--color-ink-900);">{nf.format(s.final)}</span>
         </span>
       {/each}
     </div>
@@ -225,11 +226,11 @@
       <svg viewBox="0 0 {W} {H}" class="block w-full" role="img" aria-label={m.trend_aria_label()}>
         <!-- simple numeric y-axis: a few round ticks + faint gridlines -->
         {#each yTicks as t}
-          <line x1={PAD.l} y1={yAt(t)} x2={W - PAD.r} y2={yAt(t)} stroke="#eef2f6" />
-          <text x={PAD.l - 6} y={yAt(t) + 3} text-anchor="end" class="fill-slate-400" style="font-size: 11px;">{nf.format(t)}</text>
+          <line x1={PAD.l} y1={yAt(t)} x2={W - PAD.r} y2={yAt(t)} stroke="var(--color-paper-200)" />
+          <text x={PAD.l - 6} y={yAt(t) + 3} text-anchor="end" style="font-size: 11px; fill: var(--color-ink-500);">{nf.format(t)}</text>
         {/each}
         {#each ticks as t, i}
-          <text x={xAt(t)} y={H - 8} text-anchor={i === 0 ? "start" : i === ticks.length - 1 ? "end" : "middle"} class="fill-slate-400" style="font-size: 11px;">{monthLabelShort(t)}</text>
+          <text x={xAt(t)} y={H - 8} text-anchor={i === 0 ? "start" : i === ticks.length - 1 ? "end" : "middle"} style="font-size: 11px; fill: var(--color-ink-500);">{monthLabelShort(t)}</text>
         {/each}
 
         {#each series as s}
@@ -248,7 +249,7 @@
     </div>
     {/if}
 
-    <p class="mt-3 text-xs italic text-slate-400">
+    <p class="mt-3 text-xs italic" style="color: var(--color-ink-500);">
       {m.trend_experimental_note()}
     </p>
   </div>
