@@ -112,14 +112,11 @@
   const MISMATCH_KEY = "rf-lang-mismatch-dismissed-v1";
   let mismatchTarget: Locale | null = null;
 
-  // Time-limited promo strip for the recoveredfactory.net April-surge analysis.
-  // Auto-hides sitewide once EXPIRES passes (~10-day run) — bump/clear the date
-  // to change the run. Session-dismissible like the conversion banner. Both
-  // locales point at the EN post until the Spanish translation lands.
-  const ANALYSIS_PROMO_EXPIRES = new Date("2026-08-02T00:00:00Z");
-  const ANALYSIS_PROMO_HREF = "https://recoveredfactory.net/en/287g-network-expansion";
-  const ANALYSIS_PROMO_KEY = "rf-analysis-promo-dismissed-v1";
-  let analysisPromoVisible = false;
+  // No expiry date on purpose: the previous promo's timer lapsed silently and
+  // left this slot dark for a month.
+  const DAYBOOK_PROMO_KEY = "rf-daybook-promo-dismissed-v1";
+  $: daybookPromoHref = `https://immigrationdaybook.com/${locale}`;
+  let daybookPromoVisible = false;
 
   onMount(() => {
     bannerVisible = !sessionStorage.getItem(BANNER_KEY);
@@ -131,9 +128,8 @@
       trackConversion(`conversion_impression_${conversionVariant}`);
     }
 
-    analysisPromoVisible =
-      new Date() < ANALYSIS_PROMO_EXPIRES && !sessionStorage.getItem(ANALYSIS_PROMO_KEY);
-    if (analysisPromoVisible) trackConversion("analysis_promo_impression");
+    daybookPromoVisible = !sessionStorage.getItem(DAYBOOK_PROMO_KEY);
+    if (daybookPromoVisible) trackConversion("daybook_promo_impression");
 
     if (localStorage.getItem(MISMATCH_KEY)) return;
     if (hasLocaleCookie()) return; // user has already expressed a preference
@@ -159,10 +155,10 @@
     } catch {}
   }
 
-  function dismissAnalysisPromo() {
-    analysisPromoVisible = false;
+  function dismissDaybookPromo() {
+    daybookPromoVisible = false;
     try {
-      sessionStorage.setItem(ANALYSIS_PROMO_KEY, "1");
+      sessionStorage.setItem(DAYBOOK_PROMO_KEY, "1");
     } catch {}
   }
 </script>
@@ -242,28 +238,28 @@
       {/if}
     </div>
   {/if}
-  {#if analysisPromoVisible && !isVideoRoute}
+  {#if daybookPromoVisible && !isVideoRoute}
     <div
       class="flex items-center justify-center gap-2 px-4 py-2 text-center text-sm text-white sm:gap-3"
       style="background-color: #2c2c2c;"
       role="region"
-      aria-label={m.analysis_promo_aria()}
+      aria-label={m.daybook_promo_aria()}
     >
       <a
-        href={ANALYSIS_PROMO_HREF}
+        href={daybookPromoHref}
         target="_blank"
         rel="noreferrer"
-        on:click={() => trackConversion("analysis_promo_click")}
+        on:click={() => trackConversion("daybook_promo_click")}
         class="text-white no-underline hover:no-underline"
       >
-        <span class="text-white/85">{m.analysis_promo_text()}</span>
+        <span class="text-white/85">{m.daybook_promo_text()}</span>
         <span
           class="ml-1.5 whitespace-nowrap font-semibold underline decoration-2 underline-offset-4"
           style="text-decoration-color: #BE6079;"
-        >{m.analysis_promo_cta()} →</span>
+        >{m.daybook_promo_cta()} →</span>
       </a>
       <button
-        on:click={dismissAnalysisPromo}
+        on:click={dismissDaybookPromo}
         aria-label={m.rf_banner_dismiss()}
         class="flex h-6 w-6 shrink-0 items-center justify-center rounded text-white/50 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
       >
