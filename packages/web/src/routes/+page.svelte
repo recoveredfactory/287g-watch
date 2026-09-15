@@ -121,10 +121,6 @@
     return d.toISOString().slice(0, 10);
   })() : null;
 
-  $: activityWindowEndLabel = latestActivityDate
-    ? new Intl.DateTimeFormat(getLocale() === "es" ? "es-MX" : "en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" }).format(new Date(`${latestActivityDate}T00:00:00Z`))
-    : "";
-
   type StateActivity = { abbr: string; net: number };
   $: mostActiveStates = ((): StateActivity[] => {
     if (!latestActivityDate || !activityWindowStart) return [];
@@ -312,26 +308,69 @@
        Moved above the map and enlarged per feedback: "blow this up, and put
        this all above the map." -->
   {#if mostActiveStates.length > 0}
-    <section class="border-b px-4 py-10 sm:px-6 sm:py-12" style="border-color: var(--color-paper-200); background: var(--color-paper-100);">
+    <section class="border-b px-4 py-6 sm:px-6 sm:py-8" style="border-color: var(--color-paper-200); background: var(--color-paper-100);">
       <div class="mx-auto max-w-6xl">
-        <p class="text-xs font-semibold uppercase tracking-widest" style="color: var(--color-ink-500);">{m.home_active_heading()}</p>
-        <p class="mt-1 text-sm sm:text-base" style="color: var(--color-ink-700);">{m.home_active_body_window({ date: activityWindowEndLabel })}</p>
-        <div class="mt-5 grid gap-4 sm:grid-cols-3">
+        <p class="text-sm font-semibold sm:text-base" style="color: var(--color-ink-900);">{m.home_active_heading()}</p>
+        <div class="mt-3 grid gap-2.5 sm:grid-cols-3">
           {#each mostActiveStates as s, i (s.abbr)}
             <a
               href={localizeHref(`/state/${s.abbr.toLowerCase()}`)}
-              class="block rounded-lg border p-5 no-underline shadow-sm transition hover:shadow-md"
+              class="flex items-center justify-between gap-3 rounded-md border px-3 py-2 no-underline transition hover:shadow-sm"
               style="border-color: var(--color-paper-200); background: var(--color-paper-50);"
             >
-              <p class="font-mono text-xs tabular-nums" style="color: var(--color-ink-500);">#{i + 1}</p>
-              <p class="mt-1 font-serif text-xl font-bold sm:text-2xl" style="color: var(--color-ink-900);">{STATE_NAMES[s.abbr] ?? s.abbr}</p>
-              <p class="mt-2 font-mono text-2xl font-black tabular-nums sm:text-3xl" style="color: #BE6079;">{m.home_active_delta({ count: s.net })}</p>
+              <span class="flex items-center gap-2 min-w-0">
+                <span class="font-mono text-xs tabular-nums" style="color: var(--color-ink-500);">#{i + 1}</span>
+                <span class="truncate text-sm font-semibold" style="color: var(--color-ink-900);">{STATE_NAMES[s.abbr] ?? s.abbr}</span>
+              </span>
+              <span class="shrink-0 font-mono text-sm font-bold tabular-nums" style="color: #BE6079;">{m.home_active_delta({ count: s.net })}</span>
             </a>
           {/each}
         </div>
       </div>
     </section>
   {/if}
+
+  <!-- ── What each model authorizes ───────────────────────────────────────── -->
+  <section class="border-b px-4 py-16 sm:px-6 sm:py-20" style="border-color: var(--color-paper-200); background: var(--color-paper-50);">
+    <div class="mx-auto max-w-6xl">
+      <h2 class="font-serif text-[length:var(--text-h2)] font-bold" style="color: var(--color-ink-900);">
+        {m.home_models_heading()}
+      </h2>
+      <div class="mt-8 grid items-stretch gap-5 sm:grid-cols-3">
+        {#each ALL_MODELS as model}
+          {@const desc = modelDesc(model)}
+          <a
+            href={localizeHref(`/model/${MODEL_SLUG[model]}`)}
+            class="group flex flex-col overflow-hidden border no-underline shadow-sm transition hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+            style="border-color: {MODEL_COLORS[model]};"
+          >
+            <div class="px-[1.1rem] py-[0.85rem]" style="background: {MODEL_COLORS[model]};">
+              <h3
+                class="font-serif text-base font-bold tracking-[0.01em]"
+                style="color: {MODEL_TEXT_COLORS[model] ?? '#ffffff'};"
+              >{model.replace(/ Model$/, '')}</h3>
+            </div>
+            <div class="flex flex-1 flex-col gap-3 px-[1.1rem] py-4" style="background: {MODEL_COLORS[model]}28;">
+              <p class="text-sm leading-relaxed" style="color: var(--color-ink-700);">{@html desc.short}</p>
+              <div class="mt-auto flex items-end justify-between gap-2">
+                <span
+                  class="text-sm font-semibold group-hover:underline"
+                  style="color: {MODEL_DARK_COLORS[model] ?? '#334155'};"
+                >Learn more →</span>
+                {#if data.modelCounts[model]}
+                  <p
+                    class="text-right font-mono text-xs"
+                    style="color: var(--color-ink-500);"
+                    title={data.snapshotDate ? `As of ${data.snapshotDate}` : undefined}
+                  >{intFmt.format(data.modelCounts[model])} agencies</p>
+                {/if}
+              </div>
+            </div>
+          </a>
+        {/each}
+      </div>
+    </div>
+  </section>
 
   <!-- ── Map ──────────────────────────────────────────────────────────────── -->
   <section class="border-b pt-12 sm:pt-16" style="border-color: var(--color-paper-200); background: var(--color-paper-100);">
@@ -483,48 +522,6 @@
           class="mt-4 inline-flex w-fit items-center gap-1 text-sm font-semibold no-underline hover:underline"
           style="color: var(--color-ink-900);"
         >{m.home_browse_cta_link()} →</a>
-      </div>
-    </div>
-  </section>
-
-  <!-- ── What each model authorizes ───────────────────────────────────────── -->
-  <section class="border-b px-4 py-16 sm:px-6 sm:py-20" style="border-color: var(--color-paper-200); background: var(--color-paper-50);">
-    <div class="mx-auto max-w-6xl">
-      <h2 class="font-serif text-[length:var(--text-h2)] font-bold" style="color: var(--color-ink-900);">
-        {m.home_models_heading()}
-      </h2>
-      <div class="mt-8 grid items-stretch gap-5 sm:grid-cols-3">
-        {#each ALL_MODELS as model}
-          {@const desc = modelDesc(model)}
-          <a
-            href={localizeHref(`/model/${MODEL_SLUG[model]}`)}
-            class="group flex flex-col overflow-hidden border no-underline shadow-sm transition hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
-            style="border-color: {MODEL_COLORS[model]};"
-          >
-            <div class="px-[1.1rem] py-[0.85rem]" style="background: {MODEL_COLORS[model]};">
-              <h3
-                class="font-serif text-base font-bold tracking-[0.01em]"
-                style="color: {MODEL_TEXT_COLORS[model] ?? '#ffffff'};"
-              >{model.replace(/ Model$/, '')}</h3>
-            </div>
-            <div class="flex flex-1 flex-col gap-3 px-[1.1rem] py-4" style="background: {MODEL_COLORS[model]}28;">
-              <p class="text-sm leading-relaxed" style="color: var(--color-ink-700);">{@html desc.short}</p>
-              <div class="mt-auto flex items-end justify-between gap-2">
-                <span
-                  class="text-sm font-semibold group-hover:underline"
-                  style="color: {MODEL_DARK_COLORS[model] ?? '#334155'};"
-                >Learn more →</span>
-                {#if data.modelCounts[model]}
-                  <p
-                    class="text-right font-mono text-xs"
-                    style="color: var(--color-ink-500);"
-                    title={data.snapshotDate ? `As of ${data.snapshotDate}` : undefined}
-                  >{intFmt.format(data.modelCounts[model])} agencies</p>
-                {/if}
-              </div>
-            </div>
-          </a>
-        {/each}
       </div>
     </div>
   </section>
