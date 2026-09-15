@@ -134,7 +134,7 @@
         step="0.05"
         value={cursorIdx}
         on:input={onSlide}
-        aria-label="Scrub to month"
+        aria-label={m.scrub_to_month_aria()}
         class="h-2.5 w-full cursor-pointer appearance-none rounded-full bg-paper-200 accent-ink-900"
       />
     </div>

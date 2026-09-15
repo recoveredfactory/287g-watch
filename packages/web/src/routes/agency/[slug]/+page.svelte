@@ -270,7 +270,7 @@
 
 <main id="main-content" class="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
   <!-- Breadcrumb -->
-  <nav class="text-sm text-ink-700" aria-label="Breadcrumb">
+  <nav class="text-sm text-ink-700" aria-label={m.breadcrumb_aria()}>
     <a href={localizeHref("/")} class="no-underline hover:underline">{m.agency_breadcrumb_home()}</a>
     {#if agency.state}
       <span class="mx-1.5">›</span>
@@ -372,7 +372,7 @@
   <!-- Jurisdiction -->
   {#if agency.city || agency.county || agency.state}
     <div class="mt-6 rounded border border-paper-200 bg-paper-100 px-4 py-3">
-      <p class="text-sm font-semibold uppercase tracking-wider text-ink-700">Jurisdiction</p>
+      <p class="text-sm font-semibold uppercase tracking-wider text-ink-700">{m.agency_jurisdiction_heading()}</p>
       <p class="mt-1 font-semibold text-ink-900">
         {#if agency.city}
           {agency.city}{#if agency.county || agency.state},{/if}
@@ -390,7 +390,7 @@
           <span class="ml-1 text-sm font-normal text-ink-700">({agency.county} County)</span>
         {/if}
       </p>
-      <p class="mt-1 text-xs italic text-ink-500">Coverage may overlap with county, state, or neighboring agencies.</p>
+      <p class="mt-1 text-xs italic text-ink-500">{m.agency_jurisdiction_note()}</p>
     </div>
   {/if}
 

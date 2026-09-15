@@ -436,18 +436,18 @@
             type="button"
             on:click={restartTimeline}
             class="count-card pointer-events-auto"
-            aria-label="Replay the 287(g) growth animation from January 2025"
-            title="Replay from January 2025"
+            aria-label={m.home_overlay_replay_aria()}
+            title={m.home_overlay_replay_title()}
           >
             <div class="count-stats">
               <div class="count-stat">
                 <div class="count-number">{intFmt.format(Math.round($displayedCount))}</div>
-                <div class="count-label">agencies</div>
+                <div class="count-label">{m.home_overlay_agencies_label()}</div>
               </div>
               <div class="count-divider" aria-hidden="true"></div>
               <div class="count-stat">
                 <div class="count-number">{popFmtOverlay.format(Math.max(0, $displayedPop))}</div>
-                <div class="count-label">Pop. covered</div>
+                <div class="count-label">{m.home_overlay_pop_label()}</div>
               </div>
             </div>
           </button>

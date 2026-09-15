@@ -130,7 +130,7 @@
     <div
       class="sticky top-0 z-[60] flex items-center justify-center gap-2 bg-red-600 px-4 py-1 text-center text-xs font-semibold uppercase tracking-wider text-white"
       role="alert"
-      aria-label="Non-production environment warning"
+      aria-label={m.staging_banner_aria()}
       style="height: var(--staging-banner-height);"
     >
       <span>{m.staging_banner()}</span>

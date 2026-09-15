@@ -2,6 +2,7 @@
   import type { ModelPageData } from "./+page.server";
   import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_DARK_COLORS, MODEL_SLUG } from "$lib/colors";
   import { localizeHref } from "$lib/paraglide/runtime";
+  import { m } from "$lib/paraglide/messages.js";
   import { ogImage } from "$lib/ogImage";
   import Gloss from "$lib/components/Gloss.svelte";
   import { termSlug, TERMS_MAP } from "$lib/glossary/terms";
@@ -58,34 +59,34 @@
 <main id="main-content" class="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
 
   <!-- Breadcrumb -->
-  <nav class="text-sm text-ink-500" aria-label="Breadcrumb">
-    <a href={localizeHref("/")} class="no-underline hover:underline">Home</a>
+  <nav class="text-sm text-ink-500" aria-label={m.breadcrumb_aria()}>
+    <a href={localizeHref("/")} class="no-underline hover:underline">{m.agency_breadcrumb_home()}</a>
     <span class="mx-1.5">›</span>
     <span>{modelName}</span>
   </nav>
 
   <!-- Header -->
   <div class="mt-6">
-    <p class="text-xs font-semibold uppercase tracking-widest text-ink-500">287(g) Agreement Type</p>
+    <p class="text-xs font-semibold uppercase tracking-widest text-ink-500">{m.model_page_eyebrow()}</p>
     <h1 class="mt-1 text-3xl font-black leading-tight sm:text-4xl" style="color: {darkColor};">
       {modelName}
     </h1>
     <p class="mt-1.5 text-sm text-ink-500">
-      {intFmt.format(agencies.length)} participating agencies
-      {#if dateFmt}<span class="italic">· as of {dateFmt}</span>{/if}
+      {m.model_page_participating_count({ count: intFmt.format(agencies.length) })}
+      {#if dateFmt}<span class="italic">· {m.model_page_as_of({ date: dateFmt })}</span>{/if}
     </p>
     {#if glossaryEntryHref}
       <a
         href={localizeHref(glossaryEntryHref)}
         class="mt-2 inline-block text-xs font-semibold text-ink-500 underline underline-offset-2 hover:text-ink-900"
-      >See in glossary →</a>
+      >{m.model_page_see_glossary()} →</a>
     {/if}
   </div>
 
   {#if content}
     <!-- Overview -->
     <section class="mt-8">
-      <h2 class="font-serif text-xl font-bold text-ink-900">Overview</h2>
+      <h2 class="font-serif text-xl font-bold text-ink-900">{m.model_page_overview_heading()}</h2>
       <div class="mt-3 max-w-2xl space-y-3">
         {#each content.overviewParas as para}
           <p class="leading-relaxed text-ink-700"><Gloss text={para} {seen} /></p>
@@ -94,12 +95,12 @@
 
       {#if content.keyDistinction}
         <p class="mt-4 max-w-2xl rounded-lg border border-paper-200 bg-paper-100 px-4 py-3 text-sm leading-relaxed text-ink-700">
-          <strong class="font-semibold text-ink-900">Key distinction:</strong> <Gloss text={content.keyDistinction} {seen} />
+          <strong class="font-semibold text-ink-900">{m.model_page_key_distinction_label()}</strong> <Gloss text={content.keyDistinction} {seen} />
         </p>
       {/if}
 
       <div class="mt-5">
-        <p class="text-sm font-semibold uppercase tracking-wider text-ink-500">Officers can</p>
+        <p class="text-sm font-semibold uppercase tracking-wider text-ink-500">{m.model_page_officers_can_heading()}</p>
         <ul class="mt-2 space-y-1">
           {#each content.officerCan as item}
             <li class="flex items-start gap-2 text-sm text-ink-700">
@@ -113,21 +114,21 @@
 
     <!-- Training -->
     <section class="mt-8 border-t border-paper-200 pt-8">
-      <h2 class="font-serif text-xl font-bold text-ink-900">Training requirements</h2>
+      <h2 class="font-serif text-xl font-bold text-ink-900">{m.model_page_training_heading()}</h2>
       <p class="mt-2 max-w-2xl leading-relaxed text-ink-700"><Gloss text={content.trainingText} {seen} /></p>
     </section>
 
     <!-- Background (JEM only — includes dynamic "as of" line) -->
     {#if content.backgroundParas}
       <section class="mt-8 border-t border-paper-200 pt-8">
-        <h2 class="font-serif text-xl font-bold text-ink-900">Background</h2>
+        <h2 class="font-serif text-xl font-bold text-ink-900">{m.model_page_background_heading()}</h2>
         <div class="mt-3 max-w-2xl space-y-3">
           {#each content.backgroundParas as para}
             <p class="leading-relaxed text-ink-700"><Gloss text={para} {seen} /></p>
           {/each}
           {#if dateFmt}
             <p class="leading-relaxed text-ink-700">
-              As of {dateFmt}, {intFmt.format(agencies.length)} agencies in {stateCount} states have signed this type of agreement.
+              {m.model_page_background_as_of({ date: dateFmt, count: intFmt.format(agencies.length), states: stateCount })}
             </p>
           {/if}
         </div>
@@ -137,7 +138,7 @@
     <!-- Major points -->
     {#if content.majorPoints.length > 0}
       <section class="mt-8 border-t border-paper-200 pt-8">
-        <h2 class="font-serif text-xl font-bold text-ink-900">Key findings &amp; history</h2>
+        <h2 class="font-serif text-xl font-bold text-ink-900">{m.model_page_findings_heading()}</h2>
         <dl class="mt-4 space-y-5">
           {#each content.majorPoints as point}
             <div>
@@ -152,7 +153,7 @@
 
   <!-- Program-wide oversight findings -->
   <section class="mt-8 border-t border-paper-200 pt-8">
-    <h2 class="font-serif text-xl font-bold text-ink-900">Program-wide oversight findings</h2>
+    <h2 class="font-serif text-xl font-bold text-ink-900">{m.model_page_oversight_heading()}</h2>
     <ul class="mt-4 space-y-4">
       {#each PROGRAM_FINDINGS as finding}
         <li class="flex gap-3">
@@ -166,7 +167,7 @@
       <li class="flex gap-3">
         <span class="mt-0.5 shrink-0 font-bold" style="color: {bgColor};">▪</span>
         <p class="text-sm leading-relaxed text-ink-700">
-          <strong class="font-semibold" style="color: {darkColor};">Detainer authority (legally contested):</strong>
+          <strong class="font-semibold" style="color: {darkColor};">{m.model_page_detainer_label()}</strong>
           {@html DETAINER_NOTE}
         </p>
       </li>
@@ -184,7 +185,7 @@
        fit the abstraction, which is more convoluted than this bespoke
        treatment for a ~6-row static table. -->
   <section class="mt-8 border-t border-paper-200 pt-8">
-    <h2 class="font-serif text-xl font-bold text-ink-900">How the three models compare</h2>
+    <h2 class="font-serif text-xl font-bold text-ink-900">{m.model_page_compare_heading()}</h2>
 
     <div class="mt-4 hidden overflow-x-auto rounded-lg border border-paper-200 md:block">
       <table class="w-full min-w-[480px] text-sm">
@@ -273,7 +274,7 @@
   <!-- See also -->
   {#if seeAlso.length > 0}
     <div class="mt-8 border-t border-paper-200 pt-6">
-      <p class="text-sm font-semibold uppercase tracking-wider text-ink-500">See also</p>
+      <p class="text-sm font-semibold uppercase tracking-wider text-ink-500">{m.model_page_see_also_heading()}</p>
       <div class="mt-2 flex flex-wrap gap-2">
         {#each seeAlso as term}
           <a
@@ -287,7 +288,7 @@
 
   <!-- Primary sources -->
   <section class="mt-12 border-t border-paper-200 pt-8">
-    <h2 class="font-serif text-xl font-bold text-ink-900">Primary sources</h2>
+    <h2 class="font-serif text-xl font-bold text-ink-900">{m.model_page_sources_heading()}</h2>
     <ul class="mt-4 space-y-2">
       {#each PRIMARY_SOURCES as source}
         <li class="text-sm">
