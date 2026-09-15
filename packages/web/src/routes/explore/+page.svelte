@@ -364,11 +364,15 @@
     <p class="mt-2 text-xs italic text-ink-500">{m.browse_as_of({ date: dateFmt.format(new Date(data.snapshotDate)) })}</p>
   {/if}
 
-  <!-- Search + grouped inline checklist dropdown — one box searches both
-       states and agencies at once (no States/Agencies mode switch: the
-       compare tray already mixes both, so browsing shouldn't be split). -->
-  <div class="mt-6 flex items-start gap-2">
-  <div class="browse-search relative max-w-sm flex-1">
+  <!-- Search + filters, condensed into one card: search box, sort/type
+       popover, and the state/year/model filter chips all live together, one
+       section, matching the single "Search agencies" panel this page used
+       to have — not three separately-boxed controls. -->
+  <section class="mt-6 rounded-lg border border-paper-200 bg-paper-50 p-4 sm:p-5">
+    <h2 class="font-serif text-lg font-bold text-ink-900">{m.browse_table_heading()}</h2>
+
+    <div class="mt-3 flex items-start gap-2">
+    <div class="browse-search relative max-w-sm flex-1">
     <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
     </svg>
@@ -551,14 +555,6 @@
        a search first. Hidden once a compare is active (selection non-empty)
        so the compare grid isn't buried below it — reappears on Clear. -->
   {#if selection.length === 0}
-  <div class="mt-8">
-
-    <!-- Full agency search table — restored per feedback ("the main search
-         page should serve this"), adapted from origin/main's homepage
-         "Search agencies" section onto current paper/ink tokens. -->
-    <section class="mt-12">
-      <h2 class="font-serif text-lg font-bold text-ink-900">{m.browse_table_heading()}</h2>
-
       <div class="mt-3 flex flex-wrap items-center gap-2">
         <select
           class="max-w-[11rem] rounded-md border border-paper-200 bg-paper-50 py-2 pl-3 pr-7 text-sm text-ink-700 focus:border-ink-700 focus:outline-none focus:ring-1 focus:ring-ink-700 sm:max-w-none"
@@ -659,9 +655,8 @@
           {/key}
         </div>
       {/if}
-    </section>
-  </div>
   {/if}
+  </section>
 
   <!-- Compare -->
   {#if compareDisplay.length > 0}
