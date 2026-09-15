@@ -106,11 +106,11 @@
   // straight from data.agencies/data.stateMeta, same fields /explore itself
   // computes.
   $: statesWithAgencies = new Set(data.agencies.map((a) => a.state)).size;
+  $: totalStatesTracked = Object.keys(data.stateMeta).length;
   $: totalAgencies = data.agencies.length;
-  $: nationalPopulationServed = Object.values(data.stateMeta).reduce((sum, s) => sum + (s.population_served ?? 0), 0) || null;
   $: nationalLocalLeAgencies = Object.values(data.stateMeta).reduce((sum, s) => sum + (s.local_le_agencies ?? 0), 0);
-  $: nationalLocalParticipating = Object.values(data.stateMeta).reduce((sum, s) => sum + (s.participating ?? 0), 0);
-  $: nationalParticipationPct = nationalLocalLeAgencies ? Math.round((nationalLocalParticipating / nationalLocalLeAgencies) * 100) : null;
+  $: nationalPopulationServed = Object.values(data.stateMeta).reduce((sum, s) => sum + (s.population_served ?? 0), 0) || null;
+  $: nationalLocalPopulation = Object.values(data.stateMeta).reduce((sum, s) => sum + (s.state_local_population ?? 0), 0) || null;
 
   // Top states by agency count — moved here from /explore per feedback.
   type TopState = { abbr: string; agencyCount: number; modelCounts: Record<string, number> };
@@ -283,25 +283,28 @@
        Moved here from /explore, replacing "most active this month" per
        feedback ("i think its needless"). -->
   <section class="border-b px-4 py-4 sm:px-6 sm:py-5" style="border-color: var(--color-paper-200); background: var(--color-paper-100);">
-    <dl class="mx-auto grid max-w-6xl grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4">
+    <dl class="mx-auto grid max-w-6xl grid-cols-1 gap-x-4 gap-y-5 sm:grid-cols-3">
       <div>
         <dt class="text-xs font-semibold uppercase tracking-widest" style="color: var(--color-ink-500);">{m.browse_stat_states()}</dt>
-        <dd class="mt-1 font-mono text-2xl font-bold tabular-nums" style="color: var(--color-ink-900);">{intFmt.format(statesWithAgencies)}</dd>
+        <dd class="mt-1 flex items-baseline gap-1 font-mono text-2xl font-bold tabular-nums" style="color: var(--color-ink-900);">
+          {intFmt.format(statesWithAgencies)}
+          {#if totalStatesTracked}<span class="text-sm font-semibold" style="color: var(--color-ink-500);">/{intFmt.format(totalStatesTracked)}</span>{/if}
+        </dd>
       </div>
       <div>
         <dt class="text-xs font-semibold uppercase tracking-widest" style="color: var(--color-ink-500);">{m.browse_stat_agencies()}</dt>
-        <dd class="mt-1 font-mono text-2xl font-bold tabular-nums" style="color: var(--color-ink-900);">{intFmt.format(totalAgencies)}</dd>
+        <dd class="mt-1 flex items-baseline gap-1 font-mono text-2xl font-bold tabular-nums" style="color: var(--color-ink-900);">
+          {intFmt.format(totalAgencies)}
+          {#if nationalLocalLeAgencies}<span class="text-sm font-semibold" style="color: var(--color-ink-500);">/{intFmt.format(nationalLocalLeAgencies)}</span>{/if}
+        </dd>
       </div>
       {#if nationalPopulationServed}
         <div>
           <dt class="text-xs font-semibold uppercase tracking-widest" style="color: var(--color-ink-500);">{m.browse_stat_population()}</dt>
-          <dd class="mt-1 font-mono text-2xl font-bold tabular-nums" style="color: var(--color-ink-900);">{popFmt.format(nationalPopulationServed)}</dd>
-        </div>
-      {/if}
-      {#if nationalParticipationPct !== null}
-        <div>
-          <dt class="text-xs font-semibold uppercase tracking-widest" style="color: var(--color-ink-500);">{m.browse_stat_participation()}</dt>
-          <dd class="mt-1 font-mono text-2xl font-bold tabular-nums" style="color: var(--color-ink-900);">{nationalParticipationPct}%</dd>
+          <dd class="mt-1 flex items-baseline gap-1 font-mono text-2xl font-bold tabular-nums" style="color: var(--color-ink-900);">
+            {popFmt.format(nationalPopulationServed)}
+            {#if nationalLocalPopulation}<span class="text-sm font-semibold" style="color: var(--color-ink-500);">/{popFmtOverlay.format(nationalLocalPopulation)}</span>{/if}
+          </dd>
         </div>
       {/if}
     </dl>

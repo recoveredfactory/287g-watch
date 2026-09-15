@@ -85,15 +85,6 @@
     track("browse_copy_link", { count: selection.length });
   }
 
-  // Top-of-page summary strip + default preview lists — shown unconditionally
-  // so the page has real content on load instead of just empty controls
-  // waiting for a search.
-  const statesWithAgencies = data.states.filter((s) => s.agencyCount > 0).length;
-  const totalAgencies = data.agencies.length;
-  const nationalParticipationPct =
-    nationalStateRow.localLeAgencies
-      ? Math.round(((nationalStateRow.localParticipating ?? 0) / nationalStateRow.localLeAgencies) * 100)
-      : null;
   const localeTag = getLocale() === "es" ? "es-MX" : "en-US";
   const intFmt = new Intl.NumberFormat(localeTag);
   const popFmt = new Intl.NumberFormat(localeTag, { notation: "compact", maximumFractionDigits: 1 });
@@ -372,30 +363,6 @@
   {#if data.snapshotDate}
     <p class="mt-2 text-xs italic text-ink-500">{m.browse_as_of({ date: dateFmt.format(new Date(data.snapshotDate)) })}</p>
   {/if}
-
-  <!-- Summary strip -->
-  <dl class="mt-6 grid grid-cols-2 gap-x-4 gap-y-5 border-y border-paper-200 py-6 sm:grid-cols-4">
-    <div>
-      <dt class="text-xs font-semibold uppercase tracking-widest text-ink-500">{m.browse_stat_states()}</dt>
-      <dd class="mt-1 font-mono text-2xl font-bold tabular-nums text-ink-900">{intFmt.format(statesWithAgencies)}</dd>
-    </div>
-    <div>
-      <dt class="text-xs font-semibold uppercase tracking-widest text-ink-500">{m.browse_stat_agencies()}</dt>
-      <dd class="mt-1 font-mono text-2xl font-bold tabular-nums text-ink-900">{intFmt.format(totalAgencies)}</dd>
-    </div>
-    {#if nationalStateRow.populationServed}
-      <div>
-        <dt class="text-xs font-semibold uppercase tracking-widest text-ink-500">{m.browse_stat_population()}</dt>
-        <dd class="mt-1 font-mono text-2xl font-bold tabular-nums text-ink-900">{popFmt.format(nationalStateRow.populationServed)}</dd>
-      </div>
-    {/if}
-    {#if nationalParticipationPct !== null}
-      <div>
-        <dt class="text-xs font-semibold uppercase tracking-widest text-ink-500">{m.browse_stat_participation()}</dt>
-        <dd class="mt-1 font-mono text-2xl font-bold tabular-nums text-ink-900">{nationalParticipationPct}%</dd>
-      </div>
-    {/if}
-  </dl>
 
   <!-- Search + grouped inline checklist dropdown — one box searches both
        states and agencies at once (no States/Agencies mode switch: the
