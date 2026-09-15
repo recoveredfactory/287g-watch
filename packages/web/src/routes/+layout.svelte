@@ -80,21 +80,7 @@
   const MISMATCH_KEY = "rf-lang-mismatch-dismissed-v1";
   let mismatchTarget: Locale | null = null;
 
-  // Sitewide promo for the compare tool (#93/#232 replacement): the earlier
-  // "hire us"/"support us" A/B banner measured 0.33%/0.08% CTR and the prior
-  // analysis promo (since expired) measured 4.9% — a contextual, site-native
-  // ask beats an external pitch. This points at something the reader can do
-  // right here (compare states/departments, then share the link), not an
-  // outbound ask. Session-only dismissal, same reasoning as before: a
-  // localStorage-level dismissal risks losing all visibility for someone who
-  // clicked × months ago.
-  const COMPARE_PROMO_KEY = "rf-compare-promo-dismissed-v1";
-  let comparePromoVisible = false;
-
   onMount(() => {
-    comparePromoVisible = !sessionStorage.getItem(COMPARE_PROMO_KEY);
-    if (comparePromoVisible) trackConversion("compare_promo_impression");
-
     if (localStorage.getItem(MISMATCH_KEY)) return;
     if (hasLocaleCookie()) return; // user has already expressed a preference
     const browserLang = (navigator.language || "en").split("-")[0].toLowerCase();
@@ -110,12 +96,6 @@
     } catch {}
   }
 
-  function dismissComparePromo() {
-    comparePromoVisible = false;
-    try {
-      sessionStorage.setItem(COMPARE_PROMO_KEY, "1");
-    } catch {}
-  }
 </script>
 
 <svelte:head>
@@ -196,35 +176,6 @@
           style="color: var(--color-ink-500);"
         >No thanks</button>
       {/if}
-    </div>
-  {/if}
-  {#if comparePromoVisible && !isVideoRoute}
-    <div
-      class="flex items-center justify-center gap-2 px-4 py-2 text-center text-sm text-white sm:gap-3"
-      style="background-color: var(--color-ink-900);"
-      role="region"
-      aria-label={m.compare_promo_aria()}
-    >
-      <a
-        href={localizeHref("/states")}
-        on:click={() => trackConversion("compare_promo_click")}
-        class="text-white no-underline hover:no-underline"
-      >
-        <span class="text-white/85">{m.compare_promo_text()}</span>
-        <span
-          class="ml-1.5 whitespace-nowrap font-semibold underline decoration-2 underline-offset-4"
-          style="text-decoration-color: #BE6079;"
-        >{m.compare_promo_cta()} →</span>
-      </a>
-      <button
-        on:click={dismissComparePromo}
-        aria-label={m.rf_banner_dismiss()}
-        class="flex h-6 w-6 shrink-0 items-center justify-center rounded text-white/50 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4" aria-hidden="true">
-          <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"/>
-        </svg>
-      </button>
     </div>
   {/if}
   {#if !isVideoRoute}
