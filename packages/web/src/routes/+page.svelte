@@ -43,10 +43,6 @@
   $: model = buildTimelineModel(data.agencies, data.terminatedAgencies);
   $: todayIdx = model.todayIdx;
   $: maxIdx = model.maxIdx;
-  // Statewide agencies (state police, corrections, etc.) are intentionally not
-  // plotted — a single dot would misrepresent a whole-state jurisdiction. We
-  // surface the count below the scrubber instead.
-  $: statewideCount = model.statewideCount;
   const minIdx = TIMELINE_START_IDX;
   let cursorIdx = NaN;
   $: if (Number.isNaN(cursorIdx) && Number.isFinite(maxIdx)) cursorIdx = maxIdx;
@@ -102,14 +98,22 @@
   $: statesWithAnyAgreement = new Set(data.agencies.map((a) => a.state));
 
   // Top-of-page summary strip — moved here from /explore (the "most active
-  // this month" panel it replaced read as needless per feedback). Summed
-  // straight from data.agencies/data.stateMeta, same fields /explore itself
-  // computes.
+  // this month" panel it replaced read as needless per feedback).
+  //
+  // "Participating agencies" and "Population covered" reuse the exact same
+  // ORI-deduped math as the map's own count-overlay (activeCountAt/
+  // coveredPopAt against `model`, the same TimelineModel the map builds) —
+  // NOT data.agencies.length or stateMeta's population_served, which used
+  // to disagree with the map's numbers on this same page (a raw, non-deduped
+  // agency count and a different population source entirely). Evaluated at
+  // model.maxIdx specifically, not the live `cursorIdx`, so the strip always
+  // shows the true current total and doesn't wobble if someone scrubs the
+  // timeline elsewhere on the page.
   $: statesWithAgencies = new Set(data.agencies.map((a) => a.state)).size;
   $: totalStatesTracked = Object.keys(data.stateMeta).length;
-  $: totalAgencies = data.agencies.length;
+  $: totalAgencies = activeCountAt(model, model.maxIdx);
   $: nationalLocalLeAgencies = Object.values(data.stateMeta).reduce((sum, s) => sum + (s.local_le_agencies ?? 0), 0);
-  $: nationalPopulationServed = Object.values(data.stateMeta).reduce((sum, s) => sum + (s.population_served ?? 0), 0) || null;
+  $: nationalPopulationServed = coveredPopAt(model, model.maxIdx) || null;
   $: nationalLocalPopulation = Object.values(data.stateMeta).reduce((sum, s) => sum + (s.state_local_population ?? 0), 0) || null;
 
   // Top states by agency count — moved here from /explore per feedback.
@@ -404,16 +408,6 @@
         </div>
       </div>
 
-      {#if detectedState && STATE_NAMES[detectedState] && data.stateMeta[detectedState]?.participating > 0 && !(selectedStates.size === 1 && selectedStates.has(detectedState))}
-        <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs" style="color: var(--color-ink-500);">
-          <button
-            type="button"
-            on:click={() => (selectedStates = new Set([detectedState!]))}
-            class="text-xs underline-offset-2 hover:underline"
-            style="color: var(--color-ink-500);"
-          >Zoom to {STATE_NAMES[detectedState]} →</button>
-        </div>
-      {/if}
     </div>
 
     <!-- Map: full-bleed so the country breaks the column and reads at scale -->
@@ -463,10 +457,7 @@
         <div class="mx-auto max-w-6xl">
           <MapTimelineScrubber bind:this={scrubberRef} {minIdx} {maxIdx} labelMaxIdx={todayIdx} bind:cursorIdx bind:playing={timelinePlaying} {countAtCursor} />
           <div class="px-4 pb-4 text-[11px] italic leading-snug sm:px-6 sm:text-xs" style="color: var(--color-ink-500);">
-            {#if statewideCount > 0}
-              <p>{m.home_map_statewide_note({ count: statewideCount })}</p>
-            {/if}
-            <p class="mt-1">{m.home_map_boundaries_note()}</p>
+            <p>{m.home_map_boundaries_note()}</p>
             <p class="mt-1">
               <a
                 href="https://github.com/appelson/Tracking_287g"
