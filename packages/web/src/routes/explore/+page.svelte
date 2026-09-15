@@ -94,10 +94,6 @@
     nationalStateRow.localLeAgencies
       ? Math.round(((nationalStateRow.localParticipating ?? 0) / nationalStateRow.localLeAgencies) * 100)
       : null;
-  const TOP_N = 10;
-  const topStates = data.states.slice(0, TOP_N);
-  const topAgencies = data.agencies.slice(0, TOP_N);
-
   const localeTag = getLocale() === "es" ? "es-MX" : "en-US";
   const intFmt = new Intl.NumberFormat(localeTag);
   const popFmt = new Intl.NumberFormat(localeTag, { notation: "compact", maximumFractionDigits: 1 });
@@ -292,16 +288,6 @@
   $: agenciesTotal = filteredAgenciesAll.length;
   $: filteredAgencies = filteredAgenciesAll.slice(0, DISPLAY_CAP);
 
-  // Quick-pick presets — one tap fills the compare tray instead of requiring
-  // you to already know who you want to compare.
-  function presetTopStates() {
-    selection = topStates.slice(0, 3).map((s) => ({ kind: "state" as const, id: s.abbr }));
-    track("browse_preset", { preset: "top_states" });
-  }
-  function presetTopAgencies() {
-    selection = topAgencies.slice(0, 3).map((a) => ({ kind: "agency" as const, id: a.slug }));
-    track("browse_preset", { preset: "top_agencies" });
-  }
 
   type CompareEntry =
     | { kind: "state"; row: StateRow; national: boolean }
@@ -383,7 +369,6 @@
 <main id="main-content" class="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
   <p class="text-xs font-semibold uppercase tracking-widest text-ink-500">{m.browse_eyebrow()}</p>
   <h1 class="mt-1 text-2xl font-black text-ink-900 sm:text-3xl">{m.browse_title()}</h1>
-  <p class="mt-3 max-w-prose text-sm text-ink-700 sm:text-base">{m.browse_subtitle()}</p>
   {#if data.snapshotDate}
     <p class="mt-2 text-xs italic text-ink-500">{m.browse_as_of({ date: dateFmt.format(new Date(data.snapshotDate)) })}</p>
   {/if}
@@ -570,13 +555,6 @@
   </div>
   </div>
 
-  <!-- Quick-pick presets — one tap fills the compare tray instead of
-       requiring you to already know who you want to compare. -->
-  <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs">
-    <button type="button" on:click={presetTopStates} class="font-semibold text-ink-700 underline underline-offset-2 hover:text-ink-900">{m.browse_preset_top_states()}</button>
-    <button type="button" on:click={presetTopAgencies} class="font-semibold text-ink-700 underline underline-offset-2 hover:text-ink-900">{m.browse_preset_top_agencies()}</button>
-  </div>
-
   <!-- Selection bar -->
   {#if selection.length > 0}
     <div class="mt-3 flex items-center justify-between gap-3 rounded-md border px-3 py-2" style="border-color: #BE6079; background: var(--color-paper-100);">
@@ -602,33 +580,11 @@
     </div>
   {/if}
 
-  <!-- Default top-10 preview — real content on the page without requiring a
-       search first. Hidden once a compare is active (selection non-empty) so
-       the compare grid isn't buried below it — reappears on Clear. -->
+  <!-- Full agency search table — real content on the page without requiring
+       a search first. Hidden once a compare is active (selection non-empty)
+       so the compare grid isn't buried below it — reappears on Clear. -->
   {#if selection.length === 0}
   <div class="mt-8">
-    <section class="max-w-2xl">
-      <h2 class="font-serif text-lg font-bold text-ink-900">{m.browse_top_states_heading()}</h2>
-      <ol class="mt-3 divide-y divide-paper-100 border-y border-paper-100">
-        {#each topStates as row (row.abbr)}
-          <li class="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
-            <span class="w-6 shrink-0 font-mono text-xs tabular-nums text-ink-500">{stateRankByAbbr.get(row.abbr)}</span>
-            <a href={localizeHref(`/state/${row.abbr.toLowerCase()}`)} class="min-w-0 flex-1 truncate text-sm font-semibold text-ink-900 no-underline hover:underline">{row.stateName}</a>
-            <span class="flex shrink-0 items-center gap-2">
-              {#each MODEL_ORDER as model}
-                {#if row.modelCounts[model]}
-                  <span class="flex items-center gap-1 font-mono text-[11px] tabular-nums text-ink-700" aria-label="{MODEL_SHORT[model]}: {row.modelCounts[model]}">
-                    <span class="inline-block h-2 w-2 rounded-full" style="background: {MODEL_COLORS[model]};" aria-hidden="true"></span>
-                    {row.modelCounts[model]}
-                  </span>
-                {/if}
-              {/each}
-            </span>
-            <span class="shrink-0 font-mono text-xs tabular-nums text-ink-500">{intFmt.format(row.agencyCount)} {m.leaderboard_unit_agencies()}</span>
-          </li>
-        {/each}
-      </ol>
-    </section>
 
     <!-- Full agency search table — restored per feedback ("the main search
          page should serve this"), adapted from origin/main's homepage

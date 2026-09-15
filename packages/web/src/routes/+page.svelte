@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { PageData } from "./$types";
-  import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_DARK_COLORS, MODEL_MINI, MODEL_SLUG, MODEL_ORDER } from "$lib/colors";
+  import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_DARK_COLORS, MODEL_SLUG, MODEL_ORDER, MODEL_SHORT } from "$lib/colors";
   import { STATE_NAMES } from "$lib/states";
   import NationalMap from "$lib/components/NationalMap.svelte";
   import MapTimelineScrubber from "$lib/components/MapTimelineScrubber.svelte";
@@ -101,47 +101,32 @@
   // participating===0 yet is very much not 287(g)-free. See #138.
   $: statesWithAnyAgreement = new Set(data.agencies.map((a) => a.state));
 
-  // "Most active" — real computed net signed-vs-terminated agreements per
-  // state in a rolling 30-day window ending at the most recent activity date
-  // actually present in the data (not wall-clock "now", since a snapshot can
-  // lag — same reasoning as before, just day-granular instead of
-  // calendar-month, so a snapshot taken early in a month doesn't show a
-  // near-empty window). Data-driven, no editorial narrative, per AGENTS.md.
-  $: latestActivityDate = (() => {
-    const dates = [
-      ...data.agencies.map((a) => a.signed_date).filter((d): d is string => !!d),
-      ...data.terminatedAgencies.map((a) => a.terminated_date).filter((d): d is string => !!d),
-    ];
-    return dates.length ? dates.sort().at(-1)! : null;
-  })();
+  // Top-of-page summary strip — moved here from /explore (the "most active
+  // this month" panel it replaced read as needless per feedback). Summed
+  // straight from data.agencies/data.stateMeta, same fields /explore itself
+  // computes.
+  $: statesWithAgencies = new Set(data.agencies.map((a) => a.state)).size;
+  $: totalAgencies = data.agencies.length;
+  $: nationalPopulationServed = Object.values(data.stateMeta).reduce((sum, s) => sum + (s.population_served ?? 0), 0) || null;
+  $: nationalLocalLeAgencies = Object.values(data.stateMeta).reduce((sum, s) => sum + (s.local_le_agencies ?? 0), 0);
+  $: nationalLocalParticipating = Object.values(data.stateMeta).reduce((sum, s) => sum + (s.participating ?? 0), 0);
+  $: nationalParticipationPct = nationalLocalLeAgencies ? Math.round((nationalLocalParticipating / nationalLocalLeAgencies) * 100) : null;
 
-  $: activityWindowStart = latestActivityDate ? (() => {
-    const d = new Date(`${latestActivityDate}T00:00:00Z`);
-    d.setUTCDate(d.getUTCDate() - 29);
-    return d.toISOString().slice(0, 10);
-  })() : null;
-
-  type StateActivity = { abbr: string; net: number };
-  $: mostActiveStates = ((): StateActivity[] => {
-    if (!latestActivityDate || !activityWindowStart) return [];
-    const inWindow = (d: string) => d >= activityWindowStart && d <= latestActivityDate;
-    const byState = new Map<string, { signed: number; terminated: number }>();
-    const bump = (state: string, key: "signed" | "terminated") => {
-      const cur = byState.get(state) ?? { signed: 0, terminated: 0 };
-      cur[key]++;
-      byState.set(state, cur);
-    };
+  // Top states by agency count — moved here from /explore per feedback.
+  type TopState = { abbr: string; agencyCount: number; modelCounts: Record<string, number> };
+  $: topStatesByAgencyCount = ((): TopState[] => {
+    const agencyCountByState = new Map<string, number>();
+    const modelCountsByState = new Map<string, Record<string, number>>();
     for (const a of data.agencies) {
-      if (a.signed_date && inWindow(a.signed_date)) bump(a.state, "signed");
+      agencyCountByState.set(a.state, (agencyCountByState.get(a.state) ?? 0) + 1);
+      const mc = modelCountsByState.get(a.state) ?? {};
+      for (const m of a.models) mc[m] = (mc[m] ?? 0) + 1;
+      modelCountsByState.set(a.state, mc);
     }
-    for (const a of data.terminatedAgencies) {
-      if (a.terminated_date && inWindow(a.terminated_date)) bump(a.state, "terminated");
-    }
-    return [...byState.entries()]
-      .map(([abbr, { signed, terminated }]) => ({ abbr, net: signed - terminated }))
-      .filter((s) => s.net > 0)
-      .sort((a, b) => b.net - a.net)
-      .slice(0, 3);
+    return [...agencyCountByState.entries()]
+      .map(([abbr, agencyCount]) => ({ abbr, agencyCount, modelCounts: modelCountsByState.get(abbr) ?? {} }))
+      .sort((a, b) => b.agencyCount - a.agencyCount)
+      .slice(0, 10);
   })();
 
   // Geo-aware participation callout. Renders once client-side geo resolves.
@@ -219,16 +204,6 @@
     (window as any).__getTimelineBounds = () => ({ minIdx, maxIdx, todayIdx });
   });
 
-  // "Recently signed" preview — the most recently signed agreements, newest
-  // first, complementary to /states' rank-by-size lists (this one's ordered
-  // by time, not size). Links to /states for the full browse+compare tool
-  // instead of duplicating a full filterable grid here.
-  const RECENT_N = 8;
-  $: recentAgencies = [...data.agencies]
-    .filter((a) => a.signed_date)
-    .sort((a, b) => (b.signed_date ?? "").localeCompare(a.signed_date ?? ""))
-    .slice(0, RECENT_N);
-
   function modelDesc(model: string): { short: string; detail: string } {
     switch (model) {
       case "Jail Enforcement Model":
@@ -304,31 +279,33 @@
     </div>
   </section>
 
-  <!-- ── Most active states (rolling 30 days) ────────────────────────────────
-       Moved above the map and enlarged per feedback: "blow this up, and put
-       this all above the map." -->
-  {#if mostActiveStates.length > 0}
-    <section class="border-b px-4 py-6 sm:px-6 sm:py-8" style="border-color: var(--color-paper-200); background: var(--color-paper-100);">
-      <div class="mx-auto max-w-6xl">
-        <p class="text-sm font-semibold sm:text-base" style="color: var(--color-ink-900);">{m.home_active_heading()}</p>
-        <div class="mt-3 grid gap-2.5 sm:grid-cols-3">
-          {#each mostActiveStates as s, i (s.abbr)}
-            <a
-              href={localizeHref(`/state/${s.abbr.toLowerCase()}`)}
-              class="flex items-center justify-between gap-3 rounded-md border px-3 py-2 no-underline transition hover:shadow-sm"
-              style="border-color: var(--color-paper-200); background: var(--color-paper-50);"
-            >
-              <span class="flex items-center gap-2 min-w-0">
-                <span class="font-mono text-xs tabular-nums" style="color: var(--color-ink-500);">#{i + 1}</span>
-                <span class="truncate text-sm font-semibold" style="color: var(--color-ink-900);">{STATE_NAMES[s.abbr] ?? s.abbr}</span>
-              </span>
-              <span class="shrink-0 font-mono text-sm font-bold tabular-nums" style="color: #BE6079;">{m.home_active_delta({ count: s.net })}</span>
-            </a>
-          {/each}
-        </div>
+  <!-- ── Summary strip ────────────────────────────────────────────────────────
+       Moved here from /explore, replacing "most active this month" per
+       feedback ("i think its needless"). -->
+  <section class="border-b px-4 py-6 sm:px-6 sm:py-8" style="border-color: var(--color-paper-200); background: var(--color-paper-100);">
+    <dl class="mx-auto grid max-w-6xl grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4">
+      <div>
+        <dt class="text-xs font-semibold uppercase tracking-widest" style="color: var(--color-ink-500);">{m.browse_stat_states()}</dt>
+        <dd class="mt-1 font-mono text-2xl font-bold tabular-nums" style="color: var(--color-ink-900);">{intFmt.format(statesWithAgencies)}</dd>
       </div>
-    </section>
-  {/if}
+      <div>
+        <dt class="text-xs font-semibold uppercase tracking-widest" style="color: var(--color-ink-500);">{m.browse_stat_agencies()}</dt>
+        <dd class="mt-1 font-mono text-2xl font-bold tabular-nums" style="color: var(--color-ink-900);">{intFmt.format(totalAgencies)}</dd>
+      </div>
+      {#if nationalPopulationServed}
+        <div>
+          <dt class="text-xs font-semibold uppercase tracking-widest" style="color: var(--color-ink-500);">{m.browse_stat_population()}</dt>
+          <dd class="mt-1 font-mono text-2xl font-bold tabular-nums" style="color: var(--color-ink-900);">{popFmt.format(nationalPopulationServed)}</dd>
+        </div>
+      {/if}
+      {#if nationalParticipationPct !== null}
+        <div>
+          <dt class="text-xs font-semibold uppercase tracking-widest" style="color: var(--color-ink-500);">{m.browse_stat_participation()}</dt>
+          <dd class="mt-1 font-mono text-2xl font-bold tabular-nums" style="color: var(--color-ink-900);">{nationalParticipationPct}%</dd>
+        </div>
+      {/if}
+    </dl>
+  </section>
 
   <!-- ── What each model authorizes ───────────────────────────────────────── -->
   <section class="border-b px-4 py-10 sm:px-6 sm:py-12" style="border-color: var(--color-paper-200); background: var(--color-paper-50);">
@@ -530,11 +507,12 @@
   <TrendCharts agencies={data.agencies} trendMonths={data.trendMonths} trend={data.trend} />
 
 
-  <!-- ── Recently signed agreements ────────────────────────────────────────── -->
+  <!-- ── Top states by agency count ───────────────────────────────────────────
+       Moved here from /explore per feedback. -->
   <section class="px-4 py-10 sm:px-6 sm:py-12">
     <div class="mx-auto max-w-6xl">
       <div class="flex flex-wrap items-end justify-between gap-4">
-        <h2 class="font-serif text-[length:var(--text-h2)] font-bold" style="color: var(--color-ink-900);">{m.home_recent_heading()}</h2>
+        <h2 class="font-serif text-[length:var(--text-h2)] font-bold" style="color: var(--color-ink-900);">{m.browse_top_states_heading()}</h2>
         <div class="flex flex-col items-end gap-1 text-sm font-semibold">
           <a
             href={localizeHref("/explore")}
@@ -549,42 +527,25 @@
         </div>
       </div>
 
-      {#if recentAgencies.length > 0}
-        <ul class="mt-6 divide-y overflow-hidden rounded-lg border" style="border-color: var(--color-paper-200);">
-          {#each recentAgencies as agency (agency.slug)}
-            <li class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5" style="border-color: var(--color-paper-100); background: var(--color-paper-50);">
-              <div class="min-w-0">
-                <a
-                  href={localizeHref(`/agency/${agency.slug}`)}
-                  class="font-semibold leading-snug no-underline hover:underline"
-                  style="color: var(--color-ink-900);"
-                >{agency.name}</a>
-                <p class="text-xs" style="color: var(--color-ink-500);">
-                  {#if agency.city}{agency.city}, {/if}<a
-                    href={localizeHref(`/state/${agency.state.toLowerCase()}`)}
-                    class="no-underline hover:underline"
-                  >{agency.state}</a>
-                </p>
-              </div>
-              <div class="flex shrink-0 items-center gap-3">
-                <div class="flex flex-wrap gap-1">
-                  {#each agency.models as model}
-                    <span
-                      class="model-badge"
-                      class:model-badge--jail={model.includes("Jail")}
-                      class:model-badge--taskforce={model.includes("Task")}
-                      class:model-badge--wso={model.includes("Warrant")}
-                      title={model}
-                    >{MODEL_MINI[model] ?? model}</span>
-                  {/each}
-                </div>
-                <span class="font-mono text-xs tabular-nums" style="color: var(--color-ink-500);">{agency.signed_date}</span>
-              </div>
-            </li>
-          {/each}
-        </ul>
-      {/if}
-
+      <ol class="mt-6 divide-y overflow-hidden rounded-lg border" style="border-color: var(--color-paper-200);">
+        {#each topStatesByAgencyCount as row, i (row.abbr)}
+          <li class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 sm:px-5" style="border-color: var(--color-paper-100); background: var(--color-paper-50);">
+            <span class="w-6 shrink-0 font-mono text-xs tabular-nums" style="color: var(--color-ink-500);">{i + 1}</span>
+            <a href={localizeHref(`/state/${row.abbr.toLowerCase()}`)} class="min-w-0 flex-1 truncate text-sm font-semibold no-underline hover:underline" style="color: var(--color-ink-900);">{STATE_NAMES[row.abbr] ?? row.abbr}</a>
+            <span class="flex shrink-0 items-center gap-2">
+              {#each MODEL_ORDER as model}
+                {#if row.modelCounts[model]}
+                  <span class="flex items-center gap-1 font-mono text-[11px] tabular-nums" style="color: var(--color-ink-700);" aria-label="{MODEL_SHORT[model]}: {row.modelCounts[model]}">
+                    <span class="inline-block h-2 w-2 rounded-full" style="background: {MODEL_COLORS[model]};" aria-hidden="true"></span>
+                    {row.modelCounts[model]}
+                  </span>
+                {/if}
+              {/each}
+            </span>
+            <span class="shrink-0 font-mono text-xs tabular-nums" style="color: var(--color-ink-500);">{intFmt.format(row.agencyCount)} {m.leaderboard_unit_agencies()}</span>
+          </li>
+        {/each}
+      </ol>
     </div>
   </section>
 
