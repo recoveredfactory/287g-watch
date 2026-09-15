@@ -17,10 +17,14 @@ export type AgencyRow = {
   slug: string;
   name: string;
   state: string;
+  city: string | null;
   primary_model: string;
+  models: string[];
   officerCt: number;
   population: number | null;
   agencyType: string;
+  signedDate: string | null;
+  moaUrl: string | null;
 };
 
 // Model-split cumulative agency counts per state, sampled onto a shared
@@ -92,10 +96,14 @@ export const load = async ({ fetch }): Promise<StatesPageData> => {
       slug: a.slug,
       name: a.name,
       state: a.state,
+      city: a.city ?? null,
       primary_model: a.primary_model,
+      models: a.models,
       officerCt: a.lee?.officer_ct ?? 0,
       population: a.population ?? null,
       agencyType: a.agency_type,
+      signedDate: a.signed_date ?? null,
+      moaUrl: a.moa_url ?? null,
     }))
     .sort((a, b) => b.officerCt - a.officerCt || a.name.localeCompare(b.name));
 

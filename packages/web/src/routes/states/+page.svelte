@@ -4,9 +4,10 @@
   import { browser } from "$app/environment";
   import { localizeHref, getLocale } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
-  import { MODEL_ORDER, MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_SHORT } from "$lib/colors";
+  import { MODEL_ORDER, MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_SHORT, MODEL_MINI } from "$lib/colors";
   import { ogImage } from "$lib/ogImage";
   import StateTrendMini from "$lib/components/StateTrendMini.svelte";
+  import { VirtualList } from "svelte-virtuallists";
 
   export let data: StatesPageData;
 
@@ -45,10 +46,14 @@
     slug: NATIONAL_ID,
     name: "",
     state: "",
+    city: null,
     primary_model: "",
+    models: [],
     officerCt: data.agencies.reduce((sum, a) => sum + (a.officerCt ?? 0), 0),
     population: data.agencies.reduce((sum, a) => sum + (a.population ?? 0), 0) || null,
     agencyType: "",
+    signedDate: null,
+    moaUrl: null,
   };
   // Split in two (rather than one shared flag) so removing one national card
   // from the compare grid doesn't also drop the other.
@@ -182,6 +187,58 @@
   }
 
   const DISPLAY_CAP = 150;
+
+  // ── Full agency search table ────────────────────────────────────────────
+  // Restored from origin/main's homepage "Search agencies" section (dropped
+  // in the redesign, brought back here per feedback — "the data isn't just
+  // by state... the main search page should serve this"). Shares the same
+  // text query as the compare-picker above; adds its own state/model/year
+  // filters and a virtualized table, same as the old implementation
+  // (svelte-virtuallists was never removed as a dependency).
+  let filterModels: Set<string> = new Set();
+  let filterStates: Set<string> = new Set();
+  let filterYear = "";
+
+  function toggleFilterModel(model: string) {
+    const next = new Set(filterModels);
+    if (next.has(model)) next.delete(model);
+    else next.add(model);
+    filterModels = next;
+    track("browse_table_filter", { kind: "model", model });
+  }
+  function toggleFilterState(abbr: string) {
+    const next = new Set(filterStates);
+    if (next.has(abbr)) next.delete(abbr);
+    else next.add(abbr);
+    filterStates = next;
+    track("browse_table_filter", { kind: "state", state: abbr });
+  }
+  function clearTableFilters() {
+    filterModels = new Set();
+    filterStates = new Set();
+    filterYear = "";
+    query = "";
+  }
+
+  $: allYears = [...new Set(data.agencies.map((a) => a.signedDate?.slice(0, 4)).filter((y): y is string => !!y))].sort();
+
+  $: tableAgencies = data.agencies.filter((a) => {
+    const matchesSearch =
+      !q ||
+      a.name.toLowerCase().includes(q) ||
+      a.state.toLowerCase().includes(q) ||
+      (a.city ?? "").toLowerCase().includes(q);
+    const matchesModel = filterModels.size === 0 || a.models.some((mo) => filterModels.has(mo));
+    const matchesState = filterStates.size === 0 || filterStates.has(a.state);
+    const matchesYear = !filterYear || (a.signedDate?.startsWith(filterYear) ?? false);
+    return matchesSearch && matchesModel && matchesState && matchesYear;
+  });
+  $: hasTableFilters = q !== "" || filterModels.size > 0 || filterStates.size > 0 || filterYear !== "";
+  // The virtual list keeps scroll position when `items` changes, so a
+  // narrowed filter would otherwise strand the reader mid-list — keying on
+  // this signature remounts the list (and resets scroll to top) whenever any
+  // filter changes, same as the original implementation.
+  $: tableFilterKey = JSON.stringify([q, [...filterStates].sort(), filterYear, [...filterModels].sort()]);
 
   $: if (browser && !mounted) mounted = true;
 
@@ -545,15 +602,12 @@
     </div>
   {/if}
 
-  <!-- Default top-10 previews — real content on the page without requiring a
-       search first; the interactive checklist above stays search-gated per
-       feedback, these are just glanceable, read-only top-10s shown side by
-       side now that there's no States/Agencies mode to switch between.
-       Hidden once a compare is active (selection non-empty) so the compare
-       grid isn't buried below two full top-10 lists — reappears on Clear. -->
+  <!-- Default top-10 preview — real content on the page without requiring a
+       search first. Hidden once a compare is active (selection non-empty) so
+       the compare grid isn't buried below it — reappears on Clear. -->
   {#if selection.length === 0}
-  <div class="mt-8 grid gap-x-8 gap-y-8 sm:grid-cols-2">
-    <section>
+  <div class="mt-8">
+    <section class="max-w-2xl">
       <h2 class="font-serif text-lg font-bold text-ink-900">{m.browse_top_states_heading()}</h2>
       <ol class="mt-3 divide-y divide-paper-100 border-y border-paper-100">
         {#each topStates as row (row.abbr)}
@@ -576,23 +630,112 @@
       </ol>
     </section>
 
-    <section>
-      <h2 class="font-serif text-lg font-bold text-ink-900">{m.browse_top_agencies_heading()}</h2>
-      <ol class="mt-3 divide-y divide-paper-100 border-y border-paper-100">
-        {#each topAgencies as row (row.slug)}
-          <li class="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
-            <span class="w-6 shrink-0 font-mono text-xs tabular-nums text-ink-500">{agencyRankBySlug.get(row.slug)}</span>
-            <a href={localizeHref(`/agency/${row.slug}`)} class="min-w-0 flex-1 no-underline hover:underline">
-              <p class="truncate text-sm font-semibold text-ink-900">{row.name}</p>
-              <p class="truncate text-xs text-ink-500">{row.state}</p>
-            </a>
-            {#if row.primary_model}
-              <span class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold" style="background: {MODEL_COLORS[row.primary_model]}; color: {MODEL_TEXT_COLORS[row.primary_model]};">{MODEL_SHORT[row.primary_model]}</span>
-            {/if}
-            <span class="shrink-0 font-mono text-xs tabular-nums text-ink-500">{row.officerCt ? `${intFmt.format(row.officerCt)} ${m.leaderboard_unit_officers()}` : "—"}</span>
-          </li>
+    <!-- Full agency search table — restored per feedback ("the main search
+         page should serve this"), adapted from origin/main's homepage
+         "Search agencies" section onto current paper/ink tokens. -->
+    <section class="mt-12">
+      <h2 class="font-serif text-lg font-bold text-ink-900">{m.browse_table_heading()}</h2>
+
+      <div class="mt-3 flex flex-wrap items-center gap-2">
+        <select
+          class="max-w-[11rem] rounded-md border border-paper-200 bg-paper-50 py-2 pl-3 pr-7 text-sm text-ink-700 focus:border-ink-700 focus:outline-none focus:ring-1 focus:ring-ink-700 sm:max-w-none"
+          on:change={(e) => { if (e.currentTarget.value) { toggleFilterState(e.currentTarget.value); e.currentTarget.value = ""; } }}
+        >
+          <option value="">{filterStates.size === 0 ? m.browse_table_all_states() : m.browse_table_add_state()}</option>
+          {#each data.states.filter((s) => !filterStates.has(s.abbr)) as s}
+            <option value={s.abbr}>{s.stateName}</option>
+          {/each}
+        </select>
+
+        {#each [...filterStates].sort() as abbr}
+          <button
+            type="button"
+            on:click={() => toggleFilterState(abbr)}
+            class="flex items-center gap-1 rounded px-3 py-1.5 text-xs font-semibold text-white"
+            style="background: var(--color-ink-900);"
+          >
+            {data.states.find((s) => s.abbr === abbr)?.stateName ?? abbr}
+            <span aria-hidden="true" class="opacity-70">×</span>
+          </button>
         {/each}
-      </ol>
+
+        <select bind:value={filterYear} class="rounded-md border border-paper-200 bg-paper-50 py-2 pl-3 pr-7 text-sm text-ink-700 focus:border-ink-700 focus:outline-none focus:ring-1 focus:ring-ink-700">
+          <option value="">{m.browse_table_year_signed()}</option>
+          {#each allYears as year}
+            <option value={year}>{year}</option>
+          {/each}
+        </select>
+
+        {#each MODEL_ORDER as model}
+          {@const active = filterModels.has(model)}
+          <button
+            type="button"
+            on:click={() => toggleFilterModel(model)}
+            class="rounded border px-3 py-1.5 text-xs font-semibold transition-colors"
+            style={active
+              ? `background: ${MODEL_COLORS[model]}; border-color: ${MODEL_COLORS[model]}; color: ${MODEL_TEXT_COLORS[model] ?? '#191D21'};`
+              : `background: ${MODEL_COLORS[model]}22; border-color: ${MODEL_COLORS[model]}88; color: var(--color-ink-700);`}
+          >
+            {MODEL_SHORT[model]}
+          </button>
+        {/each}
+      </div>
+
+      <p class="mt-4 text-sm text-ink-500">
+        {#if hasTableFilters}
+          {m.browse_table_match_count({ matched: intFmt.format(tableAgencies.length), total: intFmt.format(data.agencies.length) })} —
+          <button type="button" on:click={clearTableFilters} class="underline underline-offset-2 text-ink-900">{m.browse_clear_selection()}</button>
+        {:else}
+          {m.browse_table_baseline({ rows: intFmt.format(data.agencies.length), states: String(data.states.length) })}
+        {/if}
+      </p>
+
+      {#if tableAgencies.length === 0}
+        <div class="mt-5 rounded-lg border border-paper-200 bg-paper-50 px-6 py-12 text-center">
+          <p class="font-medium text-ink-700">{m.browse_table_no_match()}</p>
+          <button type="button" on:click={clearTableFilters} class="mt-2 text-sm underline underline-offset-2 text-ink-900">{m.browse_clear_selection()}</button>
+        </div>
+      {:else}
+        <div class="agency-table mt-4 overflow-hidden rounded-lg border border-paper-200 text-sm">
+          <div class="agency-row agency-row--header border-b border-paper-200 bg-paper-100 text-xs font-bold uppercase tracking-wider text-ink-700">
+            <div class="px-3 py-2 sm:px-4 sm:py-3">{m.browse_table_col_agency()}</div>
+            <div class="px-2 py-2 sm:px-3 sm:py-3">{m.browse_table_col_type()}</div>
+            <div class="px-2 py-2 sm:px-3 sm:py-3">{m.browse_table_col_signed()}</div>
+            <div class="agency-col-pop px-2 py-2 sm:px-3 sm:py-3">{m.browse_table_col_population()}</div>
+            <div class="px-2 py-2 sm:px-3 sm:py-3">{m.browse_table_col_moa()}</div>
+            <div class="agency-col-foia px-2 py-2 sm:px-3 sm:py-3">{m.browse_table_col_foia()}</div>
+          </div>
+          {#key tableFilterKey}
+          <VirtualList items={tableAgencies} style="height: min(70vh, 640px); scrollbar-gutter: stable;">
+            {#snippet vl_slot({ item: agency })}
+            <div class="agency-row border-b border-paper-100 hover:bg-paper-50">
+              <div class="px-3 py-2 sm:px-4 sm:py-3">
+                <a href={localizeHref(`/agency/${agency.slug}`)} class="font-semibold leading-snug text-ink-900 no-underline hover:underline">{agency.name}</a>
+                <p class="text-xs text-ink-500">
+                  {#if agency.city}{agency.city}{/if}{#if agency.city && agency.state}, {/if}<a href={localizeHref(`/state/${agency.state.toLowerCase()}`)} class="no-underline hover:underline">{agency.state}</a>
+                </p>
+              </div>
+              <div class="px-2 py-2 sm:px-3 sm:py-3">
+                <div class="flex flex-wrap gap-1">
+                  {#each agency.models as model}
+                    <span class="model-badge" class:model-badge--jail={model.includes("Jail")} class:model-badge--taskforce={model.includes("Task")} class:model-badge--wso={model.includes("Warrant")} title={model}>{MODEL_MINI[model] ?? model}</span>
+                  {/each}
+                </div>
+              </div>
+              <div class="px-2 py-2 tabular-nums text-ink-700 sm:px-3 sm:py-3">{agency.signedDate ? agency.signedDate.slice(0, 4) : "—"}</div>
+              <div class="agency-col-pop px-2 py-2 tabular-nums text-ink-700 sm:px-3 sm:py-3">{agency.population ? popFmt.format(agency.population) : "—"}</div>
+              <div class="px-2 py-2 text-xs font-semibold sm:px-3 sm:py-3">
+                {#if agency.moaUrl}<a href={agency.moaUrl} target="_blank" rel="noreferrer" class="no-underline hover:underline">↗</a>{:else}<span class="text-ink-300">—</span>{/if}
+              </div>
+              <div class="agency-col-foia px-2 py-2 text-xs font-semibold sm:px-3 sm:py-3">
+                <a href="https://www.muckrock.com/foi/create/" target="_blank" rel="noreferrer" class="no-underline hover:underline">→</a>
+              </div>
+            </div>
+            {/snippet}
+          </VirtualList>
+          {/key}
+        </div>
+      {/if}
     </section>
   </div>
   {/if}
@@ -744,5 +887,41 @@
     .compare-grid {
       grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
     }
+  }
+
+  /* Agency search table grid — fixed column tracks (not `auto`) so every row,
+     header included, sizes its columns identically and they line up into a
+     real table. minmax(0, …) lets the name column shrink/wrap instead of
+     forcing the grid wider than its container. */
+  .agency-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 7rem 3.25rem 2.5rem;
+    align-items: center;
+  }
+  /* The virtualized rows live inside a scrolling viewport; on classic
+     scrollbars that viewport is narrower than the header by the scrollbar's
+     width, which would shift every column. Reserve the same gutter on the
+     header so the two grids share an identical content width. */
+  .agency-row--header {
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+  .agency-col-pop,
+  .agency-col-foia {
+    display: none;
+  }
+  @media (min-width: 640px) {
+    .agency-row {
+      grid-template-columns: minmax(0, 1fr) 8.5rem 4rem 5.5rem 3.5rem 3.5rem;
+    }
+    .agency-col-pop,
+    .agency-col-foia {
+      display: block;
+    }
+  }
+  /* svelte-virtuallists' inner track — full width so each row spans the
+     viewport and its columns line up with the header. */
+  :global(.vtlist-inner) {
+    width: 100%;
   }
 </style>
