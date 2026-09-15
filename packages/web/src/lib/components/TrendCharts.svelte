@@ -180,7 +180,7 @@
   })();
 </script>
 
-<section class={embedded ? "" : "border-b px-4 py-16 sm:px-6 sm:py-20"} style={embedded ? "" : "border-color: var(--color-paper-200); background: var(--color-paper-50);"}>
+<section class={embedded ? "" : "border-b px-4 py-10 sm:px-6 sm:py-12"} style={embedded ? "" : "border-color: var(--color-paper-200); background: var(--color-paper-50);"}>
   <div class={embedded ? "" : "mx-auto max-w-[720px]"}>
     <!-- Headline stays plain text; the scope control is an ordinary select on the header row -->
     <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">

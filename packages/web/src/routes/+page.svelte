@@ -271,7 +271,7 @@
 <main id="main-content">
 
   <!-- ── Hero ─────────────────────────────────────────────────────────────── -->
-  <section class="border-b px-4 py-14 sm:px-6 sm:py-24" style="border-color: var(--color-paper-200); background: var(--color-paper-50);">
+  <section class="border-b px-4 py-8 sm:px-6 sm:py-12" style="border-color: var(--color-paper-200); background: var(--color-paper-50);">
     <div class="mx-auto max-w-3xl">
       <p class="mb-4 flex items-center gap-3 font-mono text-xs font-semibold uppercase tracking-[0.14em] sm:mb-5" style="color: var(--color-ink-500);">
         {m.home_hero_eyebrow()}
@@ -297,7 +297,7 @@
            shown on the map overlay, and the block read as plain/redundant.
            The snapshot date survives as the page's data-freshness signal. -->
       {#if data.snapshotDate}
-        <p class="mt-8 max-w-2xl border-t pt-4 font-mono text-xs sm:mt-10" style="border-color: var(--color-paper-200); color: var(--color-ink-500);">
+        <p class="mt-5 max-w-2xl border-t pt-3 font-mono text-xs sm:mt-6" style="border-color: var(--color-paper-200); color: var(--color-ink-500);">
           As of {new Intl.DateTimeFormat("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" }).format(new Date(data.snapshotDate))}
         </p>
       {/if}
@@ -331,7 +331,7 @@
   {/if}
 
   <!-- ── What each model authorizes ───────────────────────────────────────── -->
-  <section class="border-b px-4 py-16 sm:px-6 sm:py-20" style="border-color: var(--color-paper-200); background: var(--color-paper-50);">
+  <section class="border-b px-4 py-10 sm:px-6 sm:py-12" style="border-color: var(--color-paper-200); background: var(--color-paper-50);">
     <div class="mx-auto max-w-6xl">
       <h2 class="font-serif text-[length:var(--text-h2)] font-bold" style="color: var(--color-ink-900);">
         {m.home_models_heading()}
@@ -373,7 +373,7 @@
   </section>
 
   <!-- ── Map ──────────────────────────────────────────────────────────────── -->
-  <section class="border-b pt-12 sm:pt-16" style="border-color: var(--color-paper-200); background: var(--color-paper-100);">
+  <section class="border-b pt-8 sm:pt-10" style="border-color: var(--color-paper-200); background: var(--color-paper-100);">
     <div class="mx-auto max-w-6xl px-4 sm:px-6">
       <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
         <div>
@@ -511,9 +511,9 @@
   </section>
 
   <!-- ── Browse & compare ─────────────────────────────────────────────────── -->
-  <section class="border-b px-4 py-12 sm:px-6 sm:py-16" style="border-color: var(--color-paper-200); background: var(--color-paper-50);">
+  <section class="border-b px-4 py-6 sm:px-6 sm:py-8" style="border-color: var(--color-paper-200); background: var(--color-paper-50);">
     <div class="mx-auto max-w-6xl">
-      <div class="flex max-w-xl flex-col items-start rounded-lg border p-6" style="border-color: var(--color-paper-200); background: var(--color-paper-100);">
+      <div class="flex max-w-xl flex-col items-start rounded-lg border p-5" style="border-color: var(--color-paper-200); background: var(--color-paper-100);">
         <p class="text-xs font-semibold uppercase tracking-widest" style="color: var(--color-ink-500);">{m.browse_eyebrow()}</p>
         <h2 class="mt-1 font-serif text-xl font-bold" style="color: var(--color-ink-900);">{m.home_browse_cta_heading()}</h2>
         <p class="mt-2 text-sm leading-relaxed" style="color: var(--color-ink-700);">{m.home_browse_cta_body()}</p>
@@ -531,7 +531,7 @@
 
 
   <!-- ── Recently signed agreements ────────────────────────────────────────── -->
-  <section class="px-4 py-16 sm:px-6 sm:py-20">
+  <section class="px-4 py-10 sm:px-6 sm:py-12">
     <div class="mx-auto max-w-6xl">
       <div class="flex flex-wrap items-end justify-between gap-4">
         <h2 class="font-serif text-[length:var(--text-h2)] font-bold" style="color: var(--color-ink-900);">{m.home_recent_heading()}</h2>
