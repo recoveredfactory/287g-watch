@@ -18,6 +18,7 @@ export type AgencyRow = {
   primary_model: string;
   officerCt: number;
   population: number | null;
+  agencyType: string;
 };
 
 export type StatesPageData = {
@@ -81,6 +82,7 @@ export const load = async ({ fetch }): Promise<StatesPageData> => {
       primary_model: a.primary_model,
       officerCt: a.lee?.officer_ct ?? 0,
       population: a.population ?? null,
+      agencyType: a.agency_type,
     }))
     .sort((a, b) => b.officerCt - a.officerCt || a.name.localeCompare(b.name));
 

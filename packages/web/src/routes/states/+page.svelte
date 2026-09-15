@@ -2,10 +2,12 @@
   import type { StatesPageData, StateRow, AgencyRow } from "./+page.server";
   import { page } from "$app/stores";
   import { browser } from "$app/environment";
+  import { onMount } from "svelte";
   import { localizeHref, getLocale } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
   import { MODEL_ORDER, MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_SHORT } from "$lib/colors";
   import { ogImage } from "$lib/ogImage";
+  import { getCachedGeo } from "$lib/geo";
 
   export let data: StatesPageData;
 
@@ -47,6 +49,7 @@
     primary_model: "",
     officerCt: data.agencies.reduce((sum, a) => sum + (a.officerCt ?? 0), 0),
     population: data.agencies.reduce((sum, a) => sum + (a.population ?? 0), 0) || null,
+    agencyType: "",
   };
   // Split in two (rather than one shared flag) so removing one national card
   // from the compare grid doesn't also drop the other.
@@ -150,6 +153,16 @@
   let sortKey: SortKey = "rank";
   let sortMenuOpen = false;
 
+  // Agency-type filter — states don't have a type, so this only narrows the
+  // agencies list. Lives in the same popover as sort since both are
+  // "how the list is arranged" controls competing for the same bit of UI.
+  type AgencyTypeFilter = "all" | "Municipality" | "County" | "State Agency";
+  let agencyTypeFilter: AgencyTypeFilter = "all";
+  function chooseAgencyTypeFilter(value: AgencyTypeFilter) {
+    agencyTypeFilter = value;
+    track("browse_type_filter", { value });
+  }
+
   function chooseSortKey(key: SortKey) {
     sortKey = key;
     sortMenuOpen = false;
@@ -215,6 +228,7 @@
     .sort(stateComparator(sortKey));
   $: filteredAgenciesAll = data.agencies
     .filter((a) => !q || a.name.toLowerCase().includes(q) || a.state.toLowerCase().includes(q))
+    .filter((a) => agencyTypeFilter === "all" || a.agencyType === agencyTypeFilter)
     .slice()
     .sort(agencyComparator(sortKey));
   $: agenciesTotal = filteredAgenciesAll.length;
@@ -464,7 +478,8 @@
       </svg>
     </button>
     {#if sortMenuOpen}
-      <div class="absolute right-0 top-full z-20 mt-1.5 w-40 overflow-hidden rounded-md border border-paper-200 bg-paper-50 shadow-lg">
+      <div class="absolute right-0 top-full z-20 mt-1.5 w-48 overflow-hidden rounded-md border border-paper-200 bg-paper-50 shadow-lg">
+        <p class="border-b border-paper-100 bg-paper-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-ink-500">{m.browse_sort_label()}</p>
         {#each [["rank", m.browse_sort_size()], ["name", m.browse_sort_name()], ["population", m.browse_sort_population_opt()]] as [key, label]}
           <button
             type="button"
@@ -476,6 +491,20 @@
           >
             {label}
             {#if sortKey === key}<span aria-hidden="true">✓</span>{/if}
+          </button>
+        {/each}
+        <p class="border-y border-paper-100 bg-paper-100 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-ink-500">{m.browse_filter_type_label()}</p>
+        {#each [["all", m.browse_filter_type_all()], ["Municipality", m.browse_filter_type_municipality()], ["County", m.browse_filter_type_county()], ["State Agency", m.browse_filter_type_state()]] as [value, label]}
+          <button
+            type="button"
+            on:click={() => chooseAgencyTypeFilter(value as AgencyTypeFilter)}
+            class="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-paper-100"
+            class:font-semibold={agencyTypeFilter === value}
+            class:text-ink-900={agencyTypeFilter === value}
+            class:text-ink-700={agencyTypeFilter !== value}
+          >
+            {label}
+            {#if agencyTypeFilter === value}<span aria-hidden="true">✓</span>{/if}
           </button>
         {/each}
       </div>
