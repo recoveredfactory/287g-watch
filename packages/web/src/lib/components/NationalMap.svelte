@@ -145,8 +145,12 @@
     roadMajorCasing: "#FDFDFD",
     roadMajorFill: "#6A798B",
     roadMedium: "#7D8A99",
-    dotStroke: "rgba(253,253,253,0.55)",
-    dotStrokeWidth: 0.35,
+    // Bumped from a thin 0.55-opacity knockout ring: with jurisdiction-
+    // coverage fills now sitting under dots in the same model colors, a dot
+    // could disappear into a same-colored fill without a stronger ring to
+    // separate it from whatever's underneath.
+    dotStroke: "rgba(253,253,253,0.9)",
+    dotStrokeWidth: 0.9,
     text: "#393F46",
     textHalo: "rgba(253,253,253,0.9)",
     // Focus mode (focusSelected): the selected state's fill is lifted above the
@@ -690,7 +694,7 @@
             type: "fill",
             source: "states",
             filter: ["in", ["get", "name"], ["literal", stateKeysByModel[model] ?? []]],
-            paint: { "fill-color": MODEL_COLORS[model], "fill-opacity": 0.35 },
+            paint: { "fill-color": MODEL_COLORS[model], "fill-opacity": 0.18 },
           });
         }
       }
@@ -763,7 +767,7 @@
               ["concat", ["get", "name"], "|", ["get", "state"]],
               ["literal", countyKeysByModel[model] ?? []],
             ],
-            paint: { "fill-color": MODEL_COLORS[model], "fill-opacity": 0.55 },
+            paint: { "fill-color": MODEL_COLORS[model], "fill-opacity": 0.3 },
           });
         }
       }
