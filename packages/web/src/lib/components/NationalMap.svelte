@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from "svelte";
   import { goto } from "$app/navigation";
   import { browser } from "$app/environment";
-  import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_SHORT } from "$lib/colors";
+  import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_SHORT, MODEL_ORDER, MODEL_SLUG } from "$lib/colors";
   import { toInsetCoords, INSET_TRANSFORMS } from "$lib/insetTransforms";
   import { STATE_NAMES } from "$lib/states";
   import { ensurePmtilesProtocol, pmtilesBaseSource, PMTILES_GLYPHS } from "$lib/map/pmtiles";
@@ -15,7 +15,9 @@
     slug: string;
     name: string;
     state: string;
+    county?: string | null;
     city?: string | null;
+    agency_type?: string;
     primary_model: string | null;
     models: string[];
     population?: number | null;
@@ -87,8 +89,8 @@
   let container: HTMLDivElement;
   let map: any = null;
   // Flips true once the "load" callback has finished adding every source/
-  // layer (including the cluster overlay). Needed as an explicit reactive
-  // dependency below: `map` itself only changes once (null → instance,
+  // layer. Needed as an explicit reactive dependency below: `map` itself
+  // only changes once (null → instance,
   // synchronously in onMount, before "load" fires), so a `$: if (map &&
   // map.getSource(...))` guard with no other changing dependency may never
   // get a second chance to re-check once the source actually exists —
@@ -337,10 +339,20 @@
     return Math.min(1, Math.max(0, (dayNum(d!) - dayNum(newOldThreshold)) / newSpanDays));
   };
 
+  // County- and state-level agreements get area-coverage fill instead of a
+  // dot (see the "Jurisdiction coverage" block below) — a county sheriff's
+  // 287(g) authority realistically extends across the whole county, which a
+  // single dot undersells. Municipal agreements keep the dot: a city PD's
+  // reach is already fairly well represented by a point at that city.
+  // colorMode !== "model" (newOld/surge graphic) keeps every dot, unfiltered
+  // — that mode has no coverage layer of its own.
+  const isDotAgency = (a: MapAgency): boolean =>
+    colorMode !== "model" || (a.agency_type !== "County" && a.agency_type !== "State Agency");
+
   $: geojson = {
     type: "FeatureCollection",
     features: [...agencies, ...terminatedAgencies]
-      .filter((a) => a.lat != null && a.lng != null && !(lower48 && INSET_TRANSFORMS[a.state]))
+      .filter((a) => a.lat != null && a.lng != null && !(lower48 && INSET_TRANSFORMS[a.state]) && isDotAgency(a))
       .map((a) => {
         const [lng, lat] = toInsetCoords(a.lng!, a.lat!, a.state);
         return {
@@ -373,6 +385,70 @@
       }),
   };
 
+  // ── Jurisdiction coverage (county/state fills) ──────────────────────────────
+  // us-inset-counties.geojson ships with only {name, inset} — 444 county names
+  // repeat across states (30+ "Washington County"s), so nothing can match an
+  // agency's county to the right polygon without a state on the geometry too.
+  // scripts/augment-counties-with-state.mjs resolves that once, offline, and
+  // writes `state` back into the static file — this just reads the result.
+  // County names carry a handful of upstream data typos (Conty/Couty/Countey/
+  // Couny for "County") — stripped the same as the correct spelling rather
+  // than left to silently not match.
+  const COUNTY_SUFFIX = /\s+(County|Conty|Couty|Countey|Couny|Parish)$/i;
+  const normalizeCounty = (name: string): string => name.replace(COUNTY_SUFFIX, "").trim();
+  const countyKey = (name: string, state: string): string => `${normalizeCounty(name)}|${state}`;
+
+  type Coverage = { key: string; model: string };
+  $: countyCoverage = (
+    colorMode !== "model"
+      ? []
+      : agencies
+          .filter((a) => a.agency_type === "County" && a.county)
+          .map((a) => ({ key: countyKey(a.county!, a.state), model: a.primary_model ?? "" }))
+  ) as Coverage[];
+
+  $: stateCoverage = (
+    colorMode !== "model"
+      ? []
+      : agencies
+          .filter((a) => a.agency_type === "State Agency")
+          .map((a) => ({ key: STATE_NAMES[a.state] ?? a.state, model: a.primary_model ?? "" }))
+  ) as Coverage[];
+
+  // One layer per model (fixed 3, matching MODEL_ORDER) rather than a single
+  // giant match expression — a county/state only needs whichever agency's
+  // model "wins" when more than one covers it (the loader's own sort order,
+  // i.e. the first match kept per key — agency lists arrive largest-first).
+  const byWinningModel = (items: Coverage[]): Record<string, string[]> => {
+    const seen = new Map<string, string>();
+    for (const { key, model } of items) if (!seen.has(key)) seen.set(key, model);
+    const out: Record<string, string[]> = {};
+    for (const [key, model] of seen) (out[model] ??= []).push(key);
+    return out;
+  };
+  $: countyKeysByModel = byWinningModel(countyCoverage);
+  $: stateKeysByModel = byWinningModel(stateCoverage);
+
+  // Keep the coverage layers' filters in sync if the underlying agency list
+  // changes after the map has already loaded (mapLoaded, not a bare `map`
+  // guard — see its declaration above for why a plain `map &&` check can
+  // miss a second chance to re-run).
+  $: if (mapLoaded && colorMode === "model") {
+    for (const model of MODEL_ORDER) {
+      const slug = MODEL_SLUG[model];
+      if (map.getLayer(`county-coverage-${slug}`)) {
+        map.setFilter(`county-coverage-${slug}`, [
+          "in",
+          ["concat", ["get", "name"], "|", ["get", "state"]],
+          ["literal", countyKeysByModel[model] ?? []],
+        ]);
+      }
+      if (map.getLayer(`state-coverage-${slug}`)) {
+        map.setFilter(`state-coverage-${slug}`, ["in", ["get", "name"], ["literal", stateKeysByModel[model] ?? []]]);
+      }
+    }
+  }
+
   const updateSource = () => {
     if (!map) return;
     const src = map.getSource("agencies");
@@ -380,59 +456,6 @@
   };
 
   $: if (map) updateSource();
-
-  // ── Dot clustering (dense metros overlap at the national resting view) ──────
-  // Deliberately NOT MapLibre's native `cluster: true` on the live "agencies"
-  // source: that aggregates over the *entire* source dataset regardless of any
-  // layer filter, which can't stay in sync with the timeline scrubber's live
-  // per-dot fade/reveal (a dot isn't filtered out of the source, its opacity/
-  // radius are animated toward 0 — clustering would count it as "there" the
-  // whole time). So the existing "agencies" circle layer is untouched — it
-  // keeps doing 100% of the scrub/fade/reveal work exactly as before, including
-  // for the baked social videos. Clustering is a second, separate source/layer
-  // pair that only takes over the *display* when nothing is actively animating:
-  // zoomed out to the national view, colorMode is the default "model" (never
-  // for the /video/surge bake), and the cursor has been sitting still for a
-  // moment (not mid-drag or mid-playback). The moment either condition stops
-  // holding, the real per-dot layer reappears — cluster membership never needs
-  // to itself be reveal-aware, since it only ever renders once the reveal
-  // animation has already settled.
-  const CLUSTER_MAX_ZOOM = 4.5;
-  let currentZoom = 0;
-  let cursorIdle = true;
-  let idleTimer: ReturnType<typeof setTimeout>;
-  $: {
-    cursorIdx;
-    cursorIdle = false;
-    clearTimeout(idleTimer);
-    idleTimer = setTimeout(() => { cursorIdle = true; }, 500);
-  }
-
-  // Which dots are actually "on" right now, in the same signed/terminated-idx
-  // space the fade expressions use — safe to treat as a hard boolean cutoff
-  // here (rather than replicating the fade curve) because clustering only
-  // ever displays once the fade has finished settling (see cursorIdle above).
-  $: clusterFeatures =
-    colorMode !== "model"
-      ? []
-      : geojson.features.filter((f: any) => {
-          if (cursorIdx == null) return true;
-          const p = f.properties;
-          return p.signed_idx <= cursorIdx && cursorIdx < p.terminated_idx;
-        });
-
-  $: shouldCluster = colorMode === "model" && cursorIdle && currentZoom < CLUSTER_MAX_ZOOM;
-
-  $: if (mapLoaded && map.getSource("agency-clusters")) {
-    map.getSource("agency-clusters").setData({ type: "FeatureCollection", features: clusterFeatures });
-  }
-
-  $: if (mapLoaded && map.getLayer("cluster-circles")) {
-    const vis = shouldCluster ? "visible" : "none";
-    map.setLayoutProperty("cluster-circles", "visibility", vis);
-    map.setLayoutProperty("cluster-count", "visibility", vis);
-    map.setLayoutProperty("agencies", "visibility", shouldCluster ? "none" : "visible");
-  }
 
   // Smooth timeline transitions. Each dot fades + pops in over FADE_WINDOW
   // months after its signing date, so a continuous cursor reveals the data as
@@ -656,6 +679,22 @@
         paint: { "fill-color": newOldStateFill, "fill-opacity": 1 },
       });
 
+      // Jurisdiction coverage: whole-state fill for State Agency-level
+      // agreements (a state DOC/DPS agreement applies everywhere in the
+      // state) — one layer per model, filter kept in sync by the reactive
+      // block below as `stateKeysByModel` changes.
+      if (colorMode === "model") {
+        for (const model of MODEL_ORDER) {
+          map.addLayer({
+            id: `state-coverage-${MODEL_SLUG[model]}`,
+            type: "fill",
+            source: "states",
+            filter: ["in", ["get", "name"], ["literal", stateKeysByModel[model] ?? []]],
+            paint: { "fill-color": MODEL_COLORS[model], "fill-opacity": 0.35 },
+          });
+        }
+      }
+
       // Focus highlight: brighter fill for the selected state(s), drawn over the
       // base fills. Filter starts as highlightFilter (never-match outside focus
       // mode) and is kept in sync by the reactive block above.
@@ -704,6 +743,30 @@
         type: "geojson",
         data: "/us-inset-counties.geojson",
       });
+
+      // Jurisdiction coverage: county-level agreements (sheriff's offices,
+      // county PDs) fill the whole county rather than a single dot — a
+      // county sheriff's 287(g) authority realistically extends everywhere
+      // in the county, which is the point ("dots should cover areas...
+      // where you're driving, you can get screwed"). One layer per model,
+      // matched on name+state (see the augmentation script's comment above
+      // for why state is needed — 444 county names repeat across states).
+      // Drawn below county-lines so the outline stays visible on top.
+      if (colorMode === "model") {
+        for (const model of MODEL_ORDER) {
+          map.addLayer({
+            id: `county-coverage-${MODEL_SLUG[model]}`,
+            type: "fill",
+            source: "counties",
+            filter: [
+              "in",
+              ["concat", ["get", "name"], "|", ["get", "state"]],
+              ["literal", countyKeysByModel[model] ?? []],
+            ],
+            paint: { "fill-color": MODEL_COLORS[model], "fill-opacity": 0.55 },
+          });
+        }
+      }
 
       map.addLayer({
         id: "county-lines",
@@ -991,68 +1054,6 @@
         },
       });
 
-      // Cluster overlay — see the "Dot clustering" block above for why this is
-      // a wholly separate source/layer pair rather than `cluster: true` on the
-      // live "agencies" source. Starts empty; populated + shown by the
-      // reactive blocks above once shouldCluster is true. Colored neutral
-      // (not model-colored — a cluster mixes models) so it reads clearly as
-      // "zoom in to see what's here," not as a fourth model color.
-      if (colorMode === "model") {
-        map.addSource("agency-clusters", {
-          type: "geojson",
-          data: { type: "FeatureCollection", features: [] },
-          cluster: true,
-          clusterRadius: 44,
-          clusterMaxZoom: 6,
-          clusterProperties: {
-            officer_sum: ["+", ["coalesce", ["get", "officer_ct"], 0]],
-          },
-        });
-
-        map.addLayer({
-          id: "cluster-circles",
-          type: "circle",
-          source: "agency-clusters",
-          filter: ["has", "point_count"],
-          layout: { visibility: "none" },
-          paint: {
-            "circle-color": C.text,
-            "circle-opacity": 0.88,
-            "circle-stroke-width": 2,
-            "circle-stroke-color": C.roadCasing,
-            "circle-radius": ["step", ["get", "point_count"], 13, 10, 18, 50, 24, 200, 30],
-          },
-        });
-
-        map.addLayer({
-          id: "cluster-count",
-          type: "symbol",
-          source: "agency-clusters",
-          filter: ["has", "point_count"],
-          layout: {
-            "text-field": ["get", "point_count_abbreviated"],
-            "text-font": ["Noto Sans Regular"],
-            "text-size": 12,
-            visibility: "none",
-          },
-          paint: { "text-color": C.roadCasing },
-        });
-
-        map.on("mouseenter", "cluster-circles", () => { map.getCanvas().style.cursor = "pointer"; });
-        map.on("mouseleave", "cluster-circles", () => { map.getCanvas().style.cursor = ""; });
-        map.on("click", "cluster-circles", async (e: any) => {
-          const feature = e.features?.[0];
-          if (!feature) return;
-          const clusterId = feature.properties.cluster_id;
-          const src = map.getSource("agency-clusters");
-          const expansionZoom = await src.getClusterExpansionZoom(clusterId);
-          map.easeTo({ center: feature.geometry.coordinates, zoom: expansionZoom });
-        });
-
-        map.on("zoom", () => { currentZoom = map.getZoom(); });
-        currentZoom = map.getZoom();
-      }
-
       // Popup + tap/hover navigation — shared with AgencyMap.svelte via
       // $lib/map/touchPopup (see that module for the touch-interaction
       // rationale: single-tap-to-navigate + long-press-for-info, replacing
@@ -1089,9 +1090,9 @@
         navigate: (slug: string) => goto(`/agency/${slug}`),
       });
 
-      // Every source/layer (including the cluster overlay) is set up by this
-      // point — see the note on the `mapLoaded` declaration above for why the
-      // clustering reactive blocks need this as an explicit dependency.
+      // Every source/layer is set up by this point — see the note on the
+      // `mapLoaded` declaration above for why the coverage-filter reactive
+      // block needs this as an explicit dependency.
       mapLoaded = true;
 
       // Snapshot signal for the OG bake (scripts/bake-og.mjs). Set after

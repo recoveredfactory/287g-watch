@@ -158,6 +158,7 @@
   "home_map_heading": "Agencias 287(g), por modelo del programa",
   "home_map_subhead": "Haz clic en cualquier punto para ver el acuerdo y los registros de la agencia.",
   "home_map_size_note": "El tamaño del punto escala con el número de agentes jurados (FBI LEE).",
+  "home_map_coverage_note": "Las áreas sombreadas son acuerdos a nivel de condado o estatal — los puntos son acuerdos municipales.",
   "home_map_size_legend_label": "agentes",
   "home_map_caveat": "La línea de tiempo sigue los datos de 287(g) de ICE desde diciembre de 2024, el último informe antes de que Trump asumiera el cargo. Los puntos aparecen según su fecha de firma y se desvanecen cuando una agencia desaparece del registro de ICE. Hasta ahora, no hemos obtenido los datos publicados por ICE entre enero y el 4 de marzo de 2025. Si algunas agencias se unieron y dejaron el programa durante ese período, nuestros datos no las reflejarán.",
   "home_map_download": "Datos archivados por Elijah Appelson.",

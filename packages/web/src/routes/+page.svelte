@@ -347,6 +347,9 @@
           <p class="mt-1 text-xs sm:text-sm" style="color: var(--color-ink-500);">
             {m.home_map_size_note()}
           </p>
+          <p class="mt-1 text-xs sm:text-sm" style="color: var(--color-ink-500);">
+            {m.home_map_coverage_note()}
+          </p>
         </div>
         <!-- Legend -->
         <div class="flex flex-col items-start gap-2 sm:items-end">

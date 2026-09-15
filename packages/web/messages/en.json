@@ -158,6 +158,7 @@
   "home_map_heading": "287(g) agencies, by program model",
   "home_map_subhead": "Click any dot to view the agency's agreement and records.",
   "home_map_size_note": "Dot size scales with sworn officer count (FBI LEE).",
+  "home_map_coverage_note": "Shaded areas are county or statewide agreements — dots are city agreements.",
   "home_map_size_legend_label": "officers",
   "home_map_caveat": "The timeline follows ICE's 287(g) data since December, 2024, the last report before Trump took office. Dots appear as agreements based on their signing date and fade out when an agency drops off ICE's roster. So far, we have not obtained the data released by ICE from January to March 4, 2025. If agencies signed on and left the program during that period, our data will not reflect them.",
   "home_map_download": "Data archived by Elijah Appelson.",
