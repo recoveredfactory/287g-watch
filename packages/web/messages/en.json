@@ -291,6 +291,7 @@
   "glossary_subtitle": "Key terms used in reporting on the 287(g) program and immigration enforcement.",
   "glossary_jump_to_letter": "Jump to letter",
   "glossary_see_also": "See also:",
+  "glossary_learn_more": "Learn more",
   "agency_meta_title": "{agency_name} — 287(g) Agreement",
   "agency_meta_description_base": "{agency_name} in {state} has a 287(g) agreement with ICE.",
   "agency_meta_description_model": "Under the {model} model.",

@@ -10,6 +10,24 @@
 
   const terms = GLOSSARY_TERMS;
 
+  // Structured data (schema.org DefinedTermSet): lets search engines and
+  // LLM crawlers cite a specific definition directly rather than only ever
+  // summarizing the page as a whole. Each term's @id is its own in-page
+  // anchor, already the real, working URL for that definition.
+  $: glossaryJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "DefinedTermSet",
+    name: title,
+    description,
+    url: siteUrl + localizeHref("/glossary"),
+    hasDefinedTerm: terms.map((t) => ({
+      "@type": "DefinedTerm",
+      "@id": `${siteUrl}${localizeHref("/glossary")}#term-${termSlug(t.term)}`,
+      name: t.term,
+      description: t.definition,
+      inDefinedTermSet: siteUrl + localizeHref("/glossary"),
+    })),
+  };
 </script>
 
 <svelte:head>
@@ -22,6 +40,7 @@
   <meta property="og:image:height" content="630" />
   <meta property="twitter:card" content="summary_large_image" />
   <meta property="twitter:image" content={ogImage('glossary.png')} />
+  {@html `<script type="application/ld+json">${JSON.stringify(glossaryJsonLd)}</` + `script>`}
 </svelte:head>
 
 <main id="main-content" class="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
@@ -39,7 +58,7 @@
         <dd class="mt-1 text-sm leading-relaxed text-ink-700 sm:text-base">
           {t.definition}
           {#if t.learnMoreHref}
-            <a href={localizeHref(t.learnMoreHref)} class="mt-1 block text-sm font-semibold">Learn more →</a>
+            <a href={localizeHref(t.learnMoreHref)} class="mt-1 block text-sm font-semibold">{m.glossary_learn_more()} →</a>
           {/if}
           {#if t.seeAlso?.length}
             <span class="mt-1 block text-sm text-ink-500">

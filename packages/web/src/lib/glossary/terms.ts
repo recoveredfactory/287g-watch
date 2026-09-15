@@ -31,6 +31,12 @@ export const GLOSSARY_TERMS: GlossaryTerm[] = [
     seeAlso: ["Jail Enforcement Model", "Civil immigration violation"],
   },
   {
+    term: "Field office",
+    definition:
+      "One of ICE's regional administrative offices, each overseeing 287(g) agreements and other enforcement activity across a multi-state territory. A local agency's MOA is signed with, and reports up through, a specific field office.",
+    seeAlso: ["ICE", "Memorandum of Agreement"],
+  },
+  {
     term: "ICE",
     definition:
       "U.S. Immigration and Customs Enforcement, the federal agency within the Department of Homeland Security responsible for civil immigration enforcement.",
@@ -53,6 +59,12 @@ export const GLOSSARY_TERMS: GlossaryTerm[] = [
     term: "MOA",
     definition: "Short for Memorandum of Agreement — the formal contract between ICE and a local agency.",
     seeAlso: ["Memorandum of Agreement"],
+  },
+  {
+    term: "Sanctuary jurisdiction",
+    definition:
+      "A state or locality with a law or policy that limits local cooperation with federal immigration enforcement — commonly by restricting how long a jail can hold someone on an ICE detainer alone. Sanctuary status varies by degree and by jurisdiction; it doesn't necessarily mean zero cooperation, and some states with such laws still have local agencies signed onto 287(g) through models the law doesn't restrict.",
+    seeAlso: ["Detainer", "287(g)"],
   },
   {
     term: "Removal",
