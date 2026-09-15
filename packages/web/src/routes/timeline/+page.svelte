@@ -46,6 +46,7 @@
   {#if data.snapshotDate}
     <p class="mt-2 text-xs italic text-ink-500">{m.timeline_as_of({ date: dateFmt.format(new Date(data.snapshotDate)) })}</p>
   {/if}
+  <p class="mt-2 text-xs italic leading-snug text-ink-500">{m.timeline_data_caveat()}</p>
 
   <p class="mt-6 border-y border-paper-200 py-4 font-serif text-lg font-bold text-ink-900 sm:text-xl">
     {m.timeline_growth_headline({ baseline: intFmt.format(data.baselineTotal), current: intFmt.format(data.currentTotal) })}

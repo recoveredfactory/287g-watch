@@ -3,7 +3,6 @@
   import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_DARK_COLORS, MODEL_SLUG, MODEL_ORDER, MODEL_SHORT } from "$lib/colors";
   import { STATE_NAMES } from "$lib/states";
   import NationalMap from "$lib/components/NationalMap.svelte";
-  import MapTimelineScrubber from "$lib/components/MapTimelineScrubber.svelte";
   import TrendCharts from "$lib/components/TrendCharts.svelte";
   import ModelLink from "$lib/components/ModelLink.svelte";
   import { browser } from "$app/environment";
@@ -44,16 +43,19 @@
   $: todayIdx = model.todayIdx;
   $: maxIdx = model.maxIdx;
   const minIdx = TIMELINE_START_IDX;
+  // No more scrub/play control on the page itself — the map always shows the
+  // current, final state. cursorIdx stays a plain assignable var (not a `$:`
+  // derivation) because scripts/bake-map-video.mjs still drives it frame-by-
+  // frame via window.__setCursor for the growth-animation video bake.
   let cursorIdx = NaN;
   $: if (Number.isNaN(cursorIdx) && Number.isFinite(maxIdx)) cursorIdx = maxIdx;
-  // Net active at the cursor (dips as departures cross), and local pop covered.
+  // Net active at the cursor, and local pop covered.
   $: countAtCursor = activeCountAt(model, cursorIdx);
   $: popAtCursor = coveredPopAt(model, cursorIdx);
 
   // Big number overlay on the map. Always visible — readers always see the
   // live count. Smooth tween catches up with easing so the digits feel like
   // they're ticking up rather than slamming on each keystroke.
-  let timelinePlaying = false;
   // The video bake (scripts/bake-map-video.mjs) frame-steps the cursor and
   // screenshots each frame after a tiny delay. The 280ms count tween never
   // settles in that window, so the baked counter lags the map (it visibly
@@ -64,12 +66,6 @@
   const displayedPop = tweened(0, { duration: 280, easing: cubicOut });
   $: displayedCount.set(countAtCursor, bakeInstant ? { duration: 0 } : undefined);
   $: displayedPop.set(popAtCursor, bakeInstant ? { duration: 0 } : undefined);
-
-  // Card is a tap target: clicking it restarts the timeline animation from
-  // May 2025 so readers can replay the sweep without scrolling to the
-  // scrubber.
-  let scrubberRef: { restart: () => void } | null = null;
-  const restartTimeline = () => scrubberRef?.restart();
 
   // Month label for the overlay's date ticker.
   $: overlayDateLabel = overlayMonthLabel(
@@ -429,13 +425,7 @@
         <div
           class="count-overlay pointer-events-none absolute inset-x-0 top-2 flex flex-col items-center sm:top-auto sm:bottom-4"
         >
-          <button
-            type="button"
-            on:click={restartTimeline}
-            class="count-card pointer-events-auto"
-            aria-label={m.home_overlay_replay_aria()}
-            title={m.home_overlay_replay_title()}
-          >
+          <div class="count-card">
             <div class="count-stats">
               <div class="count-stat">
                 <div class="count-number">{intFmt.format(Math.round($displayedCount))}</div>
@@ -447,27 +437,24 @@
                 <div class="count-label">{m.home_overlay_pop_label()}</div>
               </div>
             </div>
-          </button>
+          </div>
           <div class="count-date">{overlayDateLabel}</div>
         </div>
       {/if}
     </div>
     {#if data.agencies.length > 0 && Number.isFinite(maxIdx)}
       <div style="background: var(--color-paper-50);">
-        <div class="mx-auto max-w-6xl">
-          <MapTimelineScrubber bind:this={scrubberRef} {minIdx} {maxIdx} labelMaxIdx={todayIdx} bind:cursorIdx bind:playing={timelinePlaying} {countAtCursor} />
-          <div class="px-4 pb-4 text-[11px] italic leading-snug sm:px-6 sm:text-xs" style="color: var(--color-ink-500);">
-            <p>{m.home_map_boundaries_note()}</p>
-            <p class="mt-1">
-              <a
-                href="https://github.com/appelson/Tracking_287g"
-                target="_blank"
-                rel="noreferrer"
-                class="underline"
-                style="color: var(--color-ink-500);"
-              >{m.home_map_download()} ↗</a>
-            </p>
-          </div>
+        <div class="mx-auto max-w-6xl px-4 py-3 text-[11px] italic leading-snug sm:px-6 sm:text-xs" style="color: var(--color-ink-500);">
+          <p>{m.home_map_boundaries_note()}</p>
+          <p class="mt-1">
+            <a
+              href="https://github.com/appelson/Tracking_287g"
+              target="_blank"
+              rel="noreferrer"
+              class="underline"
+              style="color: var(--color-ink-500);"
+            >{m.home_map_download()} ↗</a>
+          </p>
         </div>
       </div>
     {/if}
@@ -530,18 +517,12 @@
 </main>
 
 <style>
-  /* Big-number overlay on the map. Always visible. The card itself is a
-     button — tapping it replays the growth animation from Jan 2025. */
+  /* Big-number overlay on the map. Always visible, showing the current
+     (final) count — no longer an interactive replay control. */
   .count-overlay {
     transform: translateZ(0);
   }
-  button.count-card {
-    /* Reset native button chrome so the card looks like a card. */
-    border: 0;
-    font: inherit;
-    color: inherit;
-    text-align: inherit;
-    cursor: pointer;
+  .count-card {
     display: inline-flex;
     flex-direction: column;
     align-items: stretch;
@@ -556,20 +537,9 @@
     box-shadow:
       0 1px 3px rgba(36, 31, 22, 0.08),
       0 8px 22px rgba(36, 31, 22, 0.10);
-    transition: background-color 180ms ease-out, transform 180ms ease-out;
   }
   @media (min-width: 640px) {
-    button.count-card { width: 15rem; padding: 0.6rem 1rem 0.65rem; }
-  }
-  button.count-card:hover {
-    background: #ffffff;
-  }
-  button.count-card:active {
-    transform: scale(0.98);
-  }
-  button.count-card:focus-visible {
-    outline: 2px solid rgba(36, 31, 22, 0.4);
-    outline-offset: 2px;
+    .count-card { width: 15rem; padding: 0.6rem 1rem 0.65rem; }
   }
   .count-date {
     margin-top: 0.4rem;
