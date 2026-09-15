@@ -7,7 +7,7 @@ export const prerender = true;
 
 const STATIC_PATHS = [
   "/",
-  "/states",
+  "/explore",
   "/timeline",
   "/about",
   "/glossary",

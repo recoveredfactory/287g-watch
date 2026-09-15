@@ -216,7 +216,7 @@
         <div class="mt-2.5 flex items-center sm:mt-0 sm:flex-1">
           <nav class="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm font-semibold sm:ml-8 sm:flex-nowrap sm:gap-5">
             <a
-              href={localizeHref("/states")}
+              href={localizeHref("/explore")}
               class="no-underline {isNavActive('/states', basePath) ? 'text-ink-900 underline underline-offset-4 decoration-2' : 'text-ink-700 hover:text-ink-900'}"
               aria-current={isNavActive('/states', basePath) ? 'page' : undefined}
             >{m.nav_states()}</a>
@@ -265,7 +265,7 @@
         {m.footer_tagline_after_name()}
       </p>
       <p>
-        <a href={localizeHref("/states")} class="text-ink-700 hover:text-ink-900">{m.nav_states()}</a>
+        <a href={localizeHref("/explore")} class="text-ink-700 hover:text-ink-900">{m.nav_states()}</a>
         <span class="mx-1.5 text-ink-500">·</span>
         <a href={localizeHref("/timeline")} class="text-ink-700 hover:text-ink-900">{m.nav_timeline()}</a>
         <span class="mx-1.5 text-ink-500">·</span>

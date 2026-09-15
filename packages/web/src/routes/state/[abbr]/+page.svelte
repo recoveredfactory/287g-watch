@@ -238,7 +238,7 @@
         </p>
       {/if}
       <a
-        href={localizeHref(`/states?sel=state:${abbr}`)}
+        href={localizeHref(`/explore?sel=state:${abbr}`)}
         class="text-xs font-semibold text-ink-900 underline underline-offset-2 hover:text-ink-700"
       >{m.state_compare_cta()} →</a>
     </div>

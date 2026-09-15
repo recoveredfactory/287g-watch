@@ -301,7 +301,7 @@
             <span class="font-mono text-ink-500">{m.agency_rank_of({ rank: data.officerCtRank, total: data.officerCtRankTotal })}</span>
           {/if}
           <a
-            href={localizeHref(`/states?sel=agency:${agency.slug}`)}
+            href={localizeHref(`/explore?sel=agency:${agency.slug}`)}
             class="font-semibold text-ink-900 underline underline-offset-2 hover:text-ink-700"
           >{m.agency_compare_cta()} →</a>
         </p>

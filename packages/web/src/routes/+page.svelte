@@ -518,7 +518,7 @@
         <h2 class="mt-1 font-serif text-xl font-bold" style="color: var(--color-ink-900);">{m.home_browse_cta_heading()}</h2>
         <p class="mt-2 text-sm leading-relaxed" style="color: var(--color-ink-700);">{m.home_browse_cta_body()}</p>
         <a
-          href={localizeHref("/states")}
+          href={localizeHref("/explore")}
           class="mt-4 inline-flex w-fit items-center gap-1 text-sm font-semibold no-underline hover:underline"
           style="color: var(--color-ink-900);"
         >{m.home_browse_cta_link()} →</a>
@@ -537,7 +537,7 @@
         <h2 class="font-serif text-[length:var(--text-h2)] font-bold" style="color: var(--color-ink-900);">{m.home_recent_heading()}</h2>
         <div class="flex flex-col items-end gap-1 text-sm font-semibold">
           <a
-            href={localizeHref("/states")}
+            href={localizeHref("/explore")}
             class="no-underline hover:underline"
             style="color: var(--color-ink-900);"
           >{m.home_recent_browse_all()} →</a>

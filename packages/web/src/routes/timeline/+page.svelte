@@ -119,7 +119,7 @@
 
   <p class="mt-8 border-t border-paper-200 pt-6 text-sm">
     <a
-      href={localizeHref("/states")}
+      href={localizeHref("/explore")}
       class="font-semibold text-ink-900 underline underline-offset-2 hover:text-ink-700"
     >{m.timeline_browse_cta()} →</a>
   </p>
