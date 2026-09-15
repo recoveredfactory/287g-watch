@@ -8,6 +8,7 @@
   import { MODEL_ORDER, MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_SHORT } from "$lib/colors";
   import { ogImage } from "$lib/ogImage";
   import { getCachedGeo } from "$lib/geo";
+  import StateTrendMini from "$lib/components/StateTrendMini.svelte";
 
   export let data: StatesPageData;
 
@@ -98,6 +99,8 @@
   const intFmt = new Intl.NumberFormat(localeTag);
   const popFmt = new Intl.NumberFormat(localeTag, { notation: "compact", maximumFractionDigits: 1 });
   const dateFmt = new Intl.DateTimeFormat(localeTag, { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
+  const monthShortFmt = new Intl.DateTimeFormat(localeTag, { year: "numeric", month: "short", timeZone: "UTC" });
+  const monthLabel = (ym: string) => monthShortFmt.format(new Date(`${ym}-01T00:00:00Z`));
 
   $: title = m.browse_meta_title();
   $: description = m.browse_meta_description();
@@ -719,6 +722,19 @@
                     {/each}
                   </dd>
                 </div>
+                {#if !entry.national && data.stateSparkByAbbr[row.abbr]}
+                  <div>
+                    <dt class="text-[10px] font-semibold uppercase tracking-wider text-ink-500">{m.browse_spark_heading()}</dt>
+                    <dd class="mt-1 h-16 w-full">
+                      <StateTrendMini
+                        series={data.stateSparkByAbbr[row.abbr]}
+                        startLabel={monthLabel(data.trendMonths[0])}
+                        endLabel={monthLabel(data.trendMonths[data.trendMonths.length - 1])}
+                        label={m.browse_spark_aria({ state: row.stateName })}
+                      />
+                    </dd>
+                  </div>
+                {/if}
               </dl>
             {:else}
               {@const row = entry.row}
