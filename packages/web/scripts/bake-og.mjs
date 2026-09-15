@@ -4,8 +4,8 @@
 // Templates baked (all share the homepage map snapshot as background):
 //   static/og/home.png          launch tagline
 //   static/og/glossary.png      "GLOSSARY" — 287(g) terms explained
-//   static/og/about.png         "ABOUT" — About 287(g) Watch
-//   static/og/methodology.png   "METHODOLOGY" — How we built this
+//   static/og/about.png         "ABOUT" — About 287(g) Watch (now also covers
+//                                methodology, merged onto the same page)
 //   static/og/model/{slug}.png  per-program-model (jail, taskforce, wso)
 //   static/og/agency/{slug}.png per-agency (name + city/state + model accent)
 //
@@ -431,7 +431,6 @@ const STR = {
     home: "Every active agreement between local police and ICE.",
     glossary: "287(g) terms, explained.",
     about: "Why we built 287(g) Watch.",
-    methodology: "How we built this dataset.",
     "use-the-map": "Free videos and images about the growth of 287(g).",
     states: "State-by-state 287(g) news summaries and data.",
     timeline: "Month-by-month growth of ICE's 287(g) program, nationally.",
@@ -445,7 +444,6 @@ const STR = {
     home: "Cada acuerdo activo entre la policía local e ICE.",
     glossary: "Términos de 287(g), explicados.",
     about: "Por qué creamos 287(g) Watch.",
-    methodology: "Cómo construimos estos datos.",
     "use-the-map": "Videos e imágenes gratuitos sobre el crecimiento de 287(g).",
     states: "Noticias y datos de 287(g), estado por estado.",
     timeline: "El crecimiento mes a mes del programa 287(g) de ICE, a nivel nacional.",
@@ -481,7 +479,7 @@ async function bakeHome(locale) {
 }
 
 async function bakePages(locale) {
-  for (const slug of ["glossary", "about", "methodology", "use-the-map", "states", "timeline"]) {
+  for (const slug of ["glossary", "about", "use-the-map", "states", "timeline"]) {
     await bakeCard(path.join(OG_DIR, locale, `${slug}.png`), { title: STR[locale][slug] });
     console.log(`✓ ${locale}/${slug}.png`);
   }

@@ -67,9 +67,9 @@
   const PAGES: { key: string; label: () => string; href: string }[] = [
     { key: "home", label: () => m.search_palette_page_home(), href: "/" },
     { key: "states", label: () => m.search_palette_page_states(), href: "/states" },
+    { key: "timeline", label: () => m.search_palette_page_timeline(), href: "/timeline" },
     { key: "glossary", label: () => m.search_palette_page_glossary(), href: "/glossary" },
     { key: "about", label: () => m.search_palette_page_about(), href: "/about" },
-    { key: "methodology", label: () => m.search_palette_page_methodology(), href: "/methodology" },
     { key: "use-the-map", label: () => m.search_palette_page_use_the_map(), href: "/use-the-map" },
   ];
 

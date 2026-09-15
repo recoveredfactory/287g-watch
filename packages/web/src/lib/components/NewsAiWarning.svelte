@@ -21,7 +21,7 @@
     >{m.news_ai_promptql()}</a>.
     {m.news_ai_warning()}
     <a
-      href={localizeHref("/methodology#ai")}
+      href={localizeHref("/about#ai")}
       class="whitespace-nowrap font-semibold underline decoration-amber-400 underline-offset-2 hover:decoration-amber-700"
     >{m.news_ai_warning_link()}&nbsp;<span aria-hidden="true">→</span></a>
   </p>

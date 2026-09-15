@@ -11,7 +11,6 @@ const STATIC_PATHS = [
   "/timeline",
   "/about",
   "/glossary",
-  "/methodology",
   "/model/jail",
   "/model/taskforce",
   "/model/wso",

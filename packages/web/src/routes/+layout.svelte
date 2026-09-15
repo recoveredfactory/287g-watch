@@ -321,7 +321,7 @@
               href={localizeHref("/states")}
               class="no-underline {isNavActive('/states', basePath) ? 'text-ink-900 underline underline-offset-4 decoration-2' : 'text-ink-700 hover:text-ink-900'}"
               aria-current={isNavActive('/states', basePath) ? 'page' : undefined}
-            >{m.nav_explore()}</a>
+            >{m.nav_states()}</a>
             <a
               href={localizeHref("/timeline")}
               class="no-underline {isNavActive('/timeline', basePath) ? 'text-ink-900 underline underline-offset-4 decoration-2' : 'text-ink-700 hover:text-ink-900'}"
@@ -332,11 +332,6 @@
               class="no-underline {isNavActive('/glossary', basePath) ? 'text-ink-900 underline underline-offset-4 decoration-2' : 'text-ink-700 hover:text-ink-900'}"
               aria-current={isNavActive('/glossary', basePath) ? 'page' : undefined}
             >{m.nav_glossary()}</a>
-            <a
-              href={localizeHref("/methodology")}
-              class="no-underline {isNavActive('/methodology', basePath) ? 'text-ink-900 underline underline-offset-4 decoration-2' : 'text-ink-700 hover:text-ink-900'}"
-              aria-current={isNavActive('/methodology', basePath) ? 'page' : undefined}
-            >{m.nav_methodology()}</a>
             <a
               href={localizeHref("/about")}
               class="no-underline {isNavActive('/about', basePath) ? 'text-ink-900 underline underline-offset-4 decoration-2' : 'text-ink-700 hover:text-ink-900'}"
@@ -358,7 +353,7 @@
       role="note"
     >
       {m.source_material_notice()}
-      <a href={localizeHref("/methodology")} class="underline" style="color: var(--color-ink-900);">{m.nav_methodology()}</a>.
+      <a href={localizeHref("/about#methodology")} class="underline" style="color: var(--color-ink-900);">{m.nav_methodology_link()}</a>.
     </p>
   {/if}
 
@@ -372,13 +367,11 @@
         {m.footer_tagline_after_name()}
       </p>
       <p>
-        <a href={localizeHref("/states")} class="text-ink-700 hover:text-ink-900">{m.nav_explore()}</a>
+        <a href={localizeHref("/states")} class="text-ink-700 hover:text-ink-900">{m.nav_states()}</a>
         <span class="mx-1.5 text-ink-500">·</span>
         <a href={localizeHref("/timeline")} class="text-ink-700 hover:text-ink-900">{m.nav_timeline()}</a>
         <span class="mx-1.5 text-ink-500">·</span>
         <a href={localizeHref("/glossary")} class="text-ink-700 hover:text-ink-900">{m.nav_glossary()}</a>
-        <span class="mx-1.5 text-ink-500">·</span>
-        <a href={localizeHref("/methodology")} class="text-ink-700 hover:text-ink-900">{m.footer_methodology()}</a>
         <span class="mx-1.5 text-ink-500">·</span>
         <a href={localizeHref("/about")} class="text-ink-700 hover:text-ink-900">{m.footer_about()}</a>
       </p>
