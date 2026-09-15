@@ -2,7 +2,8 @@
   import type { TimelineData } from "./+page.server";
   import { getLocale, localizeHref } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
-  import { MODEL_COLORS, MODEL_SHORT } from "$lib/colors";
+  import { MODEL_COLORS, MODEL_SHORT, MODEL_ORDER } from "$lib/colors";
+  import { STATE_NAMES } from "$lib/states";
   import { ogImage } from "$lib/ogImage";
 
   export let data: TimelineData;
@@ -18,6 +19,12 @@
   $: description = m.timeline_meta_description();
 
   $: maxAbsDelta = Math.max(1, ...data.months.map((mo) => Math.abs(mo.delta)));
+
+  const modelCounts = (mo: TimelineData["months"][number]): Record<string, number> => ({
+    "Jail Enforcement Model": mo.jail,
+    "Task Force Model": mo.taskforce,
+    "Warrant Service Officer": mo.wso,
+  });
 </script>
 
 <svelte:head>
@@ -40,29 +47,27 @@
     <p class="mt-2 text-xs italic text-ink-500">{m.timeline_as_of({ date: dateFmt.format(new Date(data.snapshotDate)) })}</p>
   {/if}
 
+  <p class="mt-6 border-y border-paper-200 py-4 font-serif text-lg font-bold text-ink-900 sm:text-xl">
+    {m.timeline_growth_headline({ baseline: intFmt.format(data.baselineTotal), current: intFmt.format(data.currentTotal) })}
+  </p>
+
   <ol class="mt-10 space-y-0 border-l-2 pl-5" style="border-color: var(--color-paper-200);">
     {#each data.months as mo (mo.ym)}
-      {@const highlighted = data.highlightYms.has(mo.ym)}
       {@const barPct = Math.round((Math.abs(mo.delta) / maxAbsDelta) * 100)}
-      <li class="relative pb-7 last:pb-0">
+      <li id={mo.ym} class="relative scroll-mt-24 pb-8 last:pb-0">
         <span
           class="absolute -left-[1.6875rem] top-0.5 h-3.5 w-3.5 rounded-full border-2"
-          style="background: {highlighted ? '#BE6079' : 'var(--color-paper-200)'}; border-color: var(--color-paper-50);"
+          style="background: var(--color-paper-200); border-color: var(--color-paper-50);"
           aria-hidden="true"
         ></span>
 
-        <time class="block font-mono text-xs font-semibold uppercase tracking-wider text-ink-500">
+        <a href="#{mo.ym}" class="block font-mono text-xs font-semibold uppercase tracking-wider text-ink-500 no-underline hover:underline">
           {monthLabel(mo.ym)}
-        </time>
+        </a>
 
-        <div class="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-          <p class="font-serif text-lg font-bold text-ink-900">
-            {intFmt.format(mo.total)} <span class="text-sm font-normal text-ink-500">{m.timeline_total_label()}</span>
-          </p>
-          {#if highlighted}
-            <span class="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white" style="background: #BE6079;">{m.timeline_highlight_label()}</span>
-          {/if}
-        </div>
+        <p class="mt-1 font-serif text-lg font-bold text-ink-900">
+          {intFmt.format(mo.total)} <span class="text-sm font-normal text-ink-500">{m.timeline_total_label()}</span>
+        </p>
 
         <p class="mt-0.5 text-sm text-ink-700">
           {#if mo.delta > 0}
@@ -81,6 +86,33 @@
             style="width: {barPct}%; background: {mo.delta >= 0 ? MODEL_COLORS['Warrant Service Officer'] : '#BE6079'};"
           ></div>
         </div>
+
+        {#if mo.delta !== 0}
+          <div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span class="text-[10px] font-semibold uppercase tracking-wider text-ink-500">{m.timeline_models_label()}</span>
+            {#each MODEL_ORDER as model}
+              {@const count = modelCounts(mo)[model]}
+              {#if count}
+                <span class="flex items-center gap-1 font-mono text-[11px] tabular-nums text-ink-700">
+                  <span class="inline-block h-2 w-2 rounded-full" style="background: {MODEL_COLORS[model]};" aria-hidden="true"></span>
+                  {MODEL_SHORT[model]} {intFmt.format(count)}
+                </span>
+              {/if}
+            {/each}
+          </div>
+        {/if}
+
+        {#if mo.states.length > 0}
+          <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span class="text-[10px] font-semibold uppercase tracking-wider text-ink-500">{m.timeline_states_label()}</span>
+            {#each mo.states as s (s.abbr)}
+              <a
+                href={localizeHref(`/state/${s.abbr.toLowerCase()}`)}
+                class="font-mono text-[11px] tabular-nums text-ink-700 no-underline hover:underline"
+              >{STATE_NAMES[s.abbr] ?? s.abbr} {signedIntFmt.format(s.net)}{#if s.stateAgencyNet !== 0}&nbsp;<span class="text-ink-500">({m.timeline_statewide_tag({ count: Math.abs(s.stateAgencyNet) })})</span>{/if}</a>
+            {/each}
+          </div>
+        {/if}
       </li>
     {/each}
   </ol>
