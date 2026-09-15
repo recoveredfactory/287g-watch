@@ -192,6 +192,187 @@ export const MODEL_RICH_CONTENT: Record<string, ModelContent> = {
   },
 };
 
+// ── Spanish content ─────────────────────────────────────────────────────────
+// Translated from the English content above, not independently researched —
+// every fact, figure, case name, and citation is identical to its English
+// counterpart; only the prose is translated. Direct quotes are translated
+// too (their sources spoke/wrote in English; this follows the same
+// convention the rest of the site's Spanish content already uses for quoted
+// English-language source material, e.g. news_bilingual_brief). Model names
+// (MODEL_RICH_CONTENT_ES's keys) are deliberately left as the English
+// official designations — same existing site convention as MODEL_SHORT/
+// MODEL_MINI, which never localize either. PRIMARY_SOURCES (citation
+// titles) and Finding.source (citation labels) are left untranslated in
+// both locales — standard bibliographic practice, not an oversight.
+
+export const PROGRAM_FINDINGS_ES: Finding[] = [
+  {
+    source: "DHS OIG (2010)",
+    text: "Más de la mitad de los inmigrantes identificados a través del JEM fueron arrestados por delitos menores, principalmente infracciones de tránsito. ICE y las agencias locales no cumplían con los términos del MOA. Se emitieron al menos 33 recomendaciones.",
+  },
+  {
+    source: 'ACLU "License to Abuse" (2022)',
+    text: "De 142 agencias participantes, el 65% tenía patrones documentados de perfil racial, y el 77% operaba instalaciones de detención con condiciones inhumanas documentadas.",
+  },
+  {
+    source: "Comité de la ONU para la Eliminación de la Discriminación Racial (2022)",
+    text: 'Pidió a la administración Biden que terminara el programa, describiéndolo como una práctica que "promueve indirectamente el perfil racial."',
+  },
+  {
+    source: "Cato Institute (2018)",
+    text: "Un análisis de condados de Carolina del Norte no encontró relación causal entre las detenciones del 287(g) y la reducción del delito. Inesperadamente, se halló una correlación con un aumento de agresiones contra agentes del orden, atribuido a la erosión de la confianza comunitaria.",
+  },
+];
+
+export const DETAINER_NOTE_ES =
+  "Tribunales de varias jurisdicciones han determinado que los detainers civiles de inmigración no son vinculantes para las cárceles locales, y que retener a alguien únicamente por un detainer más allá de su fecha legal de liberación puede violar la Cuarta Enmienda. ICE sostiene que son solicitudes legales. Véase <em>Morales v. Chadbourne</em>, 1.er Cir. 2015.";
+
+export const COMPARISON_ROWS_ES: ComparisonRow[] = [
+  { label: "Entorno", jem: "Solo cárcel", tfm: "Cualquier lugar", wso: "Solo cárcel" },
+  { label: "¿Puede interrogar a sospechosos?", jem: "Sí", tfm: "Sí", wso: "No" },
+  { label: "¿Puede iniciar la deportación?", jem: "Sí", tfm: "Sí", wso: "No" },
+  {
+    label: "¿Puede arrestar sin cargos estatales?",
+    jem: "Sí (en la instalación)",
+    tfm: "Sí (en cualquier lugar)",
+    wso: "No: se requiere una orden",
+  },
+  {
+    label: "Capacitación",
+    jem: "160 horas (4 semanas)",
+    tfm: "40 horas en línea",
+    wso: "8 horas en línea",
+  },
+  {
+    label: "Inspecciones de cumplimiento",
+    jem: "Bienal",
+    tfm: "No está claro",
+    wso: "Ninguna",
+  },
+];
+
+export const MODEL_RICH_CONTENT_ES: Record<string, ModelContent> = {
+  "Jail Enforcement Model": {
+    overviewParas: [
+      "Este modelo solo autoriza a los oficiales a investigar el estatus migratorio después de que alguien ya haya sido ingresado a la cárcel — no hay patrullajes comunitarios, no hay arrestos basados en sospecha de estatus migratorio en el campo, y no hay detenciones callejeras. Los oficiales necesitan un motivo independiente para poner a alguien bajo custodia.",
+      "Los oficiales locales examinan e identifican a las personas que ya han sido ingresadas a la cárcel. Pueden entrevistar a las personas detenidas sobre su estatus migratorio, realizar verificaciones en las bases de datos del DHS, emitir detainers, y retener a alguien hasta 48 horas después de su fecha de liberación programada para que ICE pueda tomar custodia.",
+      "Los oficiales también pueden ejecutar órdenes de arresto administrativas e iniciar el papeleo de deportación.",
+    ],
+    officerCan: [
+      "Entrevistar a personas detenidas sobre su estatus migratorio",
+      "Realizar verificaciones en las bases de datos del DHS (IDENT/IAFIS)",
+      "Emitir detainers de inmigración",
+      "Retener a personas hasta 48 horas después de su liberación programada para el traslado a ICE",
+      "Ejecutar órdenes de arresto administrativas",
+      "Iniciar procesos de deportación",
+    ],
+    trainingText:
+      "Curso de 4 semanas (160 horas) en el Centro Federal de Capacitación en Cumplimiento de la Ley (FLETC) en Georgia. Se requiere capacitación de actualización cada dos años (reducida de anual tras los cambios al MOA de 2020).",
+    backgroundParas: [
+      "El primer acuerdo fue firmado en 2002 por el Departamento de Cumplimiento de la Ley de Florida (FDLE). El programa creció a 72 agencias para 2011, y luego se redujo a 37 bajo la administración Obama para 2017. El crecimiento se estancó hasta el segundo mandato de Trump, cuando las cifras subieron a aproximadamente 150 antes de acelerarse aún más.",
+    ],
+    majorPoints: [
+      {
+        heading: "Sin métricas de desempeño (GAO-21-186, 2021)",
+        body: 'ICE "no tiene metas ni medidas para evaluar el desempeño del programa." Las inspecciones de cumplimiento bienales existen en papel, pero se realizan de manera inconsistente.',
+      },
+      {
+        heading: "Retroceso en la rendición de cuentas (2020)",
+        body: 'Cuando ICE renovó 75 MOA del JEM en 2020, eliminó discretamente las fechas de vencimiento, el requisito de que los oficiales individuales se comprometieran a un mínimo de 2 años, y toda la sección que describía los procedimientos de quejas de derechos civiles — incluidos los puntos de contacto de las agencias. <a href="https://ilrc.org/sites/default/files/resources/changes_to_287g_10.20.20.pdf" target="_blank" rel="noreferrer" class="underline">Fuente: análisis de ILRC.</a>',
+      },
+    ],
+  },
+
+  "Task Force Model": {
+    overviewParas: [
+      "Esta es la concesión de autoridad más amplia. Los oficiales locales pueden interrogar y arrestar a personas por violaciones migratorias en cualquier momento — paradas de tránsito, respuestas al 911, encuentros callejeros. La autoridad no se limita al entorno carcelario.",
+      "La distinción clave con el JEM es que los oficiales del TFM hacen el primer contacto y pueden arrestar basándose únicamente en la sospecha de estatus migratorio. Los oficiales del JEM solo tienen contacto con personas que ya están bajo custodia por cargos estatales.",
+    ],
+    officerCan: [
+      "Interrogar a cualquier persona sobre su estatus migratorio durante cualquier encuentro",
+      "Acceder a las bases de datos del DHS (IDENT/IAFIS)",
+      "Realizar arrestos civiles de inmigración (no se requiere cargo penal estatal)",
+      "Emitir detainers",
+      "Iniciar procesos de deportación",
+    ],
+    keyDistinction:
+      "A diferencia del JEM, los oficiales del TFM pueden iniciar contacto y realizar arrestos en la comunidad basándose únicamente en la sospecha de estatus migratorio — no se limita a personas que ya han sido ingresadas a la cárcel.",
+    trainingText:
+      "Los oficiales completan un curso en línea de 40 horas. Antes de que el programa fuera terminado en 2012, la capacitación era un curso presencial de 4 semanas en el FLETC.",
+    majorPoints: [
+      {
+        heading: "Orígenes (2006)",
+        body: "El programa se originó en 2006. El condado de Maricopa (alguacil Arpaio) estuvo entre los primeros participantes y los más prominentes.",
+      },
+      {
+        heading: "Terminado por la administración Obama (31 de diciembre de 2012)",
+        body: "La administración Obama terminó todos los acuerdos del TFM, citando perfil racial documentado en el condado de Maricopa, AZ, y el condado de Alamance, NC.",
+      },
+      {
+        heading: "Melendres v. Arpaio",
+        body: 'Un tribunal federal determinó que los agentes del condado de Maricopa arrestaban a personas donde "aproximadamente el 77% de todos los arrestos... tenían apellidos hispanos" realizados por un agente. Otro "arrestó únicamente a latinos durante los operativos en los que participó." Los agentes hicieron circular correos electrónicos "comparando a los mexicanos con perros." Costo total para los contribuyentes del condado de Maricopa: más de $300 millones. Hasta 2025, más de 640 quejas de mala conducta de agentes permanecen sin investigar.',
+      },
+      {
+        heading: "No fue reactivado durante el primer mandato de Trump (2017–2021)",
+        body: "Ni siquiera la Orden Ejecutiva 13768 restableció el Modelo de Fuerza de Tarea.",
+      },
+      {
+        heading: "Reactivado el 20 de enero de 2025 — OE 14159",
+        body: "Los requisitos de capacitación se redujeron de 4 semanas presenciales a 40 horas en línea.",
+      },
+      {
+        heading: "Crecimiento acelerado (2025)",
+        body: "141 agencias en los primeros 50 días → 338 para junio de 2025 → más de 1,182 agencias en 32 estados.",
+      },
+      {
+        heading: "Expansiones notables (2025–2026)",
+        body: "Guardia Nacional de Florida y Texas. Policía de campus universitarios (Florida A&M, New College of Florida, entre otros). Oficina del Fiscal General de Texas. Agencias estatales de medio ambiente y vida silvestre.",
+      },
+      {
+        heading: "Condado de Alamance, NC",
+        body: 'El alguacil ordenó a los agentes "traerle algunos mexicanos." El DOJ determinó que los conductores latinos tenían "hasta 10 veces más probabilidades de ser detenidos" — descrito por el propio experto del DOJ como "algunas de las tasas más altas de perfil racial jamás documentadas en Estados Unidos." El DOJ terminó el acuerdo y presentó una demanda de derechos civiles.',
+      },
+      {
+        heading: "Oposición de las fuerzas del orden",
+        body: "La Asociación Internacional de Jefes de Policía, la Asociación de Jefes de las Grandes Ciudades, y una coalición de 63 alguaciles y jefes de policía han expresado su oposición, citando interferencia con la vigilancia comunitaria y la confianza.",
+      },
+      {
+        heading: "Noem v. Vasquez Perdomo (septiembre de 2024)",
+        body: 'Determinó que la raza/etnia puede ser un "factor relevante" en las detenciones de cumplimiento migratorio — eliminando una barrera legal clave que fue central en la terminación de la era Obama.',
+      },
+    ],
+  },
+
+  "Warrant Service Officer": {
+    overviewParas: [
+      "Este es el modelo más limitado. Los oficiales ejecutan órdenes administrativas de ICE sobre personas específicas ya identificadas por su nombre que se encuentran encarceladas. ICE ya ha identificado a la persona; los oficiales del WSO solo ejecutan la orden y realizan el arresto.",
+      "La principal distinción con el JEM es la autoridad investigativa: los oficiales del JEM identifican a personas potencialmente deportables mediante exámenes. Los oficiales del WSO ejecutan órdenes para personas que ICE ya ha identificado. Los WSO no tienen ninguna autoridad investigativa.",
+    ],
+    officerCan: [
+      "Ejecutar órdenes preexistentes de ICE (Formulario I-200 o I-205) dentro de la instalación",
+      "Trasladar a la persona a la custodia de ICE",
+    ],
+    keyDistinction:
+      "Los oficiales no pueden entrevistar a nadie sobre su estatus migratorio, evaluar a las personas detenidas para determinar su posible deportabilidad, iniciar procesos de deportación, ni emitir detainers de forma independiente — dentro o fuera de la cárcel.",
+    trainingText:
+      "Curso en línea de 8 horas — el requisito de capacitación más bajo de los tres modelos.",
+    majorPoints: [
+      {
+        heading: "Lanzamiento: 6 de mayo de 2019 — Condado de Pinellas, Florida",
+        body: "Diseñado para dos públicos: agencias en jurisdicciones santuario cuyas leyes estatales restringían la participación total en el 287(g), y agencias rurales pequeñas sin presupuesto para programas del JEM.",
+      },
+      {
+        heading: "Sin mecanismo de supervisión (GAO-21-186, 2021)",
+        body: '"ICE no contaba con un mecanismo de supervisión para los participantes del modelo WSO... ICE no tenía políticas claras sobre las responsabilidades de supervisión de los supervisores de campo del 287(g) ni planes para realizar inspecciones de cumplimiento para los participantes del WSO." A diferencia del JEM (inspecciones bienales), el WSO no tiene ninguna inspección de cumplimiento programada.',
+      },
+      {
+        heading: "Argumentos de los críticos",
+        body: "Generalmente considerado el modelo menos invasivo porque no implica interrogatorios ni exámenes. Los críticos argumentan: (1) la ausencia de inspecciones significa que las violaciones en la etapa de ejecución de órdenes pasan sin detectarse; (2) sirve como un mecanismo deliberado para lograr el cumplimiento migratorio en jurisdicciones santuario que prohíben programas más amplios.",
+      },
+    ],
+  },
+};
+
 export const PRIMARY_SOURCES: Array<{ label: string; url: string }> = [
   {
     label: "ICE 287(g) program page",

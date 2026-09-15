@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { ModelPageData } from "./+page.server";
   import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_DARK_COLORS, MODEL_SLUG } from "$lib/colors";
-  import { localizeHref } from "$lib/paraglide/runtime";
+  import { localizeHref, getLocale } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
   import { ogImage } from "$lib/ogImage";
   import Gloss from "$lib/components/Gloss.svelte";
@@ -12,11 +12,21 @@
     COMPARISON_ROWS,
     MODEL_RICH_CONTENT,
     PRIMARY_SOURCES,
+    PROGRAM_FINDINGS_ES,
+    DETAINER_NOTE_ES,
+    COMPARISON_ROWS_ES,
+    MODEL_RICH_CONTENT_ES,
   } from "$lib/model-content";
 
   export let data: ModelPageData;
 
   const { modelName, slug, definition, seeAlso, agencies, snapshotDate, stateCount, allModelCounts } = data;
+
+  const isEs = getLocale() === "es";
+  const findings = isEs ? PROGRAM_FINDINGS_ES : PROGRAM_FINDINGS;
+  const detainerNote = isEs ? DETAINER_NOTE_ES : DETAINER_NOTE;
+  const comparisonRows = isEs ? COMPARISON_ROWS_ES : COMPARISON_ROWS;
+  const richContent = isEs ? MODEL_RICH_CONTENT_ES : MODEL_RICH_CONTENT;
 
   const siteUrl = import.meta.env.PUBLIC_SITE_URL ?? "https://287g.recoveredfactory.net";
   const title = `${modelName} — 287(g) Watch`;
@@ -31,7 +41,7 @@
   const textColor = MODEL_TEXT_COLORS[modelName] ?? "#0f172a";
   const darkColor = MODEL_DARK_COLORS[modelName] ?? "#1e293b";
 
-  const content = MODEL_RICH_CONTENT[modelName];
+  const content = richContent[modelName];
 
   // Backlink to the glossary entry for this model, if one exists. Seeds the
   // page-wide first-mention tracker with the model's own term so the model
@@ -155,7 +165,7 @@
   <section class="mt-8 border-t border-paper-200 pt-8">
     <h2 class="font-serif text-xl font-bold text-ink-900">{m.model_page_oversight_heading()}</h2>
     <ul class="mt-4 space-y-4">
-      {#each PROGRAM_FINDINGS as finding}
+      {#each findings as finding}
         <li class="flex gap-3">
           <span class="mt-0.5 shrink-0 font-bold" style="color: {bgColor};">▪</span>
           <p class="text-sm leading-relaxed text-ink-700">
@@ -168,7 +178,7 @@
         <span class="mt-0.5 shrink-0 font-bold" style="color: {bgColor};">▪</span>
         <p class="text-sm leading-relaxed text-ink-700">
           <strong class="font-semibold" style="color: {darkColor};">{m.model_page_detainer_label()}</strong>
-          {@html DETAINER_NOTE}
+          {@html detainerNote}
         </p>
       </li>
     </ul>
@@ -201,7 +211,7 @@
           </tr>
         </thead>
         <tbody>
-          {#each COMPARISON_ROWS as row}
+          {#each comparisonRows as row}
             <tr class="border-b border-paper-100 last:border-0">
               <td class="px-4 py-3 font-medium text-ink-700">{row.label}</td>
               <td class="px-4 py-3 text-ink-700">{row.wso}</td>
@@ -211,8 +221,8 @@
           {/each}
           <tr class="bg-paper-100/50">
             <td class="px-4 py-3 font-medium text-ink-700">
-              Agencies
-              {#if dateFmt}<span class="block text-xs font-normal text-ink-500">as of {dateFmt}</span>{/if}
+              {m.model_page_agencies_label()}
+              {#if dateFmt}<span class="block text-xs font-normal text-ink-500">{m.model_page_as_of({ date: dateFmt })}</span>{/if}
             </td>
             <td class="px-4 py-3 font-semibold tabular-nums text-ink-900">{intFmt.format(allModelCounts["Warrant Service Officer"] ?? 0)}</td>
             <td class="px-4 py-3 font-semibold tabular-nums text-ink-900">{intFmt.format(allModelCounts["Jail Enforcement Model"] ?? 0)}</td>
@@ -223,7 +233,7 @@
     </div>
 
     <dl class="mt-4 grid gap-3 md:hidden">
-      {#each COMPARISON_ROWS as row}
+      {#each comparisonRows as row}
         <div class="rounded-lg border p-4" style="border-color: var(--color-paper-200); background: var(--color-paper-50);">
           <dt class="text-sm font-semibold" style="color: var(--color-ink-900);">{row.label}</dt>
           <dd class="mt-2 space-y-1.5">
@@ -247,8 +257,8 @@
       {/each}
       <div class="rounded-lg border p-4" style="border-color: var(--color-paper-200); background: var(--color-paper-100);">
         <dt class="text-sm font-semibold" style="color: var(--color-ink-900);">
-          Agencies
-          {#if dateFmt}<span class="block text-xs font-normal" style="color: var(--color-ink-500);">as of {dateFmt}</span>{/if}
+          {m.model_page_agencies_label()}
+          {#if dateFmt}<span class="block text-xs font-normal" style="color: var(--color-ink-500);">{m.model_page_as_of({ date: dateFmt })}</span>{/if}
         </dt>
         <dd class="mt-2 space-y-1.5">
           <div class="flex items-center justify-between gap-3 text-sm">
