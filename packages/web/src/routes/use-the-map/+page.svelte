@@ -7,6 +7,18 @@
 
   export let data: PageData;
 
+  // Umami custom event (mirrors +layout's trackConversion; no-ops in dev
+  // where the script isn't loaded). This page had zero instrumentation
+  // before — cut x format x language on every download, plus the license
+  // and custom-request links.
+  const track = (event: string, data?: Record<string, unknown>) => {
+    if (typeof window === "undefined") return;
+    const w = window as unknown as {
+      umami?: { track?: (e: string, d?: Record<string, unknown>) => void };
+    };
+    w.umami?.track?.(event, data);
+  };
+
   // Downloadable assets come from the public archive bucket's `-latest-<lang>`
   // copies when configured (PUBLIC_MAP_ASSETS_URL, set by SST), else the bundled
   // /video/ fallback for local dev. The video text is baked per language, so we
@@ -132,6 +144,7 @@
                 <a
                   href={asset(cut.prefix, fmt.ext, lang)}
                   download
+                  on:click={() => track("usemap_download", { cut: cut.prefix, format: fmt.ext, lang })}
                   class={fmt.ext === "mp4"
                     ? "inline-flex items-center gap-2 rounded bg-ink-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-ink-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink-500"
                     : "inline-flex items-center gap-2 rounded border border-paper-200 bg-paper-50 px-5 py-2.5 text-sm font-semibold text-ink-900 hover:border-ink-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink-500"}
@@ -159,7 +172,7 @@
     <h2 class="font-serif text-xl font-bold text-ink-900 sm:text-2xl">{m.usemap_license_heading()}</h2>
     <p class="mt-3">
       {m.usemap_license_body_prefix()}
-      <a href={LICENSE_URL} target="_blank" rel="noreferrer">{m.usemap_license_link()}</a>
+      <a href={LICENSE_URL} target="_blank" rel="noreferrer" on:click={() => track("usemap_license_click")}>{m.usemap_license_link()}</a>
       {m.usemap_license_body_suffix()}
     </p>
     <p class="mt-3">{m.usemap_license_ask()}</p>
@@ -167,7 +180,7 @@
     <h2 class="mt-8 font-serif text-xl font-bold text-ink-900 sm:mt-10 sm:text-2xl">{m.usemap_custom_heading()}</h2>
     <p class="mt-3">
       {m.usemap_custom_body_prefix()}
-      <a href="mailto:{LICENSE_EMAIL}">{m.usemap_custom_link()}</a>
+      <a href="mailto:{LICENSE_EMAIL}" on:click={() => track("usemap_custom_request_click")}>{m.usemap_custom_link()}</a>
       {m.usemap_custom_body_suffix()}
     </p>
   </div>
