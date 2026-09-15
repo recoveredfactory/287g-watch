@@ -126,6 +126,31 @@
     .slice(0, SELECTION_MAX);
   let selection: SelItem[] = initialSelection;
 
+  // Geo "jump to your state" banner — same detection call as the homepage
+  // hero (getCachedGeo), offering a one-tap way into the compare tool for
+  // the state you're most likely to care about. Dismissal is session-only
+  // (component-local state, not persisted) so it isn't gone for good.
+  let detectedState: string | null = null;
+  let geoBannerDismissed = false;
+  onMount(async () => {
+    const geo = await getCachedGeo();
+    if (geo.state && data.states.some((s) => s.abbr === geo.state)) {
+      detectedState = geo.state;
+    }
+  });
+  $: detectedRow = detectedState ? data.states.find((s) => s.abbr === detectedState) ?? null : null;
+  function jumpToDetected() {
+    if (!detectedState) return;
+    if (!selection.some((s) => s.kind === "state" && s.id === detectedState)) {
+      toggleSelection("state", detectedState);
+    }
+    track("browse_geo_jump", { state: detectedState });
+    geoBannerDismissed = true;
+  }
+  function dismissGeoBanner() {
+    geoBannerDismissed = true;
+  }
+
   let query = "";
   let mounted = false;
   let dropdownOpen = false;
@@ -328,6 +353,30 @@
   <p class="mt-3 max-w-prose text-sm text-ink-700 sm:text-base">{m.browse_subtitle()}</p>
   {#if data.snapshotDate}
     <p class="mt-2 text-xs italic text-ink-500">{m.browse_as_of({ date: dateFmt.format(new Date(data.snapshotDate)) })}</p>
+  {/if}
+
+  {#if detectedRow && !geoBannerDismissed}
+    <div class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2" style="border-color: var(--color-paper-200); background: var(--color-paper-50);">
+      <p class="text-sm text-ink-700">{m.browse_geo_lead({ state: detectedRow.stateName })}</p>
+      <div class="flex shrink-0 items-center gap-2">
+        <button
+          type="button"
+          on:click={jumpToDetected}
+          class="whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-semibold text-white"
+          style="background: #BE6079;"
+        >{m.browse_geo_cta({ state: detectedRow.stateName })}</button>
+        <button
+          type="button"
+          on:click={dismissGeoBanner}
+          aria-label={m.browse_geo_dismiss()}
+          class="rounded-full p-1.5 text-ink-500 hover:bg-paper-100 hover:text-ink-900"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-4 w-4" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+      </div>
+    </div>
   {/if}
 
   <!-- Summary strip -->
