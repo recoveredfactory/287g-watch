@@ -153,8 +153,8 @@
   });
 
   let flatResults = $derived([
-    ...groupedResults.agencies,
     ...groupedResults.states,
+    ...groupedResults.agencies,
     ...groupedResults.glossary,
     ...groupedResults.models,
     ...groupedResults.pages,
@@ -255,8 +255,8 @@
         <li class="px-3 py-4 text-center text-sm" style="color: var(--color-ink-500);">{m.search_palette_no_results()}</li>
       {/if}
       {#each [
-        { key: "agencies", label: m.search_palette_group_agencies(), items: groupedResults.agencies },
         { key: "states", label: m.search_palette_group_states(), items: groupedResults.states },
+        { key: "agencies", label: m.search_palette_group_agencies(), items: groupedResults.agencies },
         { key: "glossary", label: m.search_palette_group_glossary(), items: groupedResults.glossary },
         { key: "models", label: m.search_palette_group_models(), items: groupedResults.models },
         { key: "pages", label: m.search_palette_group_pages(), items: groupedResults.pages },
