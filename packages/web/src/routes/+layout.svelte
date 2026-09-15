@@ -69,40 +69,6 @@
   const isNavActive = (href: string, current: string): boolean =>
     href === "/" ? current === "/" : current === href || current.startsWith(href + "/");
 
-  // Session-only dismissal (#93): user gets the banner once per browser
-  // session, not once-and-forever. localStorage was too sticky — we'd
-  // rather risk re-showing the banner across sessions than lose all
-  // visibility for someone who clicked × six months ago.
-  const BANNER_KEY = "rf-banner-dismissed";
-  let bannerVisible = false;
-
-  // RF banner A/B test (#93): random pick per page-view, equal weight,
-  // assigned client-side once the banner is about to render. Two complete
-  // pairs — different pitch + CTA + destination — testing which framing
-  // (commercial vs reader-support) converts better.
-  //   hire    → mailto, "Got messy data? / We'll turn the noise into signal."
-  //   support → /support, "This data belongs to you. / Help us keep it open."
-  // Fires conversion_impression_{variant} on mount + conversion_click_{variant}
-  // when the CTA is tapped.
-  type ConversionVariant = "hire" | "support";
-  const CONVERSION_VARIANTS: ConversionVariant[] = ["hire", "support"];
-  let conversionVariant: ConversionVariant = "hire";
-  $: bannerHref =
-    conversionVariant === "hire"
-      ? "mailto:davideads@recoveredfactory.net"
-      : `https://recoveredfactory.net/${locale}/support`;
-  $: bannerHook =
-    conversionVariant === "hire"
-      ? m.rf_banner_hire_hook()
-      : m.rf_banner_support_hook();
-  $: bannerFollow =
-    conversionVariant === "hire"
-      ? m.rf_banner_hire_follow()
-      : m.rf_banner_support_follow();
-  $: bannerCtaLabel =
-    conversionVariant === "hire"
-      ? m.rf_banner_hire_cta()
-      : m.rf_banner_support_cta();
   function trackConversion(event: string) {
     if (typeof window === "undefined") return;
     const w = window as unknown as { umami?: { track?: (e: string) => void } };
@@ -114,28 +80,20 @@
   const MISMATCH_KEY = "rf-lang-mismatch-dismissed-v1";
   let mismatchTarget: Locale | null = null;
 
-  // Time-limited promo strip for the recoveredfactory.net April-surge analysis.
-  // Auto-hides sitewide once EXPIRES passes (~10-day run) — bump/clear the date
-  // to change the run. Session-dismissible like the conversion banner. Both
-  // locales point at the EN post until the Spanish translation lands.
-  const ANALYSIS_PROMO_EXPIRES = new Date("2026-08-02T00:00:00Z");
-  const ANALYSIS_PROMO_HREF = "https://recoveredfactory.net/en/287g-network-expansion";
-  const ANALYSIS_PROMO_KEY = "rf-analysis-promo-dismissed-v1";
-  let analysisPromoVisible = false;
+  // Sitewide promo for the compare tool (#93/#232 replacement): the earlier
+  // "hire us"/"support us" A/B banner measured 0.33%/0.08% CTR and the prior
+  // analysis promo (since expired) measured 4.9% — a contextual, site-native
+  // ask beats an external pitch. This points at something the reader can do
+  // right here (compare states/departments, then share the link), not an
+  // outbound ask. Session-only dismissal, same reasoning as before: a
+  // localStorage-level dismissal risks losing all visibility for someone who
+  // clicked × months ago.
+  const COMPARE_PROMO_KEY = "rf-compare-promo-dismissed-v1";
+  let comparePromoVisible = false;
 
   onMount(() => {
-    bannerVisible = !sessionStorage.getItem(BANNER_KEY);
-    if (bannerVisible) {
-      conversionVariant =
-        CONVERSION_VARIANTS[
-          Math.floor(Math.random() * CONVERSION_VARIANTS.length)
-        ];
-      trackConversion(`conversion_impression_${conversionVariant}`);
-    }
-
-    analysisPromoVisible =
-      new Date() < ANALYSIS_PROMO_EXPIRES && !sessionStorage.getItem(ANALYSIS_PROMO_KEY);
-    if (analysisPromoVisible) trackConversion("analysis_promo_impression");
+    comparePromoVisible = !sessionStorage.getItem(COMPARE_PROMO_KEY);
+    if (comparePromoVisible) trackConversion("compare_promo_impression");
 
     if (localStorage.getItem(MISMATCH_KEY)) return;
     if (hasLocaleCookie()) return; // user has already expressed a preference
@@ -145,15 +103,6 @@
     mismatchTarget = browserLang as Locale;
   });
 
-  function dismissBanner() {
-    bannerVisible = false;
-    sessionStorage.setItem(BANNER_KEY, "1");
-  }
-
-  function onBannerCta() {
-    trackConversion(`conversion_click_${conversionVariant}`);
-  }
-
   function dismissMismatch() {
     mismatchTarget = null;
     try {
@@ -161,10 +110,10 @@
     } catch {}
   }
 
-  function dismissAnalysisPromo() {
-    analysisPromoVisible = false;
+  function dismissComparePromo() {
+    comparePromoVisible = false;
     try {
-      sessionStorage.setItem(ANALYSIS_PROMO_KEY, "1");
+      sessionStorage.setItem(COMPARE_PROMO_KEY, "1");
     } catch {}
   }
 </script>
@@ -194,7 +143,7 @@
 </a>
 
 <div
-  class={`page-fade ${isNavigating ? "page-fade--loading" : ""} ${bannerVisible && !isVideoRoute ? "pb-28" : ""}`}
+  class={`page-fade ${isNavigating ? "page-fade--loading" : ""}`}
   style:--staging-banner-height={isProdStage ? "0px" : "28px"}
 >
   {#if !isProdStage && !isVideoRoute}
@@ -249,28 +198,26 @@
       {/if}
     </div>
   {/if}
-  {#if analysisPromoVisible && !isVideoRoute}
+  {#if comparePromoVisible && !isVideoRoute}
     <div
       class="flex items-center justify-center gap-2 px-4 py-2 text-center text-sm text-white sm:gap-3"
       style="background-color: var(--color-ink-900);"
       role="region"
-      aria-label={m.analysis_promo_aria()}
+      aria-label={m.compare_promo_aria()}
     >
       <a
-        href={ANALYSIS_PROMO_HREF}
-        target="_blank"
-        rel="noreferrer"
-        on:click={() => trackConversion("analysis_promo_click")}
+        href={localizeHref("/states")}
+        on:click={() => trackConversion("compare_promo_click")}
         class="text-white no-underline hover:no-underline"
       >
-        <span class="text-white/85">{m.analysis_promo_text()}</span>
+        <span class="text-white/85">{m.compare_promo_text()}</span>
         <span
           class="ml-1.5 whitespace-nowrap font-semibold underline decoration-2 underline-offset-4"
           style="text-decoration-color: #BE6079;"
-        >{m.analysis_promo_cta()} →</span>
+        >{m.compare_promo_cta()} →</span>
       </a>
       <button
-        on:click={dismissAnalysisPromo}
+        on:click={dismissComparePromo}
         aria-label={m.rf_banner_dismiss()}
         class="flex h-6 w-6 shrink-0 items-center justify-center rounded text-white/50 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
       >
@@ -387,41 +334,3 @@
   </footer>
   {/if}
 </div>
-
-{#if bannerVisible && !isVideoRoute}
-  <div
-    class="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between gap-4 px-4 py-4 sm:px-6"
-    style="background-color: var(--color-ink-900);"
-    role="complementary"
-    aria-label="Support Recovered Factory"
-  >
-    <div class="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-2">
-      <p class="text-sm font-semibold text-white">{bannerHook}</p>
-      <p class="text-sm text-white/80 sm:truncate">
-        {bannerFollow}
-      </p>
-    </div>
-    <div class="flex shrink-0 items-center gap-3">
-      <a
-        href={bannerHref}
-        target={conversionVariant === "support" ? "_blank" : "_self"}
-        rel={conversionVariant === "support" ? "noreferrer" : null}
-        on:click={onBannerCta}
-        data-variant={conversionVariant}
-        class="rounded px-3 py-1.5 text-sm font-semibold no-underline hover:no-underline"
-        style="background-color: #BE6079; color: #ffffff;"
-      >
-        {bannerCtaLabel}
-      </a>
-      <button
-        on:click={dismissBanner}
-        aria-label={m.rf_banner_dismiss()}
-        class="flex h-7 w-7 items-center justify-center rounded text-white/50 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4" aria-hidden="true">
-          <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"/>
-        </svg>
-      </button>
-    </div>
-  </div>
-{/if}
