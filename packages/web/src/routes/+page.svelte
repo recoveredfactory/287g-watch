@@ -246,7 +246,7 @@
 <main id="main-content">
 
   <!-- ── Hero ─────────────────────────────────────────────────────────────── -->
-  <section class="border-b px-4 py-8 sm:px-6 sm:py-12" style="border-color: var(--color-paper-200); background: var(--color-paper-50);">
+  <section class="border-b px-4 py-6 sm:px-6 sm:py-8" style="border-color: var(--color-paper-200); background: var(--color-paper-50);">
     <div class="mx-auto max-w-3xl">
       <p class="mb-4 flex items-center gap-3 font-mono text-xs font-semibold uppercase tracking-[0.14em] sm:mb-5" style="color: var(--color-ink-500);">
         {m.home_hero_eyebrow()}
@@ -263,7 +263,7 @@
       </p>
 
       {#if userStateCallout}
-        <p class="mt-5 max-w-2xl border-l-4 border-[#BE6079] bg-rose-50/40 px-4 py-3 text-base sm:mt-6 sm:text-lg" style="color: var(--color-ink-700);">
+        <p class="mt-4 max-w-2xl border-l-4 border-[#BE6079] bg-rose-50/40 px-3 py-2 text-sm sm:mt-5" style="color: var(--color-ink-700);">
           {@html userStateCallout}
         </p>
       {/if}
@@ -282,7 +282,7 @@
   <!-- ── Summary strip ────────────────────────────────────────────────────────
        Moved here from /explore, replacing "most active this month" per
        feedback ("i think its needless"). -->
-  <section class="border-b px-4 py-6 sm:px-6 sm:py-8" style="border-color: var(--color-paper-200); background: var(--color-paper-100);">
+  <section class="border-b px-4 py-4 sm:px-6 sm:py-5" style="border-color: var(--color-paper-200); background: var(--color-paper-100);">
     <dl class="mx-auto grid max-w-6xl grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4">
       <div>
         <dt class="text-xs font-semibold uppercase tracking-widest" style="color: var(--color-ink-500);">{m.browse_stat_states()}</dt>
@@ -308,7 +308,7 @@
   </section>
 
   <!-- ── What each model authorizes ───────────────────────────────────────── -->
-  <section class="border-b px-4 py-10 sm:px-6 sm:py-12" style="border-color: var(--color-paper-200); background: var(--color-paper-50);">
+  <section class="border-b px-4 py-6 sm:px-6 sm:py-8" style="border-color: var(--color-paper-200); background: var(--color-paper-50);">
     <div class="mx-auto max-w-6xl">
       <h2 class="font-serif text-[length:var(--text-h2)] font-bold" style="color: var(--color-ink-900);">
         {m.home_models_heading()}
@@ -350,7 +350,7 @@
   </section>
 
   <!-- ── Map ──────────────────────────────────────────────────────────────── -->
-  <section class="border-b pt-8 sm:pt-10" style="border-color: var(--color-paper-200); background: var(--color-paper-100);">
+  <section class="border-b pt-5 sm:pt-6" style="border-color: var(--color-paper-200); background: var(--color-paper-100);">
     <div class="mx-auto max-w-6xl px-4 sm:px-6">
       <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
         <div>
@@ -493,7 +493,7 @@
 
   <!-- ── Top states by agency count ───────────────────────────────────────────
        Moved here from /explore per feedback. -->
-  <section class="px-4 py-10 sm:px-6 sm:py-12">
+  <section class="px-4 py-6 sm:px-6 sm:py-8">
     <div class="mx-auto max-w-6xl">
       <div class="flex flex-wrap items-end justify-between gap-4">
         <h2 class="font-serif text-[length:var(--text-h2)] font-bold" style="color: var(--color-ink-900);">{m.browse_top_states_heading()}</h2>
