@@ -487,22 +487,6 @@
     </div>
   </section>
 
-  <!-- ── Browse & compare ─────────────────────────────────────────────────── -->
-  <section class="border-b px-4 py-6 sm:px-6 sm:py-8" style="border-color: var(--color-paper-200); background: var(--color-paper-50);">
-    <div class="mx-auto max-w-6xl">
-      <div class="flex max-w-xl flex-col items-start rounded-lg border p-5" style="border-color: var(--color-paper-200); background: var(--color-paper-100);">
-        <p class="text-xs font-semibold uppercase tracking-widest" style="color: var(--color-ink-500);">{m.browse_eyebrow()}</p>
-        <h2 class="mt-1 font-serif text-xl font-bold" style="color: var(--color-ink-900);">{m.home_browse_cta_heading()}</h2>
-        <p class="mt-2 text-sm leading-relaxed" style="color: var(--color-ink-700);">{m.home_browse_cta_body()}</p>
-        <a
-          href={localizeHref("/explore")}
-          class="mt-4 inline-flex w-fit items-center gap-1 text-sm font-semibold no-underline hover:underline"
-          style="color: var(--color-ink-900);"
-        >{m.home_browse_cta_link()} →</a>
-      </div>
-    </div>
-  </section>
-
   <!-- ── National trend charts (experimental, #162) ───────────────────────── -->
   <TrendCharts agencies={data.agencies} trendMonths={data.trendMonths} trend={data.trend} />
 
