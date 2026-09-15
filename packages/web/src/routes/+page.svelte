@@ -101,25 +101,34 @@
   // participating===0 yet is very much not 287(g)-free. See #138.
   $: statesWithAnyAgreement = new Set(data.agencies.map((a) => a.state));
 
-  // "Most active this month" — real computed net signed-vs-terminated
-  // agreements per state, for the most recent month actually present in the
-  // data (not wall-clock "now", since a snapshot can lag). Data-driven, no
-  // editorial narrative, per AGENTS.md.
-  $: latestActivityYm = (() => {
+  // "Most active" — real computed net signed-vs-terminated agreements per
+  // state in a rolling 30-day window ending at the most recent activity date
+  // actually present in the data (not wall-clock "now", since a snapshot can
+  // lag — same reasoning as before, just day-granular instead of
+  // calendar-month, so a snapshot taken early in a month doesn't show a
+  // near-empty window). Data-driven, no editorial narrative, per AGENTS.md.
+  $: latestActivityDate = (() => {
     const dates = [
       ...data.agencies.map((a) => a.signed_date).filter((d): d is string => !!d),
       ...data.terminatedAgencies.map((a) => a.terminated_date).filter((d): d is string => !!d),
     ];
-    return dates.length ? (dates.map((d) => d.slice(0, 7)).sort().at(-1) ?? null) : null;
+    return dates.length ? dates.sort().at(-1)! : null;
   })();
 
-  $: monthLabel = latestActivityYm
-    ? new Intl.DateTimeFormat(getLocale() === "es" ? "es-MX" : "en-US", { year: "numeric", month: "long", timeZone: "UTC" }).format(new Date(`${latestActivityYm}-01T00:00:00Z`))
+  $: activityWindowStart = latestActivityDate ? (() => {
+    const d = new Date(`${latestActivityDate}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() - 29);
+    return d.toISOString().slice(0, 10);
+  })() : null;
+
+  $: activityWindowEndLabel = latestActivityDate
+    ? new Intl.DateTimeFormat(getLocale() === "es" ? "es-MX" : "en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" }).format(new Date(`${latestActivityDate}T00:00:00Z`))
     : "";
 
   type StateActivity = { abbr: string; net: number };
   $: mostActiveStates = ((): StateActivity[] => {
-    if (!latestActivityYm) return [];
+    if (!latestActivityDate || !activityWindowStart) return [];
+    const inWindow = (d: string) => d >= activityWindowStart && d <= latestActivityDate;
     const byState = new Map<string, { signed: number; terminated: number }>();
     const bump = (state: string, key: "signed" | "terminated") => {
       const cur = byState.get(state) ?? { signed: 0, terminated: 0 };
@@ -127,10 +136,10 @@
       byState.set(state, cur);
     };
     for (const a of data.agencies) {
-      if (a.signed_date?.slice(0, 7) === latestActivityYm) bump(a.state, "signed");
+      if (a.signed_date && inWindow(a.signed_date)) bump(a.state, "signed");
     }
     for (const a of data.terminatedAgencies) {
-      if (a.terminated_date?.slice(0, 7) === latestActivityYm) bump(a.state, "terminated");
+      if (a.terminated_date && inWindow(a.terminated_date)) bump(a.state, "terminated");
     }
     return [...byState.entries()]
       .map(([abbr, { signed, terminated }]) => ({ abbr, net: signed - terminated }))
@@ -299,6 +308,31 @@
     </div>
   </section>
 
+  <!-- ── Most active states (rolling 30 days) ────────────────────────────────
+       Moved above the map and enlarged per feedback: "blow this up, and put
+       this all above the map." -->
+  {#if mostActiveStates.length > 0}
+    <section class="border-b px-4 py-10 sm:px-6 sm:py-12" style="border-color: var(--color-paper-200); background: var(--color-paper-100);">
+      <div class="mx-auto max-w-6xl">
+        <p class="text-xs font-semibold uppercase tracking-widest" style="color: var(--color-ink-500);">{m.home_active_heading()}</p>
+        <p class="mt-1 text-sm sm:text-base" style="color: var(--color-ink-700);">{m.home_active_body_window({ date: activityWindowEndLabel })}</p>
+        <div class="mt-5 grid gap-4 sm:grid-cols-3">
+          {#each mostActiveStates as s, i (s.abbr)}
+            <a
+              href={localizeHref(`/state/${s.abbr.toLowerCase()}`)}
+              class="block rounded-lg border p-5 no-underline shadow-sm transition hover:shadow-md"
+              style="border-color: var(--color-paper-200); background: var(--color-paper-50);"
+            >
+              <p class="font-mono text-xs tabular-nums" style="color: var(--color-ink-500);">#{i + 1}</p>
+              <p class="mt-1 font-serif text-xl font-bold sm:text-2xl" style="color: var(--color-ink-900);">{STATE_NAMES[s.abbr] ?? s.abbr}</p>
+              <p class="mt-2 font-mono text-2xl font-black tabular-nums sm:text-3xl" style="color: #BE6079;">{m.home_active_delta({ count: s.net })}</p>
+            </a>
+          {/each}
+        </div>
+      </div>
+    </section>
+  {/if}
+
   <!-- ── Map ──────────────────────────────────────────────────────────────── -->
   <section class="border-b pt-12 sm:pt-16" style="border-color: var(--color-paper-200); background: var(--color-paper-100);">
     <div class="mx-auto max-w-6xl px-4 sm:px-6">
@@ -434,40 +468,19 @@
     </div>
   </section>
 
-  <!-- ── Browse & compare / most active this month ────────────────────────── -->
+  <!-- ── Browse & compare ─────────────────────────────────────────────────── -->
   <section class="border-b px-4 py-12 sm:px-6 sm:py-16" style="border-color: var(--color-paper-200); background: var(--color-paper-50);">
-    <div class="mx-auto grid max-w-6xl gap-6 {mostActiveStates.length > 0 ? 'sm:grid-cols-2' : ''}">
-      <div class="flex flex-col justify-between rounded-lg border p-6" style="border-color: var(--color-paper-200); background: var(--color-paper-100);">
-        <div>
-          <p class="text-xs font-semibold uppercase tracking-widest" style="color: var(--color-ink-500);">{m.browse_eyebrow()}</p>
-          <h2 class="mt-1 font-serif text-xl font-bold" style="color: var(--color-ink-900);">{m.home_browse_cta_heading()}</h2>
-          <p class="mt-2 text-sm leading-relaxed" style="color: var(--color-ink-700);">{m.home_browse_cta_body()}</p>
-        </div>
+    <div class="mx-auto max-w-6xl">
+      <div class="flex max-w-xl flex-col items-start rounded-lg border p-6" style="border-color: var(--color-paper-200); background: var(--color-paper-100);">
+        <p class="text-xs font-semibold uppercase tracking-widest" style="color: var(--color-ink-500);">{m.browse_eyebrow()}</p>
+        <h2 class="mt-1 font-serif text-xl font-bold" style="color: var(--color-ink-900);">{m.home_browse_cta_heading()}</h2>
+        <p class="mt-2 text-sm leading-relaxed" style="color: var(--color-ink-700);">{m.home_browse_cta_body()}</p>
         <a
           href={localizeHref("/states")}
           class="mt-4 inline-flex w-fit items-center gap-1 text-sm font-semibold no-underline hover:underline"
           style="color: var(--color-ink-900);"
         >{m.home_browse_cta_link()} →</a>
       </div>
-
-      {#if mostActiveStates.length > 0}
-        <div class="rounded-lg border p-6" style="border-color: var(--color-paper-200); background: var(--color-paper-100);">
-          <p class="text-xs font-semibold uppercase tracking-widest" style="color: var(--color-ink-500);">{m.home_active_heading()}</p>
-          <p class="mt-1 text-sm" style="color: var(--color-ink-700);">{m.home_active_body({ month: monthLabel })}</p>
-          <ul class="mt-4 space-y-2.5">
-            {#each mostActiveStates as s (s.abbr)}
-              <li class="flex items-center justify-between gap-3">
-                <a
-                  href={localizeHref(`/state/${s.abbr.toLowerCase()}`)}
-                  class="text-sm font-semibold no-underline hover:underline"
-                  style="color: var(--color-ink-900);"
-                >{STATE_NAMES[s.abbr] ?? s.abbr}</a>
-                <span class="font-mono text-sm tabular-nums" style="color: var(--color-ink-700);">{m.home_active_delta({ count: s.net })}</span>
-              </li>
-            {/each}
-          </ul>
-        </div>
-      {/if}
     </div>
   </section>
 
