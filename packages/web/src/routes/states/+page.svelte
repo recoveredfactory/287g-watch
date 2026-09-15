@@ -9,6 +9,16 @@
 
   export let data: StatesPageData;
 
+  // Umami custom event (mirrors +layout's trackConversion; no-ops in dev where
+  // the script isn't loaded).
+  const track = (event: string, data?: Record<string, unknown>) => {
+    if (typeof window === "undefined") return;
+    const w = window as unknown as {
+      umami?: { track?: (e: string, d?: Record<string, unknown>) => void };
+    };
+    w.umami?.track?.(event, data);
+  };
+
   // Rank is derived from the loader's existing sort order (states by
   // agencyCount desc, agencies by officerCt desc) — no extra sort needed.
   const stateRankByAbbr = new Map(data.states.map((s, i) => [s.abbr, i + 1]));
@@ -46,6 +56,7 @@
     const anyOn = includeNationalStates || includeNationalAgencies;
     includeNationalStates = !anyOn;
     includeNationalAgencies = !anyOn;
+    track("browse_compare_national", { on: !anyOn });
   }
 
   // The URL already encodes the full selection (?sel=state:GA,agency:...,
@@ -64,6 +75,7 @@
     linkCopied = true;
     clearTimeout(linkCopiedTimer);
     linkCopiedTimer = setTimeout(() => (linkCopied = false), 2000);
+    track("browse_copy_link", { count: selection.length });
   }
 
   // Top-of-page summary strip + default preview lists — shown unconditionally
@@ -120,6 +132,16 @@
   // search first, then the matching results (and their checkboxes) appear.
   $: dropdownOpen = query.trim().length > 0;
 
+  // Fires once per search "session" (query goes empty→non-empty), not on
+  // every keystroke.
+  let searchTracked = false;
+  $: if (dropdownOpen && !searchTracked) {
+    track("browse_search");
+    searchTracked = true;
+  } else if (!dropdownOpen) {
+    searchTracked = false;
+  }
+
   // Sort control for the search dropdown — a small icon-triggered popover,
   // not a persistent control row (mobile-first: nothing extra competing for
   // space next to the search box). Shares one key across both states and
@@ -127,6 +149,12 @@
   type SortKey = "rank" | "name" | "population";
   let sortKey: SortKey = "rank";
   let sortMenuOpen = false;
+
+  function chooseSortKey(key: SortKey) {
+    sortKey = key;
+    sortMenuOpen = false;
+    track("browse_sort", { key });
+  }
 
   function stateComparator(key: SortKey) {
     if (key === "name") return (a: StateRow, b: StateRow) => a.stateName.localeCompare(b.stateName);
@@ -154,8 +182,10 @@
     const idx = selection.findIndex((s) => s.kind === kind && s.id === id);
     if (idx >= 0) {
       selection = [...selection.slice(0, idx), ...selection.slice(idx + 1)];
+      track("browse_compare_remove", { kind });
     } else if (selection.length < SELECTION_MAX) {
       selection = [...selection, { kind, id }];
+      track("browse_compare_add", { kind });
     }
   }
 
@@ -166,6 +196,7 @@
     if (entry.national) {
       if (entry.kind === "state") includeNationalStates = false;
       else includeNationalAgencies = false;
+      track("browse_compare_national", { on: false });
       return;
     }
     const id = entry.kind === "state" ? entry.row.abbr : entry.row.slug;
@@ -193,9 +224,11 @@
   // you to already know who you want to compare.
   function presetTopStates() {
     selection = topStates.slice(0, 3).map((s) => ({ kind: "state" as const, id: s.abbr }));
+    track("browse_preset", { preset: "top_states" });
   }
   function presetTopAgencies() {
     selection = topAgencies.slice(0, 3).map((a) => ({ kind: "agency" as const, id: a.slug }));
+    track("browse_preset", { preset: "top_agencies" });
   }
 
   type CompareEntry =
@@ -335,7 +368,7 @@
               {@const checked = selection.some((s) => s.kind === "state" && s.id === row.abbr)}
               <li>
                 <label
-                  class="flex cursor-pointer items-center gap-3 border-b px-3 py-2.5 last:border-b-0"
+                  class="flex flex-wrap cursor-pointer items-center gap-x-3 gap-y-1 border-b px-3 py-2.5 last:border-b-0"
                   style="border-color: var(--color-paper-100); background: {checked ? 'var(--color-paper-100)' : 'transparent'};"
                 >
                   <input
@@ -378,7 +411,7 @@
               {@const checked = selection.some((s) => s.kind === "agency" && s.id === row.slug)}
               <li>
                 <label
-                  class="flex cursor-pointer items-center gap-3 border-b px-3 py-2.5 last:border-b-0"
+                  class="flex flex-wrap cursor-pointer items-center gap-x-3 gap-y-1 border-b px-3 py-2.5 last:border-b-0"
                   style="border-color: var(--color-paper-100); background: {checked ? 'var(--color-paper-100)' : 'transparent'};"
                 >
                   <input
@@ -435,7 +468,7 @@
         {#each [["rank", m.browse_sort_size()], ["name", m.browse_sort_name()], ["population", m.browse_sort_population_opt()]] as [key, label]}
           <button
             type="button"
-            on:click={() => { sortKey = key as SortKey; sortMenuOpen = false; }}
+            on:click={() => chooseSortKey(key as SortKey)}
             class="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-paper-100"
             class:font-semibold={sortKey === key}
             class:text-ink-900={sortKey === key}
@@ -494,7 +527,7 @@
       <h2 class="font-serif text-lg font-bold text-ink-900">{m.browse_top_states_heading()}</h2>
       <ol class="mt-3 divide-y divide-paper-100 border-y border-paper-100">
         {#each topStates as row (row.abbr)}
-          <li class="flex items-center gap-3 py-2.5">
+          <li class="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
             <span class="w-6 shrink-0 font-mono text-xs tabular-nums text-ink-500">{stateRankByAbbr.get(row.abbr)}</span>
             <a href={localizeHref(`/state/${row.abbr.toLowerCase()}`)} class="min-w-0 flex-1 truncate text-sm font-semibold text-ink-900 no-underline hover:underline">{row.stateName}</a>
             <span class="flex shrink-0 items-center gap-2">
@@ -517,7 +550,7 @@
       <h2 class="font-serif text-lg font-bold text-ink-900">{m.browse_top_agencies_heading()}</h2>
       <ol class="mt-3 divide-y divide-paper-100 border-y border-paper-100">
         {#each topAgencies as row (row.slug)}
-          <li class="flex items-center gap-3 py-2.5">
+          <li class="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
             <span class="w-6 shrink-0 font-mono text-xs tabular-nums text-ink-500">{agencyRankBySlug.get(row.slug)}</span>
             <a href={localizeHref(`/agency/${row.slug}`)} class="min-w-0 flex-1 no-underline hover:underline">
               <p class="truncate text-sm font-semibold text-ink-900">{row.name}</p>

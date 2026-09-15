@@ -316,7 +316,7 @@
 
         <!-- Row 2 on mobile / middle+right on desktop -->
         <div class="mt-2.5 flex items-center sm:mt-0 sm:flex-1">
-          <nav class="flex items-center gap-5 text-sm font-semibold sm:ml-8">
+          <nav class="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm font-semibold sm:ml-8 sm:flex-nowrap sm:gap-5">
             <a
               href={localizeHref("/states")}
               class="no-underline {isNavActive('/states', basePath) ? 'text-ink-900 underline underline-offset-4 decoration-2' : 'text-ink-700 hover:text-ink-900'}"

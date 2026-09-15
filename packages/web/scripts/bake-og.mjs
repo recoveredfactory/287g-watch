@@ -434,6 +434,7 @@ const STR = {
     methodology: "How we built this dataset.",
     "use-the-map": "Free videos and images about the growth of 287(g).",
     states: "State-by-state 287(g) news summaries and data.",
+    timeline: "Month-by-month growth of ICE's 287(g) program, nationally.",
     modelDef: MODEL_DEFINITIONS,
     signed: "Signed",
     also: "Also",
@@ -447,6 +448,7 @@ const STR = {
     methodology: "Cómo construimos estos datos.",
     "use-the-map": "Videos e imágenes gratuitos sobre el crecimiento de 287(g).",
     states: "Noticias y datos de 287(g), estado por estado.",
+    timeline: "El crecimiento mes a mes del programa 287(g) de ICE, a nivel nacional.",
     modelDef: MODEL_DEFINITIONS_ES,
     signed: "Firmado",
     also: "También",
@@ -479,7 +481,7 @@ async function bakeHome(locale) {
 }
 
 async function bakePages(locale) {
-  for (const slug of ["glossary", "about", "methodology", "use-the-map", "states"]) {
+  for (const slug of ["glossary", "about", "methodology", "use-the-map", "states", "timeline"]) {
     await bakeCard(path.join(OG_DIR, locale, `${slug}.png`), { title: STR[locale][slug] });
     console.log(`✓ ${locale}/${slug}.png`);
   }
