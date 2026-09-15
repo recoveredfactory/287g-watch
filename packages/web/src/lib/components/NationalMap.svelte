@@ -154,12 +154,12 @@
     text: "#393F46",
     textHalo: "rgba(253,253,253,0.9)",
     // Focus mode (focusSelected): the selected state's fill is lifted above the
-    // base C.state and ringed with an accent border so it reads as the subject.
-    // Rose accent matches the site's established general-notice/focus color
-    // (homepage geo callout, states-index jump highlight, AgencyMap's own
-    // state-highlight border below).
+    // base C.state and ringed with a dark-grey accent border (matches
+    // AgencyMap's own state-highlight border below) so it reads as the
+    // subject without competing with the rose accent used for actual
+    // notices/CTAs elsewhere on the site.
     stateHighlight: "#FDFDFD",
-    highlightLine: "#BE6079",
+    highlightLine: "#393F46",
     highlightLineWidth: 1.6,
   };
 

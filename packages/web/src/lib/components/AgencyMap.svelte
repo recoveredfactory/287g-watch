@@ -29,7 +29,7 @@
     stateHighlight: "#FDFDFD",
     stateLines: "#656C75",
     stateLineWidth: 0.7,
-    stateHighlightBorder: "#BE6079",
+    stateHighlightBorder: "#393F46",
     stateHighlightBorderWidth: 1.8,
     county: "#DADEE2",
     roadCasing: "#FDFDFD",
