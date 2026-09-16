@@ -411,7 +411,7 @@
     <!-- Map: full-bleed so the country breaks the column and reads at scale -->
     <div class="relative mt-4 h-[360px] overflow-hidden border-y shadow-sm sm:h-[560px] lg:h-[680px]" style="border-color: var(--color-paper-200);">
       {#if data.agencies.length === 0}
-        <div class="flex h-full items-center justify-center" style="background: var(--color-paper-200); color: var(--color-ink-500);">
+        <div class="flex h-full items-center justify-center" style="background: var(--color-paper-200); color: var(--color-ink-700);">
           <div class="px-6 text-center">
             <p class="font-medium" style="color: var(--color-ink-700);">{m.home_map_empty_title()}</p>
             <p class="mt-1 text-sm">{m.home_map_empty_subtitle()}</p>

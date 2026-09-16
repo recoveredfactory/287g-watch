@@ -53,25 +53,37 @@
   /* Cool neutral ramp — replaced the original warm "documentary editorial"
      tan/beige ramp (paper-50 #fdfdfd/paper-100 #FAF9F7/paper-200 #F3F0EC,
      ink-900 #241f16/ink-700 #4a4335/ink-500 #7a7160) after direct feedback
-     that the warm tone "wasn't working." Same lightness steps as the warm
-     ramp (so spacing/hierarchy is unchanged), hue rotated to ~213° (a calm
+     that the warm tone "wasn't working." Hue rotated to ~213° (a calm
      blue-gray) at a low, consistent saturation (~7–15%) rather than a warm
      ~35–40° hue — genuinely neutral/cool, not just "less yellow." The three
      model colors (rose/blue/green, lib/colors.ts) are unaffected — this is
      the ambient/neutral palette only.
+     paper-100/paper-200 were darkened further after direct feedback that
+     backgrounds/hairlines read too washed-out ("make the greys darker").
+     paper-50 stays near-white (it's the page's base "paper," not really a
+     grey). The step sizes are deliberately uneven, not a straight lightness
+     ramp: paper-100 only had ~4pt of room before ink-500 text sitting on it
+     (the footer's "·" separators and credit line, +layout.svelte) would
+     drop below 4.5:1 — capped there. paper-200 had no such real text-on-it
+     usage after fixing the one that existed (home_map_empty_subtitle's
+     inherited color, +page.svelte, moved to ink-700), so it dropped much
+     further — it's genuinely decorative/structural, never text-bearing.
      Contrast checked against --color-paper-50 (WCAG AA, 4.5:1 normal text):
      ink-900 16.7:1, ink-700 10.5:1 — safe for any text size, any paper-*
-     background. ink-500 is 5.22:1 on paper-50, 5.00:1 on paper-100, 4.61:1
-     on paper-200 — all pass now (the warm ramp's ink-500 was borderline on
-     paper-100/200; this one clears with more room). --color-paper-200 is a
-     *decorative* hairline only (well under the 3:1 non-text-contrast
-     guidance for meaningful UI boundaries); functional element borders
-     (inputs, buttons, card outlines that need to read as identifiable
-     controls) should use ink-500 at reduced opacity instead, e.g.
-     color-mix(in srgb, var(--color-ink-500) 45%, transparent). */
+     background. ink-500 is 5.22:1 on paper-50, 4.54:1 on paper-100 (the
+     real constraint above) — both pass. --color-paper-200 is no longer
+     used for real text anywhere in the codebase (verified by grep before
+     this change), so its own ink-500 contrast isn't load-bearing; if that
+     ever changes, recheck before reusing it as a text background.
+     paper-200 vs paper-50 boundary contrast is now 1.61:1 (was ~1.2:1) —
+     still under the 3:1 non-text guidance for meaningful UI boundaries, so
+     functional element borders (inputs, buttons, card outlines that need
+     to read as identifiable controls) should still use ink-500 at reduced
+     opacity instead, e.g. color-mix(in srgb, var(--color-ink-500) 45%,
+     transparent), same as before. */
   --color-paper-50: #FDFDFD;
-  --color-paper-100: #F8F8F9;
-  --color-paper-200: #EEEFF1;
+  --color-paper-100: #EDEDF0;
+  --color-paper-200: #C7CAD1;
   --color-ink-900: #191D21;
   --color-ink-700: #393F46;
   --color-ink-500: #656C75;
