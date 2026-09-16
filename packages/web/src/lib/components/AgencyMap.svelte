@@ -65,7 +65,6 @@
 
   let container: HTMLDivElement;
   let map: any = null;
-  let resizeObserver: ResizeObserver | null = null;
 
   onMount(async () => {
     if (!browser || !container) return;
@@ -94,11 +93,6 @@
       attributionControl: { compact: true },
     });
     map.addControl(new ml.NavigationControl({ showCompass: false }), "top-right");
-
-    // ExpandableMapFrame grows this same container in place (no remount) when
-    // the reader taps to expand — the map needs to notice and resize itself.
-    resizeObserver = new ResizeObserver(() => map?.resize());
-    resizeObserver.observe(container);
 
     map.on("load", async () => {
       map.resize();
@@ -429,7 +423,6 @@
   });
 
   onDestroy(() => {
-    resizeObserver?.disconnect();
     if (map) { map.remove(); map = null; }
   });
 </script>

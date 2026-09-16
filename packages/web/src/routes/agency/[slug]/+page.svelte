@@ -7,7 +7,6 @@
   import { m } from "$lib/paraglide/messages.js";
   import { ogImage } from "$lib/ogImage";
   import AgencyMap from "$lib/components/AgencyMap.svelte";
-  import ExpandableMapFrame from "$lib/components/ExpandableMapFrame.svelte";
   import Gloss from "$lib/components/Gloss.svelte";
 
   export let data: PageData;
@@ -351,7 +350,12 @@
 
   <!-- Location map -->
   <div class="mt-6">
-    <ExpandableMapFrame ariaLabel={m.state_map_aria({ state: STATE_NAMES[agency.state] ?? agency.state })}>
+    <div
+      class="relative h-[45vh] min-h-[280px] max-h-[420px] overflow-hidden rounded-lg border shadow-sm"
+      style="border-color: var(--color-paper-200);"
+      role="region"
+      aria-label={m.state_map_aria({ state: STATE_NAMES[agency.state] ?? agency.state })}
+    >
       {#key agency.slug}
         <AgencyMap
           lat={agency.lat}
@@ -362,7 +366,7 @@
           currentSlug={agency.slug}
         />
       {/key}
-    </ExpandableMapFrame>
+    </div>
   </div>
 
   <!-- Jurisdiction -->

@@ -127,8 +127,6 @@
   "model_wso_short": "This is the most <strong>limited</strong> model. Officers execute ICE administrative warrants on <strong>specific</strong> named individuals <strong>already</strong> incarcerated or detained.",
   "model_wso_detail": "Introduced around 2020, the WSO model is narrower than JEM or TFM. Officers may only serve administrative warrants on specific individuals ICE has already identified for removal. They cannot initiate independent enforcement or conduct community operations.",
   "home_search_clear_filters": "Clear filters",
-  "map_expand": "Expand map",
-  "map_collapse": "Close map",
   "search_palette_trigger_aria": "Search the site",
   "search_palette_placeholder": "Search agencies, states, glossary, models…",
   "search_palette_placeholder_short": "Search…",

@@ -127,8 +127,6 @@
   "model_wso_short": "Los oficiales están autorizados para entregar órdenes administrativas a personas que ICE ya ha identificado.",
   "model_wso_detail": "Introducido alrededor de 2020, el modelo WSO es más limitado que JEM o TFM. Los oficiales solo pueden entregar órdenes administrativas a personas específicas que ICE ya identificó para deportación. No pueden iniciar acciones independientes de cumplimiento ni realizar operativos comunitarios.",
   "home_search_clear_filters": "Limpiar filtros",
-  "map_expand": "Ampliar el mapa",
-  "map_collapse": "Cerrar el mapa",
   "search_palette_trigger_aria": "Buscar en el sitio",
   "search_palette_placeholder": "Buscar agencias, estados, glosario, modelos…",
   "search_palette_placeholder_short": "Buscar…",
