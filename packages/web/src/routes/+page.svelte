@@ -128,6 +128,8 @@
       .sort((a, b) => b.agencyCount - a.agencyCount)
       .slice(0, 10);
   })();
+  // Which row's model breakdown is open — one at a time, click to toggle.
+  let expandedTopState: string | null = null;
 
   // Geo-aware participation callout. Renders once client-side geo resolves.
   // FL gets a distinct message because SB 168 (2019) mandates 287(g)
@@ -494,20 +496,44 @@
 
       <ol class="mt-6 divide-y overflow-hidden rounded-lg border" style="border-color: var(--color-paper-200);">
         {#each topStatesByAgencyCount as row, i (row.abbr)}
-          <li class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 sm:px-5" style="border-color: var(--color-paper-100); background: var(--color-paper-50);">
-            <span class="w-6 shrink-0 font-mono text-xs tabular-nums" style="color: var(--color-ink-500);">{i + 1}</span>
-            <a href={localizeHref(`/state/${row.abbr.toLowerCase()}`)} class="min-w-0 flex-1 truncate text-sm font-semibold no-underline hover:underline" style="color: var(--color-ink-900);">{STATE_NAMES[row.abbr] ?? row.abbr}</a>
-            <span class="flex shrink-0 items-center gap-2">
-              {#each MODEL_ORDER as model}
-                {#if row.modelCounts[model]}
-                  <span class="flex items-center gap-1 font-mono text-[11px] tabular-nums" style="color: var(--color-ink-700);" aria-label="{MODEL_SHORT[model]}: {row.modelCounts[model]}">
-                    <span class="inline-block h-2 w-2 rounded-full" style="background: {MODEL_COLORS[model]};" aria-hidden="true"></span>
-                    {row.modelCounts[model]}
-                  </span>
-                {/if}
-              {/each}
-            </span>
-            <span class="shrink-0 font-mono text-xs tabular-nums" style="color: var(--color-ink-500);">{intFmt.format(row.agencyCount)} {m.leaderboard_unit_agencies()}</span>
+          {@const expanded = expandedTopState === row.abbr}
+          <li style="border-color: var(--color-paper-100); background: var(--color-paper-50);">
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 sm:px-5">
+              <span class="w-6 shrink-0 font-mono text-xs tabular-nums" style="color: var(--color-ink-500);">{i + 1}</span>
+              <button
+                type="button"
+                on:click={() => (expandedTopState = expanded ? null : row.abbr)}
+                aria-expanded={expanded}
+                class="flex min-w-0 flex-1 items-center gap-1.5 truncate bg-transparent text-left text-sm font-semibold"
+                style="color: var(--color-ink-900);"
+              >
+                <svg
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  class="h-3 w-3 shrink-0 transition-transform"
+                  style="color: var(--color-ink-500); transform: rotate({expanded ? 90 : 0}deg);"
+                  aria-hidden="true"
+                ><path d="M6 4l8 6-8 6V4z" /></svg>
+                <span class="truncate">{STATE_NAMES[row.abbr] ?? row.abbr}</span>
+              </button>
+              <a
+                href={localizeHref(`/state/${row.abbr.toLowerCase()}`)}
+                class="shrink-0 font-mono text-xs tabular-nums no-underline hover:underline"
+                style="color: var(--color-ink-500);"
+              >{intFmt.format(row.agencyCount)} {m.leaderboard_unit_agencies()}</a>
+            </div>
+            {#if expanded}
+              <div class="flex flex-wrap gap-x-5 gap-y-1.5 border-t px-4 py-3 pl-[2.6rem] sm:px-5" style="border-color: var(--color-paper-100);">
+                {#each MODEL_ORDER as model}
+                  {#if row.modelCounts[model]}
+                    <span class="flex items-center gap-1.5 font-mono text-xs tabular-nums" style="color: var(--color-ink-700);">
+                      <span class="inline-block h-2 w-2 rounded-full" style="background: {MODEL_COLORS[model]};" aria-hidden="true"></span>
+                      {MODEL_SHORT[model]} {row.modelCounts[model]}
+                    </span>
+                  {/if}
+                {/each}
+              </div>
+            {/if}
           </li>
         {/each}
       </ol>
