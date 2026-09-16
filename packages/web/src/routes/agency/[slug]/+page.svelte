@@ -496,13 +496,13 @@
   <dl class="mt-8 grid gap-6 border-y border-paper-200 py-8 sm:grid-cols-3">
     {#if agency.signed_date}
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-widest text-ink-500">{m.agency_signed_date()}</dt>
+        <dt class="stat-label">{m.agency_signed_date()}</dt>
         <dd class="mt-1 text-xl font-bold text-ink-900">{dateFmt(agency.signed_date)}</dd>
       </div>
     {/if}
     {#if showFirstSeen}
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-widest text-ink-500">{m.agency_first_seen()}</dt>
+        <dt class="stat-label">{m.agency_first_seen()}</dt>
         <dd class="mt-1 text-xl font-bold text-ink-900">{dateFmt(agency.first_seen_date)}</dd>
       </div>
     {/if}
@@ -510,20 +510,20 @@
          agreement card below (single- and multi-agreement views alike). -->
     {#if agency.lee?.population != null}
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-widest text-ink-500">{m.agency_population()}</dt>
+        <dt class="stat-label">{m.agency_population()}</dt>
         <dd class="mt-1 text-xl font-bold text-ink-900">
           {intFmt.format(agency.lee.population)}<a href="https://cde.ucr.cjis.gov/LATEST/webapp/#/pages/downloads" target="_blank" rel="noreferrer" title="FBI Law Enforcement Employees data, {agency.lee.data_year}" class="ml-1.5 text-xs font-normal text-ink-500 no-underline hover:text-ink-700 hover:underline">FBI {agency.lee.data_year}</a>
         </dd>
       </div>
     {:else if agency.population != null}
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-widest text-ink-500">{m.agency_population()}</dt>
+        <dt class="stat-label">{m.agency_population()}</dt>
         <dd class="mt-1 text-xl font-bold text-ink-900">{intFmt.format(agency.population)}</dd>
       </div>
     {/if}
     {#if agency.lee?.officer_ct != null}
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-widest text-ink-500">{m.agency_officers()}</dt>
+        <dt class="stat-label">{m.agency_officers()}</dt>
         <dd class="mt-1 text-xl font-bold text-ink-900">
           {intFmt.format(agency.lee.officer_ct)}<a href="https://cde.ucr.cjis.gov/LATEST/webapp/#/pages/downloads" target="_blank" rel="noreferrer" title="FBI Law Enforcement Employees data, {agency.lee.data_year}" class="ml-1.5 text-xs font-normal text-ink-500 no-underline hover:text-ink-700 hover:underline">FBI {agency.lee.data_year}</a>
         </dd>
@@ -531,7 +531,7 @@
     {/if}
     {#if agency.lee?.civilian_ct != null}
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-widest text-ink-500">{m.agency_civilian_staff()}</dt>
+        <dt class="stat-label">{m.agency_civilian_staff()}</dt>
         <dd class="mt-1 text-xl font-bold text-ink-900">
           {intFmt.format(agency.lee.civilian_ct)}<a href="https://cde.ucr.cjis.gov/LATEST/webapp/#/pages/downloads" target="_blank" rel="noreferrer" title="FBI Law Enforcement Employees data, {agency.lee.data_year}" class="ml-1.5 text-xs font-normal text-ink-500 no-underline hover:text-ink-700 hover:underline">FBI {agency.lee.data_year}</a>
         </dd>
@@ -539,7 +539,7 @@
     {/if}
     {#if agency.lee?.total_pe_ct != null}
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-widest text-ink-500">{m.agency_total_personnel()}</dt>
+        <dt class="stat-label">{m.agency_total_personnel()}</dt>
         <dd class="mt-1 text-xl font-bold text-ink-900">
           {intFmt.format(agency.lee.total_pe_ct)}<a href="https://cde.ucr.cjis.gov/LATEST/webapp/#/pages/downloads" target="_blank" rel="noreferrer" title="FBI Law Enforcement Employees data, {agency.lee.data_year}" class="ml-1.5 text-xs font-normal text-ink-500 no-underline hover:text-ink-700 hover:underline">FBI {agency.lee.data_year}</a>
         </dd>
@@ -547,21 +547,21 @@
     {/if}
     {#if agency.agreement?.population_policed != null}
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-widest text-ink-500">{m.agency_population_policed()}</dt>
+        <dt class="stat-label">{m.agency_population_policed()}</dt>
         <dd class="mt-1 text-xl font-bold text-ink-900">{intFmt.format(agency.agreement.population_policed)}</dd>
         <dd class="mt-0.5 text-xs text-ink-500">{m.agency_source_moa()}</dd>
       </div>
     {/if}
     {#if agency.agreement?.operating_budget != null}
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-widest text-ink-500">{m.agency_operating_budget()}</dt>
+        <dt class="stat-label">{m.agency_operating_budget()}</dt>
         <dd class="mt-1 text-xl font-bold text-ink-900">${intFmt.format(agency.agreement.operating_budget)}</dd>
         <dd class="mt-0.5 text-xs text-ink-500">{m.agency_source_moa()}</dd>
       </div>
     {/if}
     {#if agency.moa_url}
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-widest text-ink-500">{m.agency_moa_heading()}</dt>
+        <dt class="stat-label">{m.agency_moa_heading()}</dt>
         <dd class="mt-1">
           <a
             href={agency.moa_url}
@@ -642,25 +642,25 @@
       <dl class="mt-4 space-y-3">
         {#if agency.contact_address}
           <div class="flex gap-4">
-            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-ink-500">{m.agency_contact_address()}</dt>
+            <dt class="w-20 shrink-0 pt-0.5 stat-label">{m.agency_contact_address()}</dt>
             <dd class="text-ink-700">{agency.contact_address}</dd>
           </div>
         {/if}
         {#if agency.contact_phone}
           <div class="flex gap-4">
-            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-ink-500">{m.agency_contact_phone()}</dt>
+            <dt class="w-20 shrink-0 pt-0.5 stat-label">{m.agency_contact_phone()}</dt>
             <dd><a href="tel:{agency.contact_phone}">{agency.contact_phone}</a></dd>
           </div>
         {/if}
         {#if agency.contact_email}
           <div class="flex gap-4">
-            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-ink-500">{m.agency_contact_email()}</dt>
+            <dt class="w-20 shrink-0 pt-0.5 stat-label">{m.agency_contact_email()}</dt>
             <dd><a href="mailto:{agency.contact_email}">{agency.contact_email}</a></dd>
           </div>
         {/if}
         {#if agency.contact_website}
           <div class="flex gap-4">
-            <dt class="w-20 shrink-0 pt-0.5 text-xs font-semibold uppercase tracking-wider text-ink-500">{m.agency_contact_website()}</dt>
+            <dt class="w-20 shrink-0 pt-0.5 stat-label">{m.agency_contact_website()}</dt>
             <dd class="min-w-0 break-all"><a href={agency.contact_website} target="_blank" rel="noreferrer">{agency.contact_website}</a></dd>
           </div>
         {/if}

@@ -287,14 +287,14 @@
   <section class="border-b px-4 py-4 sm:px-6 sm:py-5" style="border-color: var(--color-paper-200); background: var(--color-paper-100);">
     <dl class="mx-auto grid max-w-6xl grid-cols-1 gap-x-4 gap-y-5 sm:grid-cols-3">
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-widest" style="color: var(--color-ink-500);">{m.browse_stat_states()}</dt>
+        <dt class="stat-label">{m.browse_stat_states()}</dt>
         <dd class="mt-1 flex items-baseline gap-1 font-mono text-2xl font-bold tabular-nums" style="color: var(--color-ink-900);">
           {intFmt.format(statesWithAgencies)}
           {#if totalStatesTracked}<span class="text-sm font-semibold" style="color: var(--color-ink-500);">/{intFmt.format(totalStatesTracked)}</span>{/if}
         </dd>
       </div>
       <div>
-        <dt class="text-xs font-semibold uppercase tracking-widest" style="color: var(--color-ink-500);">{m.browse_stat_agencies()}</dt>
+        <dt class="stat-label">{m.browse_stat_agencies()}</dt>
         <dd class="mt-1 flex items-baseline gap-1 font-mono text-2xl font-bold tabular-nums" style="color: var(--color-ink-900);">
           {intFmt.format(totalAgencies)}
           {#if nationalLocalLeAgencies}<span class="text-sm font-semibold" style="color: var(--color-ink-500);">/{intFmt.format(nationalLocalLeAgencies)}</span>{/if}
@@ -302,7 +302,7 @@
       </div>
       {#if nationalPopulationServed}
         <div>
-          <dt class="text-xs font-semibold uppercase tracking-widest" style="color: var(--color-ink-500);">{m.browse_stat_population()}</dt>
+          <dt class="stat-label">{m.browse_stat_population()}</dt>
           <dd class="mt-1 flex items-baseline gap-1 font-mono text-2xl font-bold tabular-nums" style="color: var(--color-ink-900);">
             {popFmt.format(nationalPopulationServed)}
             {#if nationalLocalPopulation}<span class="text-sm font-semibold" style="color: var(--color-ink-500);">/{popFmtOverlay.format(nationalLocalPopulation)}</span>{/if}
