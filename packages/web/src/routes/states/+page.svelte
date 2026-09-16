@@ -198,7 +198,7 @@
             type="button"
             on:click={() => { bannerDismissed = true; track("states_index_detected_dismissed", { state: detectedRow?.abbr }); }}
             aria-label={m.states_index_detected_dismiss()}
-            class="rounded-full p-1.5 text-ink-500 transition-colors hover:bg-paper-200 hover:text-ink-900"
+            class="rounded-full p-3.5 text-ink-500 transition-colors hover:bg-paper-200 hover:text-ink-900"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-4 w-4" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
