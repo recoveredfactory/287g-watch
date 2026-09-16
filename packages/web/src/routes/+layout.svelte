@@ -224,7 +224,7 @@
               href={localizeHref("/use-the-map")}
               class="no-underline {isNavActive('/use-the-map', basePath) ? 'text-ink-900 underline underline-offset-4 decoration-2' : 'text-ink-700 hover:text-ink-900'}"
               aria-current={isNavActive('/use-the-map', basePath) ? 'page' : undefined}
-            >{m.nav_share()}</a>
+            >{m.nav_downloads()}</a>
             <a
               href={localizeHref("/timeline")}
               class="no-underline {isNavActive('/timeline', basePath) ? 'text-ink-900 underline underline-offset-4 decoration-2' : 'text-ink-700 hover:text-ink-900'}"
@@ -272,7 +272,7 @@
       <p>
         <a href={localizeHref("/states")} class="text-ink-700 hover:text-ink-900">{m.nav_states()}</a>
         <span class="mx-1.5 text-ink-500">·</span>
-        <a href={localizeHref("/use-the-map")} class="text-ink-700 hover:text-ink-900">{m.nav_share()}</a>
+        <a href={localizeHref("/use-the-map")} class="text-ink-700 hover:text-ink-900">{m.nav_downloads()}</a>
         <span class="mx-1.5 text-ink-500">·</span>
         <a href={localizeHref("/timeline")} class="text-ink-700 hover:text-ink-900">{m.nav_timeline()}</a>
         <span class="mx-1.5 text-ink-500">·</span>
