@@ -64,6 +64,7 @@
   "browse_stat_agencies": "Participating agencies",
   "browse_stat_population": "Population covered",
   "browse_top_states_heading": "Top states by agency count",
+  "home_top_states_breakdown_toggle": "Show agreement-type breakdown for {state}",
   "state_meta_title": "{state} 287(g) Agencies",
   "state_meta_description": "{count} agencies in {state} participating in the 287(g) immigration enforcement program.",
   "state_eyebrow": "287(g) Program",

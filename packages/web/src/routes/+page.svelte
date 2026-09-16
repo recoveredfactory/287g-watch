@@ -504,18 +504,22 @@
                 type="button"
                 on:click={() => (expandedTopState = expanded ? null : row.abbr)}
                 aria-expanded={expanded}
-                class="flex min-w-0 flex-1 items-center gap-1.5 truncate bg-transparent text-left text-sm font-semibold"
-                style="color: var(--color-ink-900);"
+                aria-label={m.home_top_states_breakdown_toggle({ state: STATE_NAMES[row.abbr] ?? row.abbr })}
+                class="shrink-0 bg-transparent p-0.5"
               >
                 <svg
                   viewBox="0 0 20 20"
                   fill="currentColor"
-                  class="h-3 w-3 shrink-0 transition-transform"
+                  class="h-3 w-3 transition-transform"
                   style="color: var(--color-ink-500); transform: rotate({expanded ? 90 : 0}deg);"
                   aria-hidden="true"
                 ><path d="M6 4l8 6-8 6V4z" /></svg>
-                <span class="truncate">{STATE_NAMES[row.abbr] ?? row.abbr}</span>
               </button>
+              <a
+                href={localizeHref(`/state/${row.abbr.toLowerCase()}`)}
+                class="min-w-0 flex-1 truncate text-sm font-semibold no-underline hover:underline"
+                style="color: var(--color-ink-900);"
+              >{STATE_NAMES[row.abbr] ?? row.abbr}</a>
               <a
                 href={localizeHref(`/state/${row.abbr.toLowerCase()}`)}
                 class="shrink-0 font-mono text-xs tabular-nums no-underline hover:underline"

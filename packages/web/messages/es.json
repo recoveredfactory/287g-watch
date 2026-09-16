@@ -64,6 +64,7 @@
   "browse_stat_agencies": "Agencias participantes",
   "browse_stat_population": "Población cubierta",
   "browse_top_states_heading": "Estados principales por número de agencias",
+  "home_top_states_breakdown_toggle": "Mostrar el desglose por tipo de acuerdo de {state}",
   "state_meta_title": "Agencias 287(g) de {state}",
   "state_meta_description": "{count} agencias en {state} que participan en el programa de control migratorio 287(g).",
   "state_eyebrow": "Programa 287(g)",
