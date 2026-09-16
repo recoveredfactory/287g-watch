@@ -58,35 +58,36 @@
      ~35–40° hue — genuinely neutral/cool, not just "less yellow." The three
      model colors (rose/blue/green, lib/colors.ts) are unaffected — this is
      the ambient/neutral palette only.
-     paper-100/paper-200 were darkened further after direct feedback that
-     backgrounds/hairlines read too washed-out ("make the greys darker").
+     paper-100/paper-200 were darkened after feedback that backgrounds/
+     hairlines read too washed-out, then paper-200 specifically came back
+     lighter after a follow-up that the first pass went too extreme there —
+     paper-100 (header/footer) was the one that actually read well dark, so
+     it stayed; paper-200 (card borders, section backgrounds, hairlines used
+     all over, not just structurally) needed a lighter middle ground.
      paper-50 stays near-white (it's the page's base "paper," not really a
-     grey). The step sizes are deliberately uneven, not a straight lightness
-     ramp: paper-100 only had ~4pt of room before ink-500 text sitting on it
-     (the footer's "·" separators and credit line, +layout.svelte) would
-     drop below 4.5:1 — capped there. paper-200 had no such real text-on-it
-     usage after fixing the one that existed (home_map_empty_subtitle's
-     inherited color, +page.svelte, moved to ink-700), so it dropped much
-     further — it's genuinely decorative/structural, never text-bearing.
+     grey). ink-500 was darkened at the same time per the same feedback —
+     "focus on making the grey text a little darker" — as the more durable
+     fix for legibility than leaning entirely on background changes: a
+     darker ink-500 only ever improves its contrast against any paper-*
+     tone, light or dark, so it's a globally safe move that doesn't need
+     the light/dark-background carve-out darkening a background does.
      Contrast checked against --color-paper-50 (WCAG AA, 4.5:1 normal text):
      ink-900 16.7:1, ink-700 10.5:1 — safe for any text size, any paper-*
-     background. ink-500 is 5.22:1 on paper-50, 4.54:1 on paper-100 (the
-     real constraint above) — both pass. --color-paper-200 is no longer
-     used for real text anywhere in the codebase (verified by grep before
-     this change), so its own ink-500 contrast isn't load-bearing; if that
-     ever changes, recheck before reusing it as a text background.
-     paper-200 vs paper-50 boundary contrast is now 1.61:1 (was ~1.2:1) —
-     still under the 3:1 non-text guidance for meaningful UI boundaries, so
-     functional element borders (inputs, buttons, card outlines that need
-     to read as identifiable controls) should still use ink-500 at reduced
-     opacity instead, e.g. color-mix(in srgb, var(--color-ink-500) 45%,
-     transparent), same as before. */
+     background. ink-500 is 6.24:1 on paper-50, 5.43:1 on paper-100, 4.67:1
+     on paper-200 — all pass with real margin now (paper-100 used to be the
+     tight one, at 4.54:1; darkening ink-500 fixed that without needing to
+     touch paper-100 itself). paper-200 vs paper-50 boundary contrast is
+     1.34:1 — still under the 3:1 non-text guidance for meaningful UI
+     boundaries (same as it's always been), so functional element borders
+     (inputs, buttons, card outlines that need to read as identifiable
+     controls) should still use ink-500 at reduced opacity instead, e.g.
+     color-mix(in srgb, var(--color-ink-500) 45%, transparent). */
   --color-paper-50: #FDFDFD;
   --color-paper-100: #EDEDF0;
-  --color-paper-200: #C7CAD1;
+  --color-paper-200: #DBDDE1;
   --color-ink-900: #191D21;
   --color-ink-700: #393F46;
-  --color-ink-500: #656C75;
+  --color-ink-500: #5A6068;
 
   /* No separate "accent" hue site-wide, by design: highlight/link color
      defaults to deep ink (--color-ink-900/700) everywhere. The exception is
@@ -284,6 +285,19 @@
   }
   .news-body h4 {
     @apply mt-4 text-sm font-semibold text-ink-900;
+  }
+
+  /* Small caption label paired with a value (a <dt> beside a <dd>, or a
+     stat-strip figure) — "States with agencies", "Signed date", "Officers",
+     etc. Consolidated here after these had drifted to a mix of
+     font-semibold/font-bold and ink-500/ink-700/ink-900 across pages with
+     no real distinction between them; this is the one weight/color for
+     that role everywhere it appears. Deliberately NOT used for eyebrows
+     (the small kicker above an <h1>, meant to stay quieter than the
+     headline it introduces) or section sub-headings ("Officers can", "See
+     also") — those are a different role and keep their existing treatment. */
+  .stat-label {
+    @apply text-xs font-bold uppercase tracking-widest text-ink-500;
   }
 
   /* Expand/collapse trigger — a centered pill flanked by hairline rules
