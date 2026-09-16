@@ -4,9 +4,9 @@ import { buildHomeData } from "$lib/server/homeData";
 // $lib/server/homeData.ts (builder) and $lib/homeData.types.ts (shapes).
 export const load = ({ fetch }) => buildHomeData(fetch);
 
-// Re-export the shapes for back-compat: other modules import these types from
-// here (e.g. AgencySearch imported `Agency`). New code should import from
-// $lib/homeData.types directly.
+// Re-export the shapes for back-compat: several other route modules still
+// import these types from here rather than $lib/homeData.types directly.
+// New code should import from $lib/homeData.types directly.
 export type {
   HistoryEvent,
   LeeData,

@@ -1,13 +1,11 @@
 <script lang="ts">
-  // Site-wide search — an always-visible inline search box in the header
-  // (same pattern as AgencySearch.svelte's agency-jump bar: input + an
-  // absolutely-positioned dropdown anchored right below it, no backdrop, no
-  // centered modal card). Covers agencies, states, glossary terms, model
-  // pages, and the static content pages. Agencies (the biggest dataset,
-  // ~1,700 rows) are fetched lazily on first focus and cached at module
-  // scope so repeat uses in the same session don't refetch.
+  // Site-wide search — an always-visible inline search box in the header:
+  // input + an absolutely-positioned dropdown anchored right below it, no
+  // backdrop, no centered modal card. Covers agencies, states, glossary
+  // terms, model pages, and the static content pages. Agencies (the biggest
+  // dataset, ~1,700 rows) are fetched lazily on first focus and cached at
+  // module scope so repeat uses in the same session don't refetch.
   import { goto } from "$app/navigation";
-  import { browser } from "$app/environment";
   import { localizeHref } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
   import { STATE_NAMES, NAVIGABLE_STATES } from "$lib/states";
