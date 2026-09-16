@@ -6,80 +6,19 @@
   import { MODEL_ORDER, MODEL_COLORS, MODEL_SHORT } from "$lib/colors";
   import { localizeHref, getLocale } from "$lib/paraglide/runtime";
   import { m } from "$lib/paraglide/messages.js";
-  import StateMiniMap from "$lib/components/StateMiniMap.svelte";
-  import StateTrendMini from "$lib/components/StateTrendMini.svelte";
-  import StateTopAgencies from "$lib/components/StateTopAgencies.svelte";
   import NewsAiWarning from "$lib/components/NewsAiWarning.svelte";
   import LegislationBadge from "$lib/components/LegislationBadge.svelte";
   import { SHOW_LEGISLATION_STANCE } from "$lib/features";
   import { ogImage } from "$lib/ogImage";
 
-  // Honor the OS reduced-motion setting for the unfurl (a 0ms animation = an
-  // instant open, no growth).
+  // Honor the OS reduced-motion setting.
   const reduceMotion = browser && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  // Peek clamp height, in px — MUST match the .states-collapsible fallback
-  // `max-height` in the CSS below (6rem). At the news-body's 28.8px line box
-  // (text-base × leading-1.8) that's ~3.3 lines: lines 1–2 stay crisp, and line 3
-  // is shown fading so it clearly reads as "more text below."
-  const PEEK = 96;
-
-  // Jump-free open/close. The bottom section is one persistent element; CSS
-  // clamps it to PEEK when closed. On toggle we animate `max-height` from the
-  // element's CURRENT height (so mid-flight toggles stay smooth) to either its
-  // full content height (scrollHeight ignores the clamp) or back to PEEK — never
-  // via 0, which is what a slide/height-from-0 transition does and reads as a
-  // jump. At rest we clear the inline overrides so CSS governs again. The fade
-  // overlay is a separate CSS concern (the .is-open class), so toggling it can't
-  // disturb this height measurement.
-  const collapsible = (node: HTMLElement, open: boolean) => {
-    let prev = open;
-    let anim: Animation | null = null;
-    const rest = (isOpen: boolean) => {
-      anim = null;
-      node.style.maxHeight = isOpen ? "none" : "";
-      node.style.overflow = isOpen ? "visible" : "";
-    };
-    rest(open);
-    return {
-      update(next: boolean) {
-        if (next === prev) return;
-        prev = next;
-        if (reduceMotion) return rest(next);
-        const from = node.getBoundingClientRect().height;
-        const to = next ? node.scrollHeight : PEEK;
-        node.style.overflow = "hidden";
-        node.style.maxHeight = `${from}px`;
-        anim?.cancel();
-        anim = node.animate(
-          [{ maxHeight: `${from}px` }, { maxHeight: `${to}px` }],
-          { duration: 280, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
-        );
-        anim.onfinish = () => rest(next);
-      },
-      destroy: () => anim?.cancel(),
-    };
-  };
-
-  // Split the rendered summary HTML after its first paragraph, so the mobile
-  // layout can tuck the trend chart in right there (desktop keeps it in the side
-  // rail). Returns [firstBlock, rest]; if there's no </p> (shouldn't happen), the
-  // whole thing is the first block and rest is empty.
-  const splitFirstPara = (html: string | undefined): [string, string] => {
-    if (!html) return ["", ""];
-    const end = html.indexOf("</p>");
-    if (end === -1) return [html, ""];
-    const cut = end + "</p>".length;
-    return [html.slice(0, cut), html.slice(cut)];
-  };
-
   export let data: PageData;
-  $: ({ rows, trendMonths } = data);
+  $: ({ rows } = data);
 
-  // Search + sort, ported forward from the branch's /explore search work —
-  // additive on top of main's card list, the expand/collapse mechanics
-  // below are otherwise untouched. "rank" keeps the server's own sort
-  // order (agencyCount desc, then population, then name).
+  // Search + sort. "rank" keeps the server's own sort order (agencyCount
+  // desc, then population, then name).
   let query = "";
   type SortKey = "rank" | "name" | "population";
   let sortKey: SortKey = "rank";
@@ -99,22 +38,19 @@
   const intFmt = new Intl.NumberFormat(localeTag);
   const popFmt = new Intl.NumberFormat(localeTag, { notation: "compact", maximumFractionDigits: 1 });
   const dateFmt = new Intl.DateTimeFormat(localeTag, { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
-  const monthFmt = new Intl.DateTimeFormat(localeTag, { month: "short", year: "2-digit", timeZone: "UTC" });
-  const monthLabel = (ym: string | undefined) => (ym ? monthFmt.format(new Date(`${ym}-01`)) : "");
 
-  // Per-card last-built date (the real built_at from the program), formatted in
-  // the active locale. Each state carries its own freshness now.
+  // Per-row last-built date (the real built_at from the program), formatted
+  // in the active locale.
   const builtDate = (built: string) => (built ? dateFmt.format(new Date(built)) : "");
 
-  // "% of local LE agencies" for a card — rounded whole percent, "<1" for
+  // "% of local LE agencies" for a row — rounded whole percent, "<1" for
   // participating states that round to 0, null when there's no LEE denominator.
   const leePctLabel = (denom: number | null, num: number | null): string | null => {
     if (!denom || num == null) return null;
     const p = Math.round((num / denom) * 100);
     return num > 0 && p === 0 ? "<1" : String(p);
   };
-  $: trendStart = monthLabel(trendMonths?.[0]);
-  $: trendEnd = monthLabel(trendMonths?.at(-1));
+
   $: metaTitle = m.states_index_meta_title();
   $: metaDescription = m.states_index_meta_description({ count: intFmt.format(rows.length) });
 
@@ -128,32 +64,23 @@
     w.umami?.track?.(event, data);
   };
 
-  // Per-row expand state. Expand-all only targets rows that actually have a full
-  // body to reveal (the TL;DR is always visible).
-  let expanded: Set<string> = new Set();
+  // Which row's short preview is open — one at a time, click to toggle. Rows
+  // without a summary aren't expandable at all (nothing to preview).
+  let expandedRow: string | null = null;
   const toggle = (abbr: string) => {
-    const next = new Set(expanded);
-    const opening = !next.has(abbr);
-    opening ? next.add(abbr) : next.delete(abbr);
-    expanded = next;
+    const opening = expandedRow !== abbr;
+    expandedRow = opening ? abbr : null;
     // Fire only on open — the "read the summary" engagement signal.
     if (opening) track("states_index_read_summary", { state: abbr });
   };
-  $: expandable = rows.filter((r) => r.news?.body_html || r.topAgencies.length);
-  const expandAll = () => {
-    expanded = new Set(expandable.map((r) => r.abbr));
-    track("states_index_expand_all", { count: expandable.length });
-  };
-  const collapseAll = () => (expanded = new Set());
-  $: allExpanded = expandable.length > 0 && expandable.every((r) => expanded.has(r.abbr));
 
   // ── "Jump to your state" ────────────────────────────────────────────────────
   // Client-side geo (same lookup as the homepage hero) resolves the viewer's
-  // state; if it's one of the cards below, offer a one-tap jump. Every navigable
-  // state has a row, so a detected US state always resolves to a card.
+  // state; if it's one of the rows below, offer a one-tap jump. Every navigable
+  // state has a row, so a detected US state always resolves to one.
   let detectedState: string | null = null;
   let bannerDismissed = false;
-  let justJumped: string | null = null; // brief highlight on the jumped-to card
+  let justJumped: string | null = null; // brief highlight on the jumped-to row
   $: detectedRow = detectedState ? rows.find((r) => r.abbr === detectedState) ?? null : null;
 
   // Fire once, the moment the banner actually starts showing — not on every
@@ -177,9 +104,7 @@
     const abbr = detectedState;
     if (!abbr) return;
     track("states_index_jump_detected", { state: abbr });
-    // Open the card so its summary is visible on arrival. Its top anchor doesn't
-    // move as it expands (growth is downward), so we can scroll right away.
-    if (canExpandRow(abbr)) expanded = new Set(expanded).add(abbr);
+    if (rows.find((r) => r.abbr === abbr)?.news) expandedRow = abbr;
     const scroll = () => {
       document
         .getElementById(`state-${abbr}`)
@@ -187,13 +112,8 @@
       justJumped = abbr;
       setTimeout(() => justJumped === abbr && (justJumped = null), 1800);
     };
-    // One frame so the just-opened card is laid out before we scroll to it.
+    // One frame so the just-opened row is laid out before we scroll to it.
     requestAnimationFrame(scroll);
-  };
-
-  const canExpandRow = (abbr: string) => {
-    const r = rows.find((row) => row.abbr === abbr);
-    return Boolean(r?.news?.body_html) || (r?.topAgencies.length ?? 0) > 0;
   };
 </script>
 
@@ -209,7 +129,7 @@
   <meta property="twitter:image" content={ogImage("states.png")} />
 </svelte:head>
 
-<main id="main-content" class="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
+<main id="main-content" class="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
   <!-- ── Header ──────────────────────────────────────────────────────────────── -->
   <header>
     <p class="text-xs font-semibold uppercase tracking-widest text-ink-500">
@@ -223,13 +143,12 @@
     </p>
 
     <!-- Always-on hallucination caution, above the controls and every AI-written
-         summary in the cards below. Full container width. Per-card last-built
-         dates ride with each state, so there's no global "updated" line here. -->
+         summary below. -->
     <div class="mt-4">
       <NewsAiWarning />
     </div>
 
-    <!-- Search + sort + expand-all, one row. -->
+    <!-- Search + sort, one row. -->
     <div class="mt-4 flex flex-wrap items-center gap-2">
       <div class="relative max-w-sm flex-1">
         <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -250,20 +169,11 @@
         <option value="name">{m.browse_sort_name()}</option>
         <option value="population">{m.browse_sort_population_opt()}</option>
       </select>
-      <button
-        type="button"
-        on:click={allExpanded ? collapseAll : expandAll}
-        class="rounded border border-paper-200 px-3 py-1.5 text-sm font-medium text-ink-700 transition-colors hover:border-ink-500 hover:text-ink-900"
-      >
-        {allExpanded ? m.states_index_collapse_all() : m.states_index_expand_all()}
-      </button>
     </div>
 
     <!-- Geo "jump to your state" banner — shows once client-side geo resolves to
-         one of the cards below. Dismissible; self-heals per session via the
-         shared geo cache. Rose accent border matches the site's convention for
-         the one attention-grabbing element on a page (see /explore's compare
-         selection bar). -->
+         one of the rows below. Dismissible; self-heals per session via the
+         shared geo cache. -->
     {#if detectedRow && !bannerDismissed}
       <div
         class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-2.5"
@@ -299,85 +209,83 @@
     {/if}
   </header>
 
-  <!-- ── State cards ─────────────────────────────────────────────────────────── -->
+  <!-- ── State rows ──────────────────────────────────────────────────────────── -->
   {#if filteredRows.length === 0}
     <div class="mt-8 rounded-lg border border-paper-200 bg-paper-50 px-6 py-12 text-center">
       <p class="font-medium text-ink-700">{m.browse_no_results()}</p>
     </div>
   {/if}
-  <div class="mt-8 space-y-4">
+  <div class="mt-8 divide-y overflow-hidden rounded-lg border" style="border-color: var(--color-paper-200);">
     {#each filteredRows as row (row.abbr)}
-      {@const isExp = expanded.has(row.abbr)}
-      {@const canExpand = Boolean(row.news?.body_html) || row.topAgencies.length > 0}
+      {@const isExp = expandedRow === row.abbr}
+      {@const canExpand = Boolean(row.news)}
       {@const leePct = leePctLabel(row.localLeAgencies, row.localParticipating)}
-      <article
-        id={`state-${row.abbr}`}
-        class="scroll-mt-24 rounded-lg border bg-paper-50 p-5 shadow-sm transition duration-300 sm:p-6"
-        style="border-color: {justJumped === row.abbr ? '#BE6079' : 'var(--color-paper-200)'};"
-      >
-        <!-- Topline header: state name + dead-simple figures -->
-        <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <h2 class="font-serif text-lg font-bold sm:text-xl">
+      <article id={`state-${row.abbr}`} class="scroll-mt-24" style="background: var(--color-paper-50);">
+        <!-- Compact row: name + toggle on the left, dead-simple figures on the
+             right, all on one line (wraps on mobile). This is the whole point
+             of the redesign — 53 of these read as a scannable list, not the
+             53 fully-expanded cards this page used to render regardless of
+             whether anyone asked for the detail. -->
+        <div
+          class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 sm:px-5"
+          style="border-left: 3px solid {justJumped === row.abbr ? '#BE6079' : 'transparent'}; transition: border-color 300ms;"
+        >
+          {#if canExpand}
+            <button
+              type="button"
+              on:click={() => toggle(row.abbr)}
+              aria-expanded={isExp}
+              aria-controls={`exp-${row.abbr}`}
+              class="flex min-w-0 items-center gap-1.5 bg-transparent text-left"
+            >
+              <svg
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                class="h-3 w-3 shrink-0 text-ink-500 transition-transform"
+                style="transform: rotate({isExp ? 90 : 0}deg);"
+                aria-hidden="true"
+              ><path d="M6 4l8 6-8 6V4z" /></svg>
+              <span class="truncate font-serif text-base font-bold text-ink-900 sm:text-lg">{row.stateName}</span>
+            </button>
+          {:else}
             <a
               href={localizeHref(`/state/${row.abbr.toLowerCase()}`)}
-              class="text-ink-900 no-underline hover:underline"
-              aria-label={m.states_index_open_state({ state: row.stateName })}
+              class="min-w-0 truncate font-serif text-base font-bold text-ink-900 no-underline hover:underline sm:text-lg"
             >{row.stateName}</a>
-          </h2>
-          <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-700">
+          {/if}
+
+          <div class="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-700 sm:text-sm">
             {#if SHOW_LEGISLATION_STANCE && row.news?.legislation}
               <LegislationBadge legislation={row.news.legislation} />
             {/if}
-            <span>
-              <span class="font-semibold text-ink-900">{intFmt.format(row.agencyCount)}</span>
-              {row.agencyCount === 1 ? m.state_agency_one() : m.state_agency_other()}
-            </span>
+            <span><span class="font-semibold text-ink-900">{intFmt.format(row.agencyCount)}</span> {row.agencyCount === 1 ? m.state_agency_one() : m.state_agency_other()}</span>
             {#if leePct !== null}
-              <span>
-                <span class="font-semibold text-ink-900">{leePct}%</span>
-                {m.states_index_local_le_pct()}
-              </span>
+              <span class="hidden sm:inline"><span class="font-semibold text-ink-900">{leePct}%</span> {m.states_index_local_le_pct()}</span>
             {/if}
-            {#each MODEL_ORDER as model}
-              {#if row.modelCounts[model]}
-                <span class="flex items-center gap-1.5">
-                  <span class="inline-block h-2 w-2 rounded-full" style="background: {MODEL_COLORS[model]};"></span>
-                  <span class="font-semibold text-ink-900">{row.modelCounts[model]}</span>
-                  {MODEL_SHORT[model]}
-                </span>
-              {/if}
-            {/each}
+            <span class="hidden items-center gap-2 sm:flex">
+              {#each MODEL_ORDER as model}
+                {#if row.modelCounts[model]}
+                  <span class="flex items-center gap-1" aria-label="{MODEL_SHORT[model]}: {row.modelCounts[model]}">
+                    <span class="inline-block h-2 w-2 rounded-full" style="background: {MODEL_COLORS[model]};" aria-hidden="true"></span>
+                    <span class="font-semibold text-ink-900">{row.modelCounts[model]}</span>
+                  </span>
+                {/if}
+              {/each}
+            </span>
             {#if row.populationServed}
-              <span>
-                <span class="font-semibold text-ink-900">{popFmt.format(row.populationServed)}</span>
-                {m.state_covered()}
-              </span>
+              <span class="hidden sm:inline"><span class="font-semibold text-ink-900">{popFmt.format(row.populationServed)}</span> {m.state_covered()}</span>
             {/if}
           </div>
         </div>
 
-        <!-- Block A (always): the quick take beside the map — TL;DR on the left
-             (wider ~2/3), state map on the right. Stacks on mobile. Tapping
-             anywhere in it toggles the card open/closed — a convenience layer
-             over the real toggle button below (which keeps the keyboard/AT
-             path). Clicks on links and active text selections pass through. -->
-        <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
-        <div
-          class="mt-4 sm:grid sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] sm:items-start sm:gap-10 {canExpand
-            ? 'cursor-pointer'
-            : ''}"
-          on:click={(e) => {
-            if (!canExpand) return;
-            if (e.target instanceof Element && e.target.closest("a, button")) return;
-            if (window.getSelection()?.toString()) return;
-            toggle(row.abbr);
-          }}
-        >
-          <div class="min-w-0">
+        <!-- Short preview: TL;DR only, no full body/chart/agency list — those
+             already live on the full state page, one click away. Keeps this
+             index page cheap to render and quick to scan; the detail page is
+             the destination, not a duplicate of it. -->
+        {#if isExp}
+          <div id={`exp-${row.abbr}`} class="border-t px-4 py-4 sm:px-5" style="border-color: var(--color-paper-200); background: var(--color-paper-100);">
             {#if row.news}
-              <!-- This state's own last-built date, ahead of the summary (the
-                   stance pill rides up in the card's topline figures). -->
-              <p class="mb-2 text-xs italic text-ink-500">
+              <p class="text-xs italic text-ink-500">
                 {m.news_updated({ date: builtDate(row.news.built_at) })} ·
                 {m.news_generated_with()}
                 <a
@@ -387,203 +295,15 @@
                   class="underline decoration-paper-200 underline-offset-2 hover:text-ink-900"
                 >{m.news_ai_promptql()}</a>
               </p>
-              <div class="news-prose news-tldr max-w-prose">{@html row.news.tldr_html}</div>
-            {:else}
-              <p class="text-sm italic text-ink-500">{m.states_index_no_summary()}</p>
+              <div class="news-prose news-tldr mt-2 max-w-prose">{@html row.news.tldr_html}</div>
             {/if}
+            <a
+              href={localizeHref(`/state/${row.abbr.toLowerCase()}`)}
+              class="mt-3 inline-flex items-center gap-1 rounded bg-ink-900 px-3 py-1.5 text-sm font-semibold text-paper-50 no-underline transition-colors hover:bg-ink-700"
+            >{m.states_index_explore_state({ state: row.stateName })} →</a>
           </div>
-          {#if row.map}
-            <div class="mt-4 aspect-[3/2] w-full sm:mt-0">
-              <StateMiniMap
-                id={row.abbr}
-                w={row.map.w}
-                h={row.map.h}
-                outline={row.map.outline}
-                highways={row.map.highways}
-                dots={row.map.dots}
-                label={m.states_index_map_aria({ state: row.stateName })}
-              />
-            </div>
-          {/if}
-        </div>
-
-        {#if row.spark || canExpand}
-          {@const hasRail = Boolean(row.spark) || row.topAgencies.length > 0}
-          {@const gridCls = hasRail
-            ? "sm:grid sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] sm:items-start sm:gap-10"
-            : ""}
-
-          <!-- Bottom-section body (narrative left, chart + agencies right). Kept
-               fully rendered in both states — the collapse just clamps it — so
-               the open/close animation has no content popping in or out. -->
-          {#snippet bottomInner()}
-            {@const [firstPara, restHtml] = splitFirstPara(row.news?.body_html)}
-            {#if row.news?.body_html}
-              <div class="min-w-0 {hasRail ? 'sm:col-start-1 sm:row-start-1' : ''}">
-                <div class="news-prose news-body max-w-prose">
-                  {@html firstPara}
-                  {#if row.spark}
-                    <!-- Mobile only: the trend chart sits right after the first
-                         paragraph. On desktop it lives in the side rail below, so
-                         this copy is hidden there (sm:hidden). -->
-                    <div class="mb-5 aspect-[2/1] w-full sm:hidden">
-                      <StateTrendMini
-                        series={row.spark}
-                        startLabel={trendStart}
-                        endLabel={trendEnd}
-                        label={m.states_index_spark_aria({ state: row.stateName })}
-                      />
-                    </div>
-                  {/if}
-                  {@html restHtml}
-                </div>
-                <p class="mt-4 text-sm">
-                  <a
-                    href={localizeHref(`/state/${row.abbr.toLowerCase()}`)}
-                    class="font-medium text-ink-700 underline decoration-paper-200 underline-offset-2 hover:text-ink-900"
-                  >{m.states_index_explore_state({ state: row.stateName })}
-                    <span aria-hidden="true">→</span></a>
-                </p>
-              </div>
-            {/if}
-            {#if hasRail}
-              <!-- On mobile the chart has moved inline (above), so this rail only
-                   carries the agencies there; drop its top margin when it has no
-                   mobile content to avoid a stray gap. -->
-              <div class="sm:col-start-2 sm:row-start-1 sm:mt-0 {row.topAgencies.length ? 'mt-4' : ''}">
-                {#if row.spark}
-                  <!-- Desktop rail chart (hidden on mobile — shown inline above). -->
-                  <div class="hidden aspect-[2/1] w-full sm:block">
-                    <StateTrendMini
-                      series={row.spark}
-                      startLabel={trendStart}
-                      endLabel={trendEnd}
-                      label={m.states_index_spark_aria({ state: row.stateName })}
-                    />
-                  </div>
-                {/if}
-                {#if row.topAgencies.length}
-                  <div class="mt-6">
-                    <StateTopAgencies agencies={row.topAgencies} abbr={row.abbr} total={row.agencyCount} />
-                  </div>
-                {/if}
-              </div>
-            {/if}
-          {/snippet}
-
-          <!-- Read-more is anchored right after the quick-take row and stays put:
-               the whole bottom section unfurls below it (like the state page's
-               toggle-under-the-lead). Collapsed, that section is a single faded,
-               clipped tease — the chart included — as the inducement to click. -->
-          {#if canExpand}
-            <div class="mt-5 flex items-center gap-3">
-              <span class="news-rule" aria-hidden="true"></span>
-              <button
-                type="button"
-                class="news-toggle"
-                on:click={() => toggle(row.abbr)}
-                aria-expanded={isExp}
-                aria-controls={`exp-${row.abbr}`}
-              >
-                {isExp ? m.states_index_hide_summary() : m.states_index_read_summary()}
-                <span class="news-chev" class:rotate-180={isExp} aria-hidden="true">▾</span>
-              </button>
-              <span class="news-rule" aria-hidden="true"></span>
-            </div>
-          {/if}
-
-          <!-- Bottom section: chart-only rows (no summary/agencies to open) just
-               show; everything else is one persistent element the `collapsible`
-               action grows/shrinks between the peek clamp and full height, with a
-               fade overlay (`.is-open`) lifting as it opens. `inert` keeps the
-               clamped tease out of the tab order. -->
-          {#if !canExpand}
-            <div class="mt-4 {gridCls}">{@render bottomInner()}</div>
-          {:else}
-            <!-- Tapping the clamped tease opens the card (open-only — closing
-                 stays on the buttons and Block A). The handler sits on this
-                 wrapper because `inert` removes the collapsible itself from
-                 hit-testing while closed; clicks fall through to here. -->
-            <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
-            <div
-              class={isExp ? "" : "cursor-pointer"}
-              on:click={(e) => {
-                if (isExp) return;
-                if (e.target instanceof Element && e.target.closest("a, button")) return;
-                if (window.getSelection()?.toString()) return;
-                toggle(row.abbr);
-              }}
-            >
-              <div
-                id={`exp-${row.abbr}`}
-                class="states-collapsible mt-4 {gridCls}"
-                class:is-open={isExp}
-                use:collapsible={isExp}
-                inert={!isExp}
-              >
-                {@render bottomInner()}
-              </div>
-            </div>
-          {/if}
-
-          {#if isExp && canExpand}
-            <!-- Foot collapse (like the state page) so a long expanded card
-                 doesn't force a scroll back up to close it. -->
-            <div class="mt-6 flex items-center gap-3">
-              <span class="news-rule" aria-hidden="true"></span>
-              <button
-                type="button"
-                class="news-toggle"
-                on:click={() => toggle(row.abbr)}
-                aria-expanded={isExp}
-                aria-controls={`exp-${row.abbr}`}
-              >
-                {m.states_index_hide_summary()}
-                <span class="news-chev rotate-180" aria-hidden="true">▾</span>
-              </button>
-              <span class="news-rule" aria-hidden="true"></span>
-            </div>
-          {/if}
         {/if}
       </article>
     {/each}
   </div>
 </main>
-
-<style>
-  /* Collapsible bottom section. Closed, it's clamped to a short peek of the
-     narrative + chart (this fallback max-height is what the `collapsible` action
-     animates to/from — keep the px in the script's PEEK in sync). A gradient
-     overlay fades the clamped bottom into the card so it reads as a tease; the
-     overlay lifts (opacity → 0) as the section opens. Height is driven entirely
-     by inline styles from the action, so the .is-open class only governs the
-     fade and never disturbs the height measurement. */
-  .states-collapsible {
-    position: relative;
-    /* ~3.3 lines of news-body (28.8px line box): lines 1–2 crisp, line 3 shown
-       fading — enough of it visible to read as text and signal "more below." */
-    max-height: 6rem;
-    overflow: hidden;
-  }
-  .states-collapsible::after {
-    content: "";
-    position: absolute;
-    inset-inline: 0;
-    bottom: 0;
-    /* Transparent edge sits at the start of line 3 (6rem − 2.4rem = 3.6rem ≈ 2
-       lines), so lines 1–2 read clean and only line 3 fades out. */
-    height: 2.4rem;
-    background: linear-gradient(to bottom, transparent, var(--color-paper-50));
-    pointer-events: none;
-    opacity: 1;
-    transition: opacity 240ms ease;
-  }
-  .states-collapsible.is-open::after {
-    opacity: 0;
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .states-collapsible::after {
-      transition: none;
-    }
-  }
-</style>
