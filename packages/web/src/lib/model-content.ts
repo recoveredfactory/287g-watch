@@ -125,7 +125,7 @@ export const MODEL_RICH_CONTENT: Record<string, ModelContent> = {
       },
       {
         heading: "Terminated by Obama administration (December 31, 2012)",
-        body: "The Obama administration terminated all TFM agreements, citing documented racial profiling in Maricopa County, AZ and Alamance County, NC.",
+        body: 'The Obama administration terminated all TFM agreements, citing documented racial profiling in Maricopa County, AZ and <a href="/en/agency/alamance-county-sheriffs-office-nc" class="underline underline-offset-2">Alamance County, NC</a>.',
       },
       {
         heading: "Melendres v. Arpaio",
@@ -310,7 +310,7 @@ export const MODEL_RICH_CONTENT_ES: Record<string, ModelContent> = {
       },
       {
         heading: "Terminado por la administración Obama (31 de diciembre de 2012)",
-        body: "La administración Obama terminó todos los acuerdos del TFM, citando perfil racial documentado en el condado de Maricopa, AZ, y el condado de Alamance, NC.",
+        body: 'La administración Obama terminó todos los acuerdos del TFM, citando perfil racial documentado en el condado de Maricopa, AZ, y el <a href="/es/agency/alamance-county-sheriffs-office-nc" class="underline underline-offset-2">condado de Alamance, NC</a>.',
       },
       {
         heading: "Melendres v. Arpaio",
