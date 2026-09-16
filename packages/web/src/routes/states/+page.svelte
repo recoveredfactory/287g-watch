@@ -253,7 +253,7 @@
       <button
         type="button"
         on:click={allExpanded ? collapseAll : expandAll}
-        class="rounded-full border border-paper-200 px-3 py-1.5 text-sm font-medium text-ink-700 transition-colors hover:border-ink-500 hover:text-ink-900"
+        class="rounded border border-paper-200 px-3 py-1.5 text-sm font-medium text-ink-700 transition-colors hover:border-ink-500 hover:text-ink-900"
       >
         {allExpanded ? m.states_index_collapse_all() : m.states_index_expand_all()}
       </button>
@@ -280,7 +280,7 @@
           <button
             type="button"
             on:click={jumpToDetected}
-            class="whitespace-nowrap rounded-full bg-ink-900 px-3 py-1.5 text-sm font-semibold text-paper-50 transition-colors hover:bg-ink-700"
+            class="whitespace-nowrap rounded bg-ink-900 px-3 py-1.5 text-sm font-semibold text-paper-50 transition-colors hover:bg-ink-700"
           >
             {m.states_index_detected_jump()}
           </button>
