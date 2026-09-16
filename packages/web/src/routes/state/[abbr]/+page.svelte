@@ -237,10 +237,6 @@
           {m.state_as_of({ date: dateFmt.format(new Date(snapshotDate)) })}
         </p>
       {/if}
-      <a
-        href={localizeHref(`/explore?sel=state:${abbr}`)}
-        class="text-xs font-semibold text-ink-900 underline underline-offset-2 hover:text-ink-700"
-      >{m.state_compare_cta()} →</a>
     </div>
   </header>
 

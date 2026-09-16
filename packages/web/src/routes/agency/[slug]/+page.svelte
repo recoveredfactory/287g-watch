@@ -300,10 +300,6 @@
           {#if data.officerCtRank > 0}
             <span class="font-mono text-ink-500">{m.agency_rank_of({ rank: data.officerCtRank, total: data.officerCtRankTotal })}</span>
           {/if}
-          <a
-            href={localizeHref(`/explore?sel=agency:${agency.slug}`)}
-            class="font-semibold text-ink-900 underline underline-offset-2 hover:text-ink-700"
-          >{m.agency_compare_cta()} →</a>
         </p>
       </div>
       <div class="flex flex-wrap gap-1.5">
