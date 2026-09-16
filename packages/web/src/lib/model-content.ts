@@ -195,10 +195,14 @@ export const MODEL_RICH_CONTENT: Record<string, ModelContent> = {
 // ── Spanish content ─────────────────────────────────────────────────────────
 // Translated from the English content above, not independently researched —
 // every fact, figure, case name, and citation is identical to its English
-// counterpart; only the prose is translated. Direct quotes are translated
-// too (their sources spoke/wrote in English; this follows the same
-// convention the rest of the site's Spanish content already uses for quoted
-// English-language source material, e.g. news_bilingual_brief). Model names
+// counterpart; only the prose is translated. Direct quotes (e.g. the GAO-
+// 21-186 findings below) are translated too and kept in quotation marks,
+// even though their sources spoke/wrote in English — flagged here as an
+// editorial call, not a documented site convention, since no comparable
+// precedent could be confirmed elsewhere in the codebase. Worth a second
+// look: an alternative would be leaving direct quotes in English with an
+// inline "(traducción)" note, or moving the translation outside the quote
+// marks entirely. Model names
 // (MODEL_RICH_CONTENT_ES's keys) are deliberately left as the English
 // official designations — same existing site convention as MODEL_SHORT/
 // MODEL_MINI, which never localize either. PRIMARY_SOURCES (citation

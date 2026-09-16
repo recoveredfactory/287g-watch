@@ -63,7 +63,7 @@ export const GLOSSARY_TERMS: GlossaryTerm[] = [
   {
     term: "Expedited removal",
     definition:
-      "A fast-track deportation process that lets ICE remove certain noncitizens without a hearing before an immigration judge. It covers a narrower set of cases than ordinary removal proceedings, but its scope has expanded over the years — most people identified through 287(g) never see a courtroom.",
+      "A fast-track deportation process that lets ICE remove certain noncitizens without a hearing before an immigration judge. It covers a narrower set of cases than ordinary removal proceedings, but its scope has expanded significantly over the years.",
     seeAlso: ["Removal", "Immigration judge", "Notice to Appear"],
   },
   {
@@ -105,7 +105,7 @@ export const GLOSSARY_TERMS: GlossaryTerm[] = [
   {
     term: "Immigration judge",
     definition:
-      "An administrative judge within the Department of Justice's Executive Office for Immigration Review — not part of the regular federal court system — who presides over removal proceedings. Most people flagged through 287(g) never appear before one; their cases are resolved through expedited removal or a negotiated departure instead.",
+      "An administrative judge within the Department of Justice's Executive Office for Immigration Review — not part of the regular federal court system — who presides over removal proceedings. Not everyone facing removal appears before one: expedited removal and other fast-track processes bypass a hearing entirely in many cases.",
     seeAlso: ["Removal", "Expedited removal", "Notice to Appear"],
   },
   {
