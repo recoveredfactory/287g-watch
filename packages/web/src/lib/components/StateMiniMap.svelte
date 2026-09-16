@@ -45,11 +45,7 @@
 
   // Dark theme (the expansion graphic, colorMode="newOld" — bake-only, kept
   // exactly as published) vs. the default light theme, matching
-  // NationalMap.svelte/AgencyMap.svelte's cool-gray basemap palette. The
-  // light path is currently unused (the /states rebuild dropped this
-  // component's only light-mode consumer; /video/surge always passes
-  // dark) — kept in sync anyway rather than left stale, in case it's
-  // revived.
+  // NationalMap.svelte/AgencyMap.svelte's cool-gray basemap palette.
   $: landFill = dark ? "#182331" : "#F8F8F9";
   $: landStroke = dark ? "#48607f" : "#656C75";
   $: hwStroke = dark ? "#354661" : "#7D8A99";

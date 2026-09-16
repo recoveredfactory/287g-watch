@@ -2,12 +2,10 @@
   import { onMount, onDestroy } from "svelte";
   import { goto } from "$app/navigation";
   import { browser } from "$app/environment";
-  import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_SHORT, MODEL_ORDER, MODEL_SLUG } from "$lib/colors";
+  import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_SHORT } from "$lib/colors";
   import { toInsetCoords, INSET_TRANSFORMS } from "$lib/insetTransforms";
   import { STATE_NAMES } from "$lib/states";
   import { ensurePmtilesProtocol, pmtilesBaseSource, PMTILES_GLYPHS } from "$lib/map/pmtiles";
-  import { setupMapNavigation } from "$lib/map/touchPopup";
-  import { mediaQuery } from "$lib/reactiveMedia";
 
   export let selectedStates: Set<string> = new Set();
 
@@ -15,9 +13,7 @@
     slug: string;
     name: string;
     state: string;
-    county?: string | null;
     city?: string | null;
-    agency_type?: string;
     primary_model: string | null;
     models: string[];
     population?: number | null;
@@ -88,24 +84,7 @@
 
   let container: HTMLDivElement;
   let map: any = null;
-  // Flips true once the "load" callback has finished adding every source/
-  // layer. Needed as an explicit reactive dependency below: `map` itself
-  // only changes once (null → instance,
-  // synchronously in onMount, before "load" fires), so a `$: if (map &&
-  // map.getSource(...))` guard with no other changing dependency may never
-  // get a second chance to re-check once the source actually exists —
-  // Svelte only re-runs a reactive block when one of ITS OWN tracked
-  // dependencies changes, not when some unrelated async callback mutates
-  // the map's internal state.
-  let mapLoaded = false;
-  // Reactive (resize/orientation-aware) — replaces a one-time matchMedia
-  // check that used to freeze at whatever value was true at mount, leaving
-  // dot scale and fit padding stale after a device rotation.
-  const isMobileStore = mediaQuery("(max-width: 480px)");
-  $: isMobile = $isMobileStore;
-  // Snapshot at module init for the synchronous, pre-mount FIT_PADDING/bounds
-  // setup below (onMount's initial fit can't await a store subscription).
-  const isMobileInitial = browser && window.matchMedia("(max-width: 480px)").matches;
+  const isMobile = browser && window.matchMedia("(max-width: 640px)").matches;
 
   // State polygons (inset coords), loaded once the "states" source is ready.
   // fitToSelection prefers these over agency points so a state with a sparse
@@ -113,27 +92,9 @@
   // shape instead of clipping the edges agency points don't reach.
   let statesGeoJson: { features: any[] } | null = null;
 
-  // Light "documentary editorial" basemap — replaced the previous dark
-  // "steely analytical" scheme (#118, #148). Land is lifted lighter than the
-  // ocean/background so the country shape separates clearly, same
-  // relationship the old dark scheme used (there: near-black sea, lighter
-  // slate land) just inverted in tone, not in structure. Model dot colors
-  // are unchanged (load-bearing, fixed) — contrast of the weakest (blue,
-  // ~2.9:1 against the land fill) is close to what it was against the old
-  // dark land fill (~4.4:1); a real-world light-basemap tradeoff, offset by
-  // each dot's own light stroke rim for separation rather than relying on
-  // fill contrast alone. NOTE: this only affects the default "model"
-  // colorMode — colorMode="newOld" (the /video/surge bake-only graphic)
-  // keeps its own separately-set dark fill/line further down, deliberately:
-  // that's a distinct, already-published visual asset.
-  // Cool-gray palette (matches app.css's ink/paper ramp — same hue family,
-  // ~213°, kept here as raw hex since MapLibre paint expressions can't read
-  // CSS custom properties; see app.css's @theme block for the rationale).
-  // bg is darkened well below the land fill (not just a couple of points
-  // lighter) — this map has no other-country geometry at all (the "states"
-  // source is a custom US-only inset), so bg is the only thing separating
-  // "USA" from "not USA"; it needs to read as a clearly different tone at a
-  // glance, not just a subtle shade.
+  // Light "documentary editorial" palette (kept as raw hex since MapLibre
+  // paint expressions can't read CSS custom properties; see app.css's
+  // @theme block for the rationale).
   const C = {
     bg: "#BFC6CF",
     state: "#F8F8F9",
@@ -145,10 +106,6 @@
     roadMajorCasing: "#FDFDFD",
     roadMajorFill: "#6A798B",
     roadMedium: "#7D8A99",
-    // Bumped from a thin 0.55-opacity knockout ring: with jurisdiction-
-    // coverage fills now sitting under dots in the same model colors, a dot
-    // could disappear into a same-colored fill without a stronger ring to
-    // separate it from whatever's underneath.
     dotStroke: "rgba(253,253,253,0.9)",
     dotStrokeWidth: 0.9,
     text: "#393F46",
@@ -180,10 +137,7 @@
   //   - Desktop reserves bottom space (bottom: 70) so AK's inset (which
   //     extends to ~18° below the bbox south of 21°) has room on wide
   //     aspect ratios where fitBounds otherwise pins 21° to the edge.
-  // Uses the synchronous snapshot (isMobileInitial), not the reactive
-  // isMobile store — this const runs once at component init, before mount,
-  // so it can't depend on statement-ordering against a $: assignment.
-  const FIT_PADDING: any = isMobileInitial
+  const FIT_PADDING: any = isMobile
     ? { top: 95, bottom: 8, left: 6, right: 6 }
     : { top: 14, bottom: 70, left: 14, right: 14 };
 
@@ -343,20 +297,10 @@
     return Math.min(1, Math.max(0, (dayNum(d!) - dayNum(newOldThreshold)) / newSpanDays));
   };
 
-  // County- and state-level agreements get area-coverage fill instead of a
-  // dot (see the "Jurisdiction coverage" block below) — a county sheriff's
-  // 287(g) authority realistically extends across the whole county, which a
-  // single dot undersells. Municipal agreements keep the dot: a city PD's
-  // reach is already fairly well represented by a point at that city.
-  // colorMode !== "model" (newOld/surge graphic) keeps every dot, unfiltered
-  // — that mode has no coverage layer of its own.
-  const isDotAgency = (a: MapAgency): boolean =>
-    colorMode !== "model" || (a.agency_type !== "County" && a.agency_type !== "State Agency");
-
   $: geojson = {
     type: "FeatureCollection",
     features: [...agencies, ...terminatedAgencies]
-      .filter((a) => a.lat != null && a.lng != null && !(lower48 && INSET_TRANSFORMS[a.state]) && isDotAgency(a))
+      .filter((a) => a.lat != null && a.lng != null && !(lower48 && INSET_TRANSFORMS[a.state]))
       .map((a) => {
         const [lng, lat] = toInsetCoords(a.lng!, a.lat!, a.state);
         return {
@@ -388,70 +332,6 @@
         };
       }),
   };
-
-  // ── Jurisdiction coverage (county/state fills) ──────────────────────────────
-  // us-inset-counties.geojson ships with only {name, inset} — 444 county names
-  // repeat across states (30+ "Washington County"s), so nothing can match an
-  // agency's county to the right polygon without a state on the geometry too.
-  // scripts/augment-counties-with-state.mjs resolves that once, offline, and
-  // writes `state` back into the static file — this just reads the result.
-  // County names carry a handful of upstream data typos (Conty/Couty/Countey/
-  // Couny for "County") — stripped the same as the correct spelling rather
-  // than left to silently not match.
-  const COUNTY_SUFFIX = /\s+(County|Conty|Couty|Countey|Couny|Parish)$/i;
-  const normalizeCounty = (name: string): string => name.replace(COUNTY_SUFFIX, "").trim();
-  const countyKey = (name: string, state: string): string => `${normalizeCounty(name)}|${state}`;
-
-  type Coverage = { key: string; model: string };
-  $: countyCoverage = (
-    colorMode !== "model"
-      ? []
-      : agencies
-          .filter((a) => a.agency_type === "County" && a.county)
-          .map((a) => ({ key: countyKey(a.county!, a.state), model: a.primary_model ?? "" }))
-  ) as Coverage[];
-
-  $: stateCoverage = (
-    colorMode !== "model"
-      ? []
-      : agencies
-          .filter((a) => a.agency_type === "State Agency")
-          .map((a) => ({ key: STATE_NAMES[a.state] ?? a.state, model: a.primary_model ?? "" }))
-  ) as Coverage[];
-
-  // One layer per model (fixed 3, matching MODEL_ORDER) rather than a single
-  // giant match expression — a county/state only needs whichever agency's
-  // model "wins" when more than one covers it (the loader's own sort order,
-  // i.e. the first match kept per key — agency lists arrive largest-first).
-  const byWinningModel = (items: Coverage[]): Record<string, string[]> => {
-    const seen = new Map<string, string>();
-    for (const { key, model } of items) if (!seen.has(key)) seen.set(key, model);
-    const out: Record<string, string[]> = {};
-    for (const [key, model] of seen) (out[model] ??= []).push(key);
-    return out;
-  };
-  $: countyKeysByModel = byWinningModel(countyCoverage);
-  $: stateKeysByModel = byWinningModel(stateCoverage);
-
-  // Keep the coverage layers' filters in sync if the underlying agency list
-  // changes after the map has already loaded (mapLoaded, not a bare `map`
-  // guard — see its declaration above for why a plain `map &&` check can
-  // miss a second chance to re-run).
-  $: if (mapLoaded && colorMode === "model") {
-    for (const model of MODEL_ORDER) {
-      const slug = MODEL_SLUG[model];
-      if (map.getLayer(`county-coverage-${slug}`)) {
-        map.setFilter(`county-coverage-${slug}`, [
-          "in",
-          ["concat", ["get", "name"], "|", ["get", "state"]],
-          ["literal", countyKeysByModel[model] ?? []],
-        ]);
-      }
-      if (map.getLayer(`state-coverage-${slug}`)) {
-        map.setFilter(`state-coverage-${slug}`, ["in", ["get", "name"], ["literal", stateKeysByModel[model] ?? []]]);
-      }
-    }
-  }
 
   const updateSource = () => {
     if (!map) return;
@@ -487,33 +367,11 @@
     "*", BASE_OPACITY, fadeMultiplier(cursor), fadeOutMultiplier(cursor),
   ];
 
-  // Dot radius scales by sqrt of the officer count so big departments read
-  // visibly heavier than rural sheriff's offices, without erasing the small
-  // ones. Mobile gets a tighter scale — reactive to isMobile (not a one-time
-  // check) so rotating a device or crossing the breakpoint after mount
-  // rescales the dots instead of leaving them frozen at the mount-time size.
-  // Domain ceiling = ~1,000 officers (between p99 and the dozen-or-so 1k+
-  // outliers like Las Vegas Metro) → sqrt ≈ 31.6.
-  $: SCALE = (isMobile ? 0.7 : 1) * dotScale;
-  const sizeExpr: any = ["sqrt", ["coalesce", ["get", "officer_ct"], 0]];
-  const sizeDomainMax = 32;
-  // dotBump is added at BOTH endpoints, so the linear interpolation lifts
-  // every dot by the same flat pixel amount regardless of officer count.
-  $: radiusFn = (low: number, high: number) => [
-    "interpolate", ["linear"], sizeExpr,
-    0, low * SCALE + dotBump,
-    sizeDomainMax, high * SCALE + dotBump,
-  ];
   // MapLibre rule: ["zoom"] can only appear as the direct input of a top-level
   // interpolate/step, never nested. So instead of wrapping the existing radius
   // expression in ["*", fade, ...], we keep `interpolate(linear, [zoom], ...)`
   // at the top and multiply fade INTO each per-zoom stop's output.
-  $: radiusStops = [
-    [3, radiusFn(0.8, 9)],
-    [6, radiusFn(2.4, 16)],
-    [10, radiusFn(5, 30)],
-    [13, radiusFn(8, 40)],
-  ] as Array<[number, any]>;
+  let radiusStops: Array<[number, any]> = [];
   const baseRadiusExpression = (): any => {
     if (!radiusStops.length) return 1;
     return ["interpolate", ["linear"], ["zoom"], ...radiusStops.flat()];
@@ -548,13 +406,6 @@
   const NEWOLD_STATE_FILL = "#1e2a39";
   const NEWOLD_STATE_LINE = "#4f6a89";
   const NEWOLD_LINE_WIDTH = 0.9;
-  // The ocean/background layer isn't gated by colorMode the way state fill/line
-  // are (it's set once at map construction, before the reactive newOld* vars
-  // exist) — without its own override it would silently inherit C.bg's new
-  // light tone even in newOld mode, putting a light ocean behind this dark
-  // navy state fill. Keep the surge graphic's original near-black ocean.
-  const NEWOLD_BG = "#0c1117";
-  const backgroundColor = colorMode === "newOld" ? NEWOLD_BG : C.bg;
   $: newOldStateFill = colorMode === "newOld" ? NEWOLD_STATE_FILL : C.state;
   $: newOldStateLine = colorMode === "newOld" ? NEWOLD_STATE_LINE : C.line;
   const localRevealExpr = (progress: number): any => {
@@ -588,11 +439,7 @@
     return ["interpolate", ["linear"], ["zoom"], ...flat];
   };
 
-  // `radiusStops` is read here (even though it's only used indirectly, via
-  // the functions below that close over it) purely so Svelte's dependency
-  // tracker re-runs this block when it changes — e.g. isMobile flipping
-  // after a device rotation — and pushes the new radius into the live map.
-  $: if (map && map.getLayer && map.getLayer("agencies") && radiusStops) {
+  $: if (map && map.getLayer && map.getLayer("agencies")) {
     if (colorMode === "newOld") {
       map.setPaintProperty("agencies", "circle-opacity", ["*", newOldOpacityExpr(revealProgress), dimExpr]);
       map.setPaintProperty("agencies", "circle-stroke-opacity", newOldStrokeOpacityExpr(revealProgress));
@@ -635,7 +482,7 @@
         glyphs: PMTILES_GLYPHS,
         projection: { type: "mercator" },
         layers: [
-          { id: "background", type: "background", paint: { "background-color": backgroundColor } },
+          { id: "background", type: "background", paint: { "background-color": C.bg } },
         ],
       } as any,
       // Inset layout: continental US + territory insets all fit in this window
@@ -682,22 +529,6 @@
         filter: insetFilter,
         paint: { "fill-color": newOldStateFill, "fill-opacity": 1 },
       });
-
-      // Jurisdiction coverage: whole-state fill for State Agency-level
-      // agreements (a state DOC/DPS agreement applies everywhere in the
-      // state) — one layer per model, filter kept in sync by the reactive
-      // block below as `stateKeysByModel` changes.
-      if (colorMode === "model") {
-        for (const model of MODEL_ORDER) {
-          map.addLayer({
-            id: `state-coverage-${MODEL_SLUG[model]}`,
-            type: "fill",
-            source: "states",
-            filter: ["in", ["get", "name"], ["literal", stateKeysByModel[model] ?? []]],
-            paint: { "fill-color": MODEL_COLORS[model], "fill-opacity": 0.18 },
-          });
-        }
-      }
 
       // Focus highlight: brighter fill for the selected state(s), drawn over the
       // base fills. Filter starts as highlightFilter (never-match outside focus
@@ -747,30 +578,6 @@
         type: "geojson",
         data: "/us-inset-counties.geojson",
       });
-
-      // Jurisdiction coverage: county-level agreements (sheriff's offices,
-      // county PDs) fill the whole county rather than a single dot — a
-      // county sheriff's 287(g) authority realistically extends everywhere
-      // in the county, which is the point ("dots should cover areas...
-      // where you're driving, you can get screwed"). One layer per model,
-      // matched on name+state (see the augmentation script's comment above
-      // for why state is needed — 444 county names repeat across states).
-      // Drawn below county-lines so the outline stays visible on top.
-      if (colorMode === "model") {
-        for (const model of MODEL_ORDER) {
-          map.addLayer({
-            id: `county-coverage-${MODEL_SLUG[model]}`,
-            type: "fill",
-            source: "counties",
-            filter: [
-              "in",
-              ["concat", ["get", "name"], "|", ["get", "state"]],
-              ["literal", countyKeysByModel[model] ?? []],
-            ],
-            paint: { "fill-color": MODEL_COLORS[model], "fill-opacity": 0.3 },
-          });
-        }
-      }
 
       map.addLayer({
         id: "county-lines",
@@ -1007,9 +814,29 @@
         data: geojson,
       });
 
-      // Agency dot radius: radiusStops (reactive, computed at the top of this
-      // script from SCALE/dotScale/dotBump) is guaranteed set by the time this
-      // async "load" callback runs, since it's set up before component mount.
+      // Agency dots — on top of city labels. Radius scales by sqrt of the
+      // officer count so big departments read visibly heavier than rural
+      // sheriff's offices, without erasing the small ones. Mobile gets a
+      // tighter scale. Domain ceiling = ~1,000 officers (between p99 and the
+      // dozen-or-so 1k+ outliers like Las Vegas Metro) → sqrt ≈ 31.6.
+      const SCALE = (isMobile ? 0.7 : 1) * dotScale;
+      const sizeExpr: any = ["sqrt", ["coalesce", ["get", "officer_ct"], 0]];
+      const sizeDomainMax = 32;
+      // dotBump is added at BOTH endpoints, so the linear interpolation lifts
+      // every dot by the same flat pixel amount regardless of officer count.
+      const radius = (low: number, high: number) => [
+        "interpolate", ["linear"], sizeExpr,
+        0, low * SCALE + dotBump,
+        sizeDomainMax, high * SCALE + dotBump,
+      ];
+      // Captured so the timeline cursor's paint updates can rebuild the radius
+      // interpolation each frame with the fade multiplier applied per-stop.
+      radiusStops = [
+        [3, radius(0.8, 9)],
+        [6, radius(2.4, 16)],
+        [10, radius(5, 30)],
+        [13, radius(8, 40)],
+      ];
       const initialRadius =
         colorMode === "newOld"
           ? newOldRadiusExpr(revealProgress)
@@ -1058,10 +885,22 @@
         },
       });
 
-      // Popup + tap/hover navigation — shared with AgencyMap.svelte via
-      // $lib/map/touchPopup (see that module for the touch-interaction
-      // rationale: single-tap-to-navigate + long-press-for-info, replacing
-      // the old two-tap dance).
+      // Popup
+      const popup = new ml.Popup({
+        closeButton: false,
+        closeOnClick: false,
+        offset: 10,
+        className: "map-popup",
+      });
+
+      // Touch devices have no hover, so the existing mouseenter→click chain
+      // fires the popup and the navigation in the same gesture and the user
+      // never sees the tooltip. Gate hover handlers to real hover devices;
+      // touch uses a two-tap pattern: first tap shows the popup, second tap
+      // on the same dot (or on the popup itself) navigates.
+      const hasHoverPointer = window.matchMedia("(hover: hover)").matches;
+      let popupSlug: string | null = null;
+
       const isFeatureVisible = (p: any): boolean => {
         if (cursorIdx == null) return true;
         const idx = Number(p.signed_idx);
@@ -1083,21 +922,67 @@
           (modelBadges ? `<div class="popup-badges">${modelBadges}</div>` : "");
       };
 
-      setupMapNavigation({
-        map,
-        ml,
-        layerId: "agencies",
-        hasHoverPointer: window.matchMedia("(hover: hover)").matches,
-        isFeatureVisible,
-        buildPopupHtml,
-        getSlug: (p: any) => p.slug,
-        navigate: (slug: string) => goto(`/agency/${slug}`),
+      const showPopupForFeature = (f: any) => {
+        const p = f.properties;
+        popup
+          .setLngLat(f.geometry.coordinates.slice())
+          .setHTML(buildPopupHtml(p))
+          .addTo(map);
+        popupSlug = p.slug;
+        if (!hasHoverPointer && p.slug) {
+          const el = popup.getElement();
+          if (el) {
+            el.style.cursor = "pointer";
+            el.addEventListener(
+              "click",
+              (ev) => { ev.stopPropagation(); goto(`/agency/${p.slug}`); },
+              { once: true },
+            );
+          }
+        }
+      };
+
+      const dismissPopup = () => {
+        popup.remove();
+        popupSlug = null;
+      };
+
+      map.on("mouseenter", "agencies", (e: any) => {
+        if (!hasHoverPointer) return;
+        if (!e.features?.length) return;
+        const f = e.features[0];
+        if (!isFeatureVisible(f.properties)) return;
+        map.getCanvas().style.cursor = "pointer";
+        showPopupForFeature(f);
       });
 
-      // Every source/layer is set up by this point — see the note on the
-      // `mapLoaded` declaration above for why the coverage-filter reactive
-      // block needs this as an explicit dependency.
-      mapLoaded = true;
+      map.on("mouseleave", "agencies", () => {
+        if (!hasHoverPointer) return;
+        map.getCanvas().style.cursor = "";
+        dismissPopup();
+      });
+
+      map.on("click", "agencies", (e: any) => {
+        if (!e.features?.length) return;
+        const f = e.features[0];
+        if (!isFeatureVisible(f.properties)) return;
+        const slug = f.properties.slug;
+        // Touch: first tap on a new dot opens the popup; second tap on the
+        // same dot navigates. Hover devices navigate immediately as before.
+        if (!hasHoverPointer && popupSlug !== slug) {
+          showPopupForFeature(f);
+          return;
+        }
+        if (slug) goto(`/agency/${slug}`);
+      });
+
+      // Touch: tap on empty map dismisses the popup. Hover devices already
+      // handle dismissal via mouseleave.
+      map.on("click", (e: any) => {
+        if (hasHoverPointer || !popupSlug) return;
+        const feats = map.queryRenderedFeatures(e.point, { layers: ["agencies"] });
+        if (feats.length === 0) dismissPopup();
+      });
 
       // Snapshot signal for the OG bake (scripts/bake-og.mjs). Set after
       // the first idle fires past initial render so a Playwright snapshot
