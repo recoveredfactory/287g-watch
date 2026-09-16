@@ -35,6 +35,21 @@
   --text-body: 0.9375rem;
   --text-caption: 0.8125rem;
 
+  /* Corner radius — one value sitewide instead of the sm/md/lg/xl mix that
+     had accumulated (2px/4px/6px/8px/12px across different components with
+     no real logic to which got which). Overriding Tailwind's scale directly
+     means every existing rounded/rounded-sm/rounded-md/rounded-lg/rounded-xl
+     class already in use resolves to the same 2px going forward — no need to
+     hunt down and edit each usage individually. rounded-full is untouched:
+     pills and circular badges are a deliberately different shape, not a
+     "box" corner. */
+  --radius-xs: 0.125rem;
+  --radius-sm: 0.125rem;
+  --radius-md: 0.125rem;
+  --radius-lg: 0.125rem;
+  --radius-xl: 0.125rem;
+  --radius: 0.125rem;
+
   /* Cool neutral ramp — replaced the original warm "documentary editorial"
      tan/beige ramp (paper-50 #fdfdfd/paper-100 #FAF9F7/paper-200 #F3F0EC,
      ink-900 #241f16/ink-700 #4a4335/ink-500 #7a7160) after direct feedback
