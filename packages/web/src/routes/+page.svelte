@@ -505,7 +505,7 @@
                 on:click={() => (expandedTopState = expanded ? null : row.abbr)}
                 aria-expanded={expanded}
                 aria-label={m.home_top_states_breakdown_toggle({ state: STATE_NAMES[row.abbr] ?? row.abbr })}
-                class="shrink-0 bg-transparent p-0.5"
+                class="shrink-0 rounded-full bg-transparent p-2.5 transition-colors hover:bg-paper-100"
               >
                 <svg
                   viewBox="0 0 20 20"
