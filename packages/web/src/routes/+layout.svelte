@@ -221,11 +221,6 @@
               aria-current={isNavActive('/states', basePath) ? 'page' : undefined}
             >{m.nav_states()}</a>
             <a
-              href={localizeHref("/use-the-map")}
-              class="no-underline {isNavActive('/use-the-map', basePath) ? 'text-ink-900 underline underline-offset-4 decoration-2' : 'text-ink-700 hover:text-ink-900'}"
-              aria-current={isNavActive('/use-the-map', basePath) ? 'page' : undefined}
-            >{m.nav_downloads()}</a>
-            <a
               href={localizeHref("/timeline")}
               class="no-underline {isNavActive('/timeline', basePath) ? 'text-ink-900 underline underline-offset-4 decoration-2' : 'text-ink-700 hover:text-ink-900'}"
               aria-current={isNavActive('/timeline', basePath) ? 'page' : undefined}
@@ -240,6 +235,11 @@
               class="no-underline {isNavActive('/about', basePath) ? 'text-ink-900 underline underline-offset-4 decoration-2' : 'text-ink-700 hover:text-ink-900'}"
               aria-current={isNavActive('/about', basePath) ? 'page' : undefined}
             >{m.nav_about()}</a>
+            <a
+              href={localizeHref("/use-the-map")}
+              class="no-underline {isNavActive('/use-the-map', basePath) ? 'text-ink-900 underline underline-offset-4 decoration-2' : 'text-ink-700 hover:text-ink-900'}"
+              aria-current={isNavActive('/use-the-map', basePath) ? 'page' : undefined}
+            >{m.nav_downloads()}</a>
           </nav>
           <LanguageSwitcher {hrefFor} extraClass="ml-auto hidden border-l border-paper-200 pl-5 sm:flex" />
         </div>
@@ -272,13 +272,13 @@
       <p>
         <a href={localizeHref("/states")} class="text-ink-700 hover:text-ink-900">{m.nav_states()}</a>
         <span class="mx-1.5 text-ink-500">·</span>
-        <a href={localizeHref("/use-the-map")} class="text-ink-700 hover:text-ink-900">{m.nav_downloads()}</a>
-        <span class="mx-1.5 text-ink-500">·</span>
         <a href={localizeHref("/timeline")} class="text-ink-700 hover:text-ink-900">{m.nav_timeline()}</a>
         <span class="mx-1.5 text-ink-500">·</span>
         <a href={localizeHref("/glossary")} class="text-ink-700 hover:text-ink-900">{m.nav_glossary()}</a>
         <span class="mx-1.5 text-ink-500">·</span>
         <a href={localizeHref("/about")} class="text-ink-700 hover:text-ink-900">{m.footer_about()}</a>
+        <span class="mx-1.5 text-ink-500">·</span>
+        <a href={localizeHref("/use-the-map")} class="text-ink-700 hover:text-ink-900">{m.nav_downloads()}</a>
       </p>
       <p class="text-xs" style="color: var(--color-ink-500);">
         {m.footer_credit_prefix()}
