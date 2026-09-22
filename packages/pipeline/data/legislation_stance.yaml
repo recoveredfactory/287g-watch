@@ -1,0 +1,734 @@
+# Statewide 287(g) / ICE-cooperation legislative posture, by state.
+#
+# HAND-MAINTAINED. This file is the source of truth — a human edits it, not a
+# script. The previous version of this data came from an AI classifier
+# (the now-retired `news_287g_state_summary` program) and got at least one
+# state backwards: Iowa has a law that COMPELS local ICE cooperation, but the
+# AI labeled it "anti" (as in anti-287g), apparently keying off
+# immigration-adjacent language in the bill's name rather than what the law
+# actually does. That failure mode — classifying by a law's popular label
+# instead of its legal effect — is exactly what this file's fields are
+# designed to make hard to repeat silently. See PR #275 review, section 4.4.
+#
+# Researched 2026-09-22 (Claude, web search against primary sources + ILRC's
+# state tracker, cross-checked against Bolts/NCSL/news coverage). NOT
+# reviewed by a second human yet — treat as a first draft pending review,
+# especially the entries with review_note set.
+#
+# stance:
+#   pro  — statewide authority COMPELS/mandates local ICE cooperation or
+#          287(g) participation
+#   anti — statewide authority RESTRICTS/bans local 287(g) participation or
+#          ICE cooperation
+#   none — no statewide authority either way (any 287(g) activity is a
+#          local/county decision, not compelled or barred by the state)
+#
+# source_type: what kind of authority backs the classification. Prefer
+#   "statute" — a state's stance is much shakier when it rests only on
+#   case law, an AG opinion, or a court order (these can be narrower, more
+#   contingent, and easier to reverse than legislation).
+#   - statute
+#   - executive_order
+#   - case_law
+#   - ag_opinion
+#   - court_order
+#   - none        (used only when stance is "none")
+#
+# common_name: the law's popular/political name, if it has one (e.g.
+#   "anti-sanctuary law", "TRUST Act"). Kept SEPARATE from `description` on
+#   purpose — the point of this file is that the popular name and the actual
+#   legal effect can point opposite directions (see Iowa above), so a reader
+#   of this file should never have to infer effect from name.
+#
+# description: one plain sentence on what the law actually DOES. This is the
+#   field that has to be correct. Write it from the statute's operative
+#   language, not from how the law is described in press coverage of its
+#   passage.
+#
+# source_url: a real, checkable citation — statute text, a legal tracker, or
+#   substantive news coverage. Never a guessed/fabricated URL.
+#
+# verified_date: last date a human (or, for this first pass, an AI research
+#   agent) actually checked this entry against a live source. Drives the
+#   staleness check in build-legislation-stance.ts.
+#
+# verified_by: who did the verification. "claude-research-agent-2026-09-22"
+#   for this initial pass; replace with a person's name once a human reviews
+#   an entry (this is meant to be a real byline, not decoration).
+#
+# review_note: set ONLY on entries the initial research flagged as needing a
+#   second look — a genuine uncertainty, a contested legal status, or a
+#   distinction worth being careful about in reader-facing copy. Cleared once
+#   a human reviews and either confirms or corrects the entry.
+
+states:
+  # ── pro (compels/mandates cooperation) ─────────────────────────────────
+  FL:
+    stance: pro
+    source_type: statute
+    common_name: "SB 168 (2019); SB 4-C (2025)"
+    description: >-
+      Mandates that all local law enforcement comply with ICE detainers, and
+      (2025) affirmatively requires sheriffs and jail administrators to enter
+      287(g) agreements, with $5,000 fines and removal from office for
+      refusal.
+    source_url: "https://www.flsenate.gov/Session/Bill/2019/168"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  TX:
+    stance: pro
+    source_type: statute
+    common_name: "SB 4 (2017)"
+    description: >-
+      Bans local sanctuary policies, requires local officers to comply with
+      ICE detainer requests, and makes a sheriff's refusal a criminal
+      misdemeanor; largely upheld by the Fifth Circuit.
+    source_url: "https://www.govinfo.gov/content/pkg/USCOURTS-ca5-17-50762/pdf/USCOURTS-ca5-17-50762-0.pdf"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  GA:
+    stance: pro
+    source_type: statute
+    common_name: 'HB 1105 (2024), "Criminal Alien Track and Report Act"'
+    description: >-
+      Affirmatively requires every county sheriff to apply for a 287(g)
+      agreement and to notify/transport to ICE, with misdemeanor penalties
+      and loss of state grants for non-compliance.
+    source_url: "https://www.burkecountysheriff.com/house-bill-1105.cfm"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  SC:
+    stance: pro
+    source_type: statute
+    common_name: 'SB 20 (2011), "South Carolina Illegal Immigration Reform Act"'
+    description: >-
+      Statutorily directs the state Dept. of Public Safety director to
+      negotiate a 287(g) memorandum of agreement with ICE and bars local
+      sanctuary policies.
+    source_url: "https://www.scstatehouse.gov/sess119_2011-2012/bills/20.htm"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  IA:
+    stance: pro
+    source_type: statute
+    common_name: "SF 481 (2018)"
+    description: >-
+      Requires local law enforcement to fully comply with any federal
+      immigration detainer request, bars local policies discouraging ICE
+      cooperation, and cuts off all state funding for non-compliance.
+    source_url: "https://www.aclu-ia.org/news/signing-sf-481-law-marks-dark-day-iowa/"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  TN:
+    stance: pro
+    source_type: statute
+    common_name: "HB 2315 (2018); SB 6002/HB 6001 (2025)"
+    description: >-
+      Bars local sanctuary policies and conditions state funding on ICE
+      cooperation (2018), then creates a state immigration enforcement
+      division and a grant fund that pays local agencies specifically for
+      joining 287(g) (2025).
+    source_url: "https://www.tn.gov/governor/news/2025/1/30/gov--lee-marks-the-close-of-special-legislative-session--passes-full-agenda.html"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  NC:
+    stance: pro
+    source_type: statute
+    common_name: "HB 10 (2024), enacted over veto"
+    description: >-
+      Compels all 100 sheriffs to honor ICE detainers by holding individuals
+      up to 48 hours and to notify ICE about certain charged (not convicted)
+      individuals.
+    source_url: "https://www.acluofnorthcarolina.org/legislation/hb-10-require-sheriffs-cooperate-ice/"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  AZ:
+    stance: pro
+    source_type: statute
+    common_name: "SB 1070 (2010), codified at A.R.S. § 11-1051"
+    description: >-
+      The surviving provision bars any state or local agency from limiting
+      federal immigration enforcement "to less than the full extent
+      permitted by federal law" and requires status checks on lawful stops.
+    source_url: "https://www.azleg.gov/ars/11/01051.htm"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+    review_note: >-
+      Most of SB 1070 was struck down in Arizona v. United States (2012) —
+      do not describe SB 1070 as intact. The "pro" classification rests on
+      the one surviving provision, A.R.S. 11-1051(A), not the original bill
+      as a whole.
+
+  AL:
+    stance: pro
+    source_type: statute
+    common_name: 'HB 56 (2011) "Beason-Hammon Act" (mostly enjoined); SB 53 (2025)'
+    description: >-
+      SB 53 (eff. Oct 2025) requires immigration status checks on any
+      detention and requires facilities to hold individuals up to 48 hours
+      on an ICE detainer.
+    source_url: "https://nipnlg.org/work/resources/alabamas-new-anti-immigrant-laws-sb-53-and-sb-63"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+    review_note: >-
+      Most of the older HB 56 (2011) is permanently enjoined by settlement —
+      the live legal basis for Alabama's "pro" classification is SB 53
+      (2025), not HB 56. Don't cite HB 56 as the operative law.
+
+  MS:
+    stance: pro
+    source_type: statute
+    common_name: "SB 2710 (2017); HB 538 (2026)"
+    description: >-
+      Bans sanctuary policies and (2026, eff. July 1) requires all state,
+      county, municipal, and higher-ed entities and their law enforcement to
+      cooperate with ICE "to the fullest extent possible" and to comply with
+      any ICE detainer request.
+    source_url: "https://billstatus.ls.state.ms.us/documents/2026/html/HB/0500-0599/HB0538SG.htm"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  LA:
+    stance: pro
+    source_type: statute
+    common_name: "Act 314 (2024)"
+    description: >-
+      Prohibits any state entity, law enforcement agency, or local
+      government from adopting a sanctuary policy and requires compliance
+      with ICE detainer requests.
+    source_url: "https://legis.la.gov/legis/ViewDocument.aspx?d=1380786"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  OK:
+    stance: pro
+    source_type: statute
+    common_name: 'HB 1804 (2007), "Oklahoma Taxpayer and Citizen Protection Act"'
+    description: >-
+      Declares it state policy that "all agencies within this state ...
+      fully cooperate with federal immigration authorities" and expands
+      local officers' status-verification powers.
+    source_url: "https://oscn.net/applications/oscn/deliverdocument.asp?hits=&id=448995"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  AR:
+    stance: pro
+    source_type: statute
+    common_name: "SB 411 / Act 1071 (2019), Ark. Code § 14-1-103"
+    description: >-
+      Prohibits municipalities from adopting any policy that restricts
+      cooperation with ICE or imposes conditions on compliance with ICE
+      detainers, on pain of losing state discretionary funds.
+    source_url: "https://law.justia.com/codes/arkansas/title-14/subtitle-1/chapter-1/subchapter-1/section-14-1-103/"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  WV:
+    stance: pro
+    source_type: statute
+    common_name: "SB 615 (2026)"
+    description: >-
+      Requires state, county, and local law enforcement to notify and
+      cooperate with ICE to the full extent authorized by law whenever a
+      person in custody is determined to be unlawfully present.
+    source_url: "https://www.wvlegislature.gov/Bill_Status/bills_text.cfm?billdoc=sb615+sub1.htm&yr=2026&sesstype=RS&i=615"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+    review_note: >-
+      Passed the Senate 32-2; the Governor's signature was not independently
+      confirmed during research. Verify enactment before publishing.
+      Classification is likely safe regardless — WV's Governor separately
+      ordered all state law enforcement to cooperate with ICE by executive
+      order.
+
+  IN:
+    stance: pro
+    source_type: statute
+    common_name: "SEA 76 (2026)"
+    description: >-
+      Requires law enforcement agencies to comply with ICE detainer requests
+      and bars any government body or university from interfering with
+      federal immigration enforcement, with penalties up to $10,000 per
+      violation.
+    source_url: "https://indianacapitalchronicle.com/2026/01/27/immigration-enforcement-bill-clears-indiana-senate-amid-national-ice-controversy/"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  ID:
+    stance: pro
+    source_type: statute
+    common_name: 'HB 83 (2025), "Immigration Cooperation and Enforcement Act"'
+    description: >-
+      Requires local law enforcement to cooperate with federal immigration
+      authorities and record immigration status on detention. Compels
+      cooperation, but does not mandate 287(g) enrollment specifically —
+      two 2026 bills to mandate statewide 287(g) (HB 659, SB 1441) both
+      died in committee, opposed by the Idaho Sheriffs' Association.
+    source_url: "https://legislature.idaho.gov/sessioninfo/2025/legislation/H0083/"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  UT:
+    stance: pro
+    source_type: statute
+    common_name: "SB 81 (2008), Utah Code § 67-27-101 et seq.; HB 497 (2011)"
+    description: >-
+      Prohibits any local government from enacting a policy limiting
+      officers or employees from communicating or cooperating with federal
+      officials about immigration status.
+    source_url: "https://le.utah.gov/xcode/Title67/Chapter27/67-27-S101.html"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  MO:
+    stance: pro
+    source_type: statute
+    common_name: "HB 1549 (2008), RSMo § 67.307"
+    description: >-
+      Prohibits any county, city, town, or village from enacting a sanctuary
+      policy and makes violators ineligible for all state-administered grant
+      money.
+    source_url: "https://revisor.mo.gov/main/OneSection.aspx?section=67.307"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  KS:
+    stance: pro
+    source_type: statute
+    common_name: "HB 2717 (2022)"
+    description: >-
+      Prohibits cities and counties from enacting sanctuary ordinances or
+      policies that limit cooperation with federal immigration authorities.
+    source_url: "https://www.kcur.org/news/2022-04-11/kansas-governor-kelly-signs-sanctuary-city-bill-dealing-harsh-blow-to-immigration-activists"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  MT:
+    stance: pro
+    source_type: statute
+    common_name: "HB 200 (2021)"
+    description: >-
+      Bans sanctuary policies by state agencies and local governments,
+      authorizes the attorney general to sue for non-compliance, and imposes
+      fines and state grant cutoffs.
+    source_url: "https://dailymontanan.com/briefs/gov-gianforte-signs-bill-prohibiting-sanctuary-cities-in-montana/"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  ND:
+    stance: pro
+    source_type: statute
+    common_name: "HB 1155 (2023)"
+    description: >-
+      Bars the state, cities, counties, and higher-ed institutions from
+      adopting policies that inhibit reporting of or cooperation with
+      federal immigration officials.
+    source_url: "https://ndlegis.gov/assembly/68-2023/regular/bill-overview/bo1155.html"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  SD:
+    stance: pro
+    source_type: statute
+    common_name: "SB 7 (2025)"
+    description: >-
+      Prohibits any local government action that interferes with federal
+      immigration enforcement and requires local law enforcement to
+      cooperate with federal immigration authorities on request.
+    source_url: "https://www.sdpb.org/politics/2025-02-04/south-dakota-house-passes-legislation-banning-sanctuary-city-laws"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  WY:
+    stance: pro
+    source_type: statute
+    common_name: "HB 133 / House Enrolled Act 76 (2025)"
+    description: >-
+      Prohibits any city, town, or county policy restricting officials from
+      communicating or cooperating with federal officials regarding
+      immigration status.
+    source_url: "https://www.wyomingpublicmedia.org/politics-government/2025-03-18/wyoming-bans-sanctuary-cities-and-ranked-choice-voting"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  NH:
+    stance: pro
+    source_type: statute
+    common_name: "HB 511 and SB 62 (2025)"
+    description: >-
+      Requires municipalities to comply with ICE detainers "if safe to do
+      so" and bans any state or local sanctuary policy impeding cooperation
+      with federal immigration officials.
+    source_url: "https://newhampshirebulletin.com/2025/05/22/gov-ayotte-signs-two-anti-sanctuary-city-bills/"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  OH:
+    stance: pro
+    source_type: statute
+    common_name: "Ohio Rev. Code § 9.63"
+    description: >-
+      Prohibits municipalities from adopting any ordinance or policy that
+      materially hinders local employees from cooperating with federal
+      immigration services, on pain of losing state homeland security
+      funding.
+    source_url: "https://codes.ohio.gov/ohio-revised-code/section-9.63"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  # ── anti (restricts/bans participation) ─────────────────────────────────
+  CA:
+    stance: anti
+    source_type: statute
+    common_name: 'SB 54 (2017) "California Values Act"; AB 4 (2013) TRUST Act'
+    description: >-
+      Expressly prohibits 287(g) agreements and bars state/local agencies
+      from performing immigration officer functions, inquiring into status,
+      or making civil immigration arrests.
+    source_url: "https://www.ilrc.org/sites/default/files/resources/sb54_advisory-gr-20180208.pdf"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  IL:
+    stance: anti
+    source_type: statute
+    common_name: "TRUST Act, SB 31 (2017); Illinois Way Forward Act (2021)"
+    description: >-
+      Prohibits any Illinois law enforcement agency or official from
+      entering into a 287(g) agreement and bars detention on ICE requests
+      without a judicial warrant.
+    source_url: "https://illinoisattorneygeneral.gov/News-Room/Current-News/GuidanceTrustAct.pdf?language_id=1"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  OR:
+    stance: anti
+    source_type: statute
+    common_name: "ORS § 181A.820 (1987); Sanctuary Promise Act, HB 3265 (2021)"
+    description: >-
+      Bars use of state/local law enforcement resources to detect or
+      apprehend people solely for immigration violations and prohibits
+      direct or indirect participation in immigration enforcement without a
+      judicial warrant.
+    source_url: "https://www.doj.state.or.us/oregon-department-of-justice/civil-rights/sanctuary-promise/"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  WA:
+    stance: anti
+    source_type: statute
+    common_name: "Keep Washington Working Act, E2SSB 5497 (2019)"
+    description: >-
+      Prohibits state and local law enforcement from entering any agreement
+      granting federal civil immigration enforcement authority, expressly
+      including 287(g) agreements, and required existing detention
+      agreements to terminate.
+    source_url: "https://www.atg.wa.gov/keep-washington-working-act-faq-law-enforcement"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  CT:
+    stance: anti
+    source_type: statute
+    common_name: "TRUST Act, Conn. Gen. Stat. § 54-192h (2013, expanded 2019); PA 25-29"
+    description: >-
+      Limits detainer compliance to narrow enumerated cases (judicial
+      warrant, class A/B felony conviction, terrorist watch list) and
+      restricts state resources used on immigration enforcement including
+      287(g) agreements.
+    source_url: "https://portal.ct.gov/-/media/ag/civil-rights/trust-act-guidance-memo-11525english.pdf"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  NJ:
+    stance: anti
+    source_type: statute
+    common_name: 'A4071 (2026), "Immigrant Trust Act"'
+    description: >-
+      Prohibits state and local authorities from entering the 287(g)
+      program, restricts detention on ICE requests, and bars citizenship
+      inquiries unrelated to criminal investigations.
+    source_url: "https://boltsmag.org/new-jersey-immigrant-protections-codified-into-law/"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+    review_note: >-
+      Exact signing date should be double-checked — one source reports
+      March 2026 signing; classification itself is not in doubt.
+
+  DE:
+    stance: anti
+    source_type: statute
+    common_name: "HB 182 (2025)"
+    description: "Bans 287(g) agreements between ICE and Delaware police agencies."
+    source_url: "https://www.aclu-de.org/press-releases/delaware-passes-legislation-ban-287g-agreements-between-ice-and-local-police/"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  MD:
+    stance: anti
+    source_type: statute
+    common_name: "SB 245 / HB 444 (2026), Maryland Values Act of 2026"
+    description: >-
+      Bans 287(g) agreements and gave the nine participating counties 90
+      days to terminate them; companion law adds courthouses to sensitive
+      locations and bars school personnel from assisting enforcement.
+    source_url: "https://marylandmatters.org/2026/02/18/moore-signs-bills-banning-agreements-between-local-police-federal-immigration-agencies/"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  NM:
+    stance: anti
+    source_type: statute
+    common_name: "HB 9 (2026)"
+    description: >-
+      Bans 287(g) agreements between ICE and local law enforcement and
+      prohibits state public entities from signing ICE detention (IGSA)
+      contracts.
+    source_url: "https://sourcenm.com/2026/01/29/gov-supports-nm-ban-on-local-law-enforcement-agreements-with-ice/"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  ME:
+    stance: anti
+    source_type: statute
+    common_name: "LD 1259 (2025)"
+    description: >-
+      Prohibits state and local law enforcement from contracting with
+      federal immigration authorities, effectively banning 287(g)
+      agreements.
+    source_url: "https://mainemorningstar.com/2026/07/28/new-restrictions-on-state-involvement-in-immigration-enforcement-take-effect-wednesday/"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  NY:
+    stance: anti
+    source_type: statute
+    common_name: '"Local Cops, Local Crimes Act" (2026)'
+    description: >-
+      Prohibits local governments and law enforcement from entering 287(g)
+      agreements and required all existing agreements terminated by
+      2026-08-25.
+    source_url: "https://www.governor.ny.gov/news/keeping-new-yorkers-safe-governor-hochul-announces-local-cops-local-crimes-provision-banning"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  CO:
+    stance: anti
+    source_type: statute
+    common_name: "HB 19-1124 (2019); SB 21-131 (2021); SB 25-276 (2025); HB 26-1276 (2026)"
+    description: >-
+      Bars holding anyone past release time on an ICE detainer, bars status
+      inquiries (penalties to $50,000), and prohibits state/local contracts
+      with the federal government for immigration detention.
+    source_url: "https://www.cpr.org/2025/03/05/colorado-immigration-laws-explained/"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+    review_note: >-
+      Colorado restricts detainers and status inquiries broadly, but does
+      NOT contain an outright statutory 287(g) ban — that provision was
+      stripped from HB 19-1124 under veto threat and never restored. Do not
+      describe Colorado as banning 287(g) specifically; it restricts
+      cooperation short of that.
+
+  VA:
+    stance: anti
+    source_type: statute
+    common_name: "SB 783 / HB 1441 (2026)"
+    description: >-
+      Imposes twelve conditions (judicial warrants, sensitive-location bans,
+      advance notice, agent identification) that must be met before any
+      locality may enter or renew a 287(g) agreement.
+    source_url: "https://www.wric.com/news/virginia-news/federal-judge-injunction-287g-agreements/"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+    review_note: >-
+      A federal judge preliminarily enjoined the law's application to
+      federal officers on 2026-08-31 (intergovernmental immunity grounds).
+      Legal status is genuinely unsettled as of the verified_date above —
+      re-check before publishing, and consider surfacing the injunction in
+      reader-facing copy rather than presenting the law as unconditionally
+      in effect.
+
+  DC:
+    stance: anti
+    source_type: statute
+    common_name: "Sanctuary Values Amendment Act of 2020, D.C. Law 23-282"
+    description: >-
+      Bars the District from complying with ICE detainer requests absent a
+      judicial warrant and prohibits direct transfer of released individuals
+      into ICE custody.
+    source_url: "https://code.dccouncil.gov/us/dc/council/laws/23-282"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  VT:
+    stance: anti
+    source_type: statute
+    common_name: "S.79 / Act 5 (2017), Fair and Impartial Policing"
+    description: >-
+      Vests sole authority to enter a 287(g) agreement in the Governor
+      (after consulting the AG) rather than banning them outright; state
+      policy also bars holds on immigration detainers without a judicial
+      warrant. No Vermont agency currently participates.
+    source_url: "https://legislature.vermont.gov/Documents/2018/Docs/ACTS/ACT005/ACT005%20As%20Enacted.pdf"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+    review_note: >-
+      Act 5 does NOT ban 287(g) — it moves the decision to the Governor.
+      Currently functions as a de facto ban only because the sitting
+      Governor has declined; a future Governor could reverse this without
+      new legislation. Describe precisely, not as an outright ban.
+
+  MA:
+    stance: anti
+    source_type: case_law
+    common_name: "Lunn v. Commonwealth, 477 Mass. 517 (2017)"
+    description: >-
+      The SJC held Massachusetts law gives officers no authority to arrest
+      or hold someone solely on an ICE civil detainer.
+    source_url: "https://www.mass.gov/decision/lunn-v-commonwealth"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+    review_note: >-
+      This is case law, NOT a statute — Massachusetts has no statutory
+      287(g) ban, and some MA agencies still hold active 287(g) contracts
+      (confirmed via Bolts, Mar 2026). If this site's "anti" badge is meant
+      to read as "287(g) is barred here," Massachusetts is a weak fit for
+      it and arguably belongs in "none" with an explanatory note instead.
+      Needs a human decision, not just a data fix.
+
+  HI:
+    stance: anti
+    source_type: statute
+    common_name: "HB 1902 (2018)"
+    description: >-
+      Prohibits state and local agencies from sharing certain information
+      with ICE unless required by federal or state law. Hawaii has no
+      287(g) agreements.
+    source_url: "https://www.civilbeat.org/2026/02/hawaii-cant-control-ice-lawmakers-want-instead/"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  MN:
+    stance: anti
+    source_type: ag_opinion
+    common_name: "AG advisory opinion + court decisions"
+    description: >-
+      State law is interpreted to prohibit law enforcement from holding
+      someone on an immigration detainer alone past their release time.
+    source_url: "https://www.ag.state.mn.us/office/opinions/3a-20250206.pdf"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+    review_note: >-
+      Rests on an AG advisory opinion and court decisions, not a statute —
+      no statutory 287(g) ban exists, and Minnesota DOC publicly states it
+      honors ICE transfer requests. Weakest of the "anti" classifications;
+      consider "none" with an explanatory note. Needs a human decision.
+
+  NV:
+    stance: anti
+    source_type: statute
+    common_name: 'AB 376 (2019), "Keep Nevada Working Act"'
+    description: >-
+      Requires the Attorney General to publish model policies limiting
+      immigration enforcement for law enforcement, schools, and health
+      facilities.
+    source_url: "https://legiscan.com/NV/text/AB376/id/1966562"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+    review_note: >-
+      The bill's stronger anti-cooperation provisions were removed before
+      passage; the enacted version mostly creates a task force and model
+      policies rather than binding restrictions. Weakest-effect "anti" on
+      the list — worth a second look at whether "anti" overstates it.
+
+  RI:
+    stance: anti
+    source_type: court_order
+    common_name: "2014 federal court order + local policies"
+    description: >-
+      Police may not hold a person on an ICE detainer alone beyond 48 hours,
+      under a 2014 federal court order.
+    source_url: "https://rhodeislandcurrent.com/2025/01/27/trump-immigration-policy-edicts-prompt-guidance-from-r-i-officials-and-aclu/"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+    review_note: >-
+      Rests on a 2014 federal court order and local policies, not a
+      statewide statute. No statutory 287(g) ban exists. Same shape as the
+      Massachusetts/Minnesota entries — consider "none" with an
+      explanatory note. Needs a human decision.
+
+  # ── none (no statewide statute either way) ──────────────────────────────
+  AK:
+    stance: none
+    source_type: none
+    common_name: null
+    description: >-
+      No statewide statute either compelling or restricting local 287(g)
+      participation or ICE cooperation.
+    source_url: "https://www.ilrc.org/state-map-immigration-enforcement"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  KY:
+    stance: none
+    source_type: none
+    common_name: null
+    description: >-
+      No statewide statute either compelling or restricting local 287(g)
+      participation or ICE cooperation.
+    source_url: "https://www.ilrc.org/state-map-immigration-enforcement"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  MI:
+    stance: none
+    source_type: none
+    common_name: null
+    description: >-
+      No statewide statute either compelling or restricting local 287(g)
+      participation or ICE cooperation.
+    source_url: "https://www.ilrc.org/state-map-immigration-enforcement"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  NE:
+    stance: none
+    source_type: none
+    common_name: null
+    description: >-
+      No statewide statute either compelling or restricting local 287(g)
+      participation or ICE cooperation.
+    source_url: "https://www.ilrc.org/state-map-immigration-enforcement"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  PA:
+    stance: none
+    source_type: none
+    common_name: null
+    description: >-
+      No statewide statute either compelling or restricting local 287(g)
+      participation or ICE cooperation.
+    source_url: "https://www.ilrc.org/state-map-immigration-enforcement"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"
+
+  WI:
+    stance: none
+    source_type: none
+    common_name: null
+    description: >-
+      No statewide statute either compelling or restricting local 287(g)
+      participation or ICE cooperation.
+    source_url: "https://www.ilrc.org/state-map-immigration-enforcement"
+    verified_date: "2026-09-22"
+    verified_by: "claude-research-agent-2026-09-22"

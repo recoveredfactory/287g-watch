@@ -55,6 +55,26 @@
   $: metaTitle = m.states_index_meta_title();
   $: metaDescription = m.states_index_meta_description({ count: intFmt.format(rows.length) });
 
+  // Structured data (schema.org ItemList): each list item points at a real
+  // state page carrying its own Dataset/BreadcrumbList markup, so a crawler
+  // or AI tool can both see this as an index AND follow through to a specific
+  // state's own structured data rather than treating this page as a dead end.
+  const siteUrl = import.meta.env.PUBLIC_SITE_URL ?? "https://287g.recoveredfactory.net";
+  $: canonicalUrl = siteUrl + localizeHref("/states");
+  $: jsonLd = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: metaTitle,
+    description: metaDescription,
+    url: canonicalUrl,
+    itemListElement: rows.map((row, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: row.stateName,
+      url: siteUrl + localizeHref(`/state/${row.abbr.toLowerCase()}`),
+    })),
+  });
+
   // Umami custom event (mirrors +layout's trackConversion; no-ops in dev where
   // the script isn't loaded). Passes the state so opens are filterable per state.
   const track = (event: string, data?: Record<string, unknown>) => {
@@ -123,11 +143,13 @@
   <meta name="description" content={metaDescription} />
   <meta property="og:title" content={metaTitle} />
   <meta property="og:description" content={metaDescription} />
+  <meta property="og:url" content={canonicalUrl} />
   <meta property="og:image" content={ogImage("states.png")} />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta property="twitter:card" content="summary_large_image" />
   <meta property="twitter:image" content={ogImage("states.png")} />
+  {@html `<script type="application/ld+json">${jsonLd}</` + `script>`}
 </svelte:head>
 
 <main id="main-content" class="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
@@ -265,8 +287,8 @@
           >{row.stateName}</a>
 
           <div class="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-700 sm:text-sm">
-            {#if SHOW_LEGISLATION_STANCE && row.news?.legislation}
-              <LegislationBadge legislation={row.news.legislation} />
+            {#if SHOW_LEGISLATION_STANCE && row.legislation}
+              <LegislationBadge legislation={row.legislation} />
             {/if}
             <span><span class="font-semibold text-ink-900">{intFmt.format(row.agencyCount)}</span> {row.agencyCount === 1 ? m.state_agency_one() : m.state_agency_other()}</span>
             {#if leePct !== null}

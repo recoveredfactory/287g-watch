@@ -28,6 +28,7 @@ export type StatePageData = {
   trendMonths: string[];
   trend: Record<string, TrendSeries>;
   news: StateNews | null;
+  legislation: NewsLegislation | null;
 };
 
 // The news program emits a short TL;DR plus the full statewide narrative, in
@@ -51,10 +52,12 @@ export type NewsArticle = {
   agencies: NewsAgencyRef[];
   counties: string;
 };
-// Statewide legislative posture toward 287(g): pro (a statute backs/mandates
-// participation), anti (a statute limits/bars it), or none. `active` flags a
-// currently-live bill; `description` is the program's English-only rationale,
-// carried through for a later bilingual pass but not rendered yet.
+// Statewide legislative posture toward 287(g): pro (a statute compels
+// participation/cooperation), anti (a statute restricts/bars it), or none.
+// Hand-maintained (not from the news program; see
+// packages/pipeline/data/legislation_stance.yaml) — its own fetch below,
+// independent of whether a state has a news summary at all. `active` is a
+// placeholder for a currently-live/pending bill, not surfaced in the UI yet.
 export type NewsLegislation = {
   stance: "pro" | "anti" | "none";
   active: boolean;
@@ -66,7 +69,6 @@ export type StateNews = {
   // `built_at` is the program's own last-built time (the real "generated" signal);
   // `generated_at` is our local pipeline write stamp, kept as a fallback.
   built_at: string;
-  legislation: NewsLegislation | null;
   articles: NewsArticle[];
 };
 
@@ -75,7 +77,6 @@ type NewsLangBlock = { tldr_html?: string; summary_html?: string };
 type NewsFile = {
   generated_at?: string;
   built_at?: string;
-  legislation?: NewsLegislation | null;
   en?: NewsLangBlock;
   es?: NewsLangBlock;
   internal?: { relevant_articles?: RawArticle[] };
@@ -151,7 +152,6 @@ const pickNews = (
     tldr_html: block.tldr_html ?? "",
     body_html: block.summary_html ?? "",
     built_at: raw.built_at ?? raw.generated_at ?? "",
-    legislation: raw.legislation ?? null,
     articles: shapeArticles(raw.internal?.relevant_articles ?? [], roster),
   };
 };
@@ -161,14 +161,19 @@ export const load = async ({ fetch, params }): Promise<StatePageData> => {
   const stateName = NAVIGABLE_STATES[abbr];
   if (!stateName) throw error(404, `No state page for: ${abbr}`);
 
-  const [agenciesRes, metaRes, terminatedRes, pendingRes, newsRes] = await Promise.all([
+  const [agenciesRes, metaRes, terminatedRes, pendingRes, newsRes, legislationRes] = await Promise.all([
     fetch("/data/dist/agency_index.json"),
     fetch("/data/dist/state_meta.json"),
     fetch("/data/dist/terminated_agencies.json"),
     fetch("/data/dist/pending_agencies.json"),
     fetch(`/data/dist/news/${abbr}.json`),
+    fetch("/data/dist/legislation_stance.json"),
   ]);
   if (!agenciesRes.ok) throw error(503, "Data unavailable");
+
+  const legislationByState: Record<string, NewsLegislation> = legislationRes.ok
+    ? await legislationRes.json()
+    : {};
 
   const allAgencies: Agency[] = await agenciesRes.json();
   const terminatedRaw: Agency[] = terminatedRes.ok ? await terminatedRes.json() : [];
@@ -314,5 +319,6 @@ export const load = async ({ fetch, params }): Promise<StatePageData> => {
     trendMonths,
     trend: { "": sampleMonthly(stateForTrend) },
     news,
+    legislation: legislationByState[abbr] ?? null,
   };
 };

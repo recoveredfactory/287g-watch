@@ -22,6 +22,39 @@
   $: metaTitle = m.state_meta_title({ state: stateName });
   $: metaDescription = m.state_meta_description({ count: agencies.length, state: stateName });
 
+  // Mirrors agency/[slug]'s @graph pattern: an aggregate entity for the state's
+  // 287(g) footprint plus a BreadcrumbList, so a crawler or AI tool can cite a
+  // specific state's agency count/population directly instead of parsing prose.
+  const siteUrl = import.meta.env.PUBLIC_SITE_URL ?? "https://287g.recoveredfactory.net";
+  $: canonicalUrl = siteUrl + localizeHref(`/state/${abbr.toLowerCase()}`);
+  $: jsonLd = JSON.stringify({
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Dataset",
+        name: metaTitle,
+        description: metaDescription,
+        url: canonicalUrl,
+        license: "https://creativecommons.org/licenses/by/4.0/",
+        creator: { "@type": "Organization", name: "287(g) Watch" },
+        variableMeasured: [
+          { "@type": "PropertyValue", name: "participating agencies", value: agencies.length },
+          ...(stateMeta?.population_served
+            ? [{ "@type": "PropertyValue", name: "population covered", value: stateMeta.population_served }]
+            : []),
+        ],
+      },
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: m.agency_breadcrumb_home(), item: siteUrl + localizeHref("/") },
+          { "@type": "ListItem", position: 2, name: m.nav_states(), item: siteUrl + localizeHref("/states") },
+          { "@type": "ListItem", position: 3, name: stateName, item: canonicalUrl },
+        ],
+      },
+    ],
+  });
+
   // "% of local LE agencies" (FBI LEE County+City; state police excluded both
   // sides). Rounded whole percent, but a participating state that rounds to 0
   // shows "<1" so a card never reads "1 agency · 0%". Null when no LEE denom.
@@ -179,12 +212,14 @@
   <meta name="description" content={metaDescription} />
   <meta property="og:title" content={metaTitle} />
   <meta property="og:description" content={metaDescription} />
+  <meta property="og:url" content={canonicalUrl} />
   <!-- Generic card for now; per-state artwork is #265. -->
   <meta property="og:image" content={ogImage("states.png")} />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta property="twitter:card" content="summary_large_image" />
   <meta property="twitter:image" content={ogImage("states.png")} />
+  {@html `<script type="application/ld+json">${jsonLd}</` + `script>`}
 </svelte:head>
 
 <main id="main-content" class="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
@@ -198,8 +233,8 @@
       {stateName}
     </h1>
     <div class="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-ink-700">
-      {#if SHOW_LEGISLATION_STANCE && data.news?.legislation}
-        <LegislationBadge legislation={data.news.legislation} />
+      {#if SHOW_LEGISLATION_STANCE && data.legislation}
+        <LegislationBadge legislation={data.legislation} />
       {/if}
       <span>
         <span class="font-semibold text-ink-900">{intFmt.format(agencies.length)}</span>

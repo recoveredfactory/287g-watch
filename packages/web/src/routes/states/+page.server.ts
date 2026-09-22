@@ -10,7 +10,9 @@ import { getLocale } from "$lib/paraglide/runtime";
 // states as fully-expanded cards regardless of whether anyone asked for the
 // detail; this loader only fetches what the compact view + preview need.
 
-// Statewide 287(g) legislative posture (see the per-state page's NewsLegislation).
+// Statewide 287(g) legislative posture — hand-maintained (not from the news
+// program; see packages/pipeline/data/legislation_stance.yaml), so it's its
+// own fetch, independent of whether a state has a news summary at all.
 export type StateIndexLegislation = {
   stance: "pro" | "anti" | "none";
   active: boolean;
@@ -21,7 +23,6 @@ export type StateIndexNews = {
   // Program's own last-built time (real "generated" signal); local write stamp is
   // the fallback. Rendered per-row so each state carries its own freshness.
   built_at: string;
-  legislation: StateIndexLegislation | null;
 };
 
 export type StateIndexRow = {
@@ -37,6 +38,7 @@ export type StateIndexRow = {
   localLeAgencies: number | null;
   localParticipating: number | null;
   news: StateIndexNews | null;
+  legislation: StateIndexLegislation | null;
 };
 
 export type StatesIndexData = {
@@ -48,7 +50,6 @@ type NewsLangBlock = { tldr_html?: string };
 type NewsFile = {
   generated_at?: string;
   built_at?: string;
-  legislation?: StateIndexLegislation | null;
   en?: NewsLangBlock;
   es?: NewsLangBlock;
 };
@@ -62,19 +63,22 @@ const pickNews = (raw: NewsFile | null): StateIndexNews | null => {
   return {
     tldr_html: block.tldr_html,
     built_at: raw.built_at ?? raw.generated_at ?? "",
-    legislation: raw.legislation ?? null,
   };
 };
 
 export const load = async ({ fetch }): Promise<StatesIndexData> => {
   const abbrs = Object.keys(NAVIGABLE_STATES);
 
-  const [agenciesRes, metaRes] = await Promise.all([
+  const [agenciesRes, metaRes, legislationRes] = await Promise.all([
     fetch("/data/dist/agency_index.json"),
     fetch("/data/dist/state_meta.json"),
+    fetch("/data/dist/legislation_stance.json"),
   ]);
   const allAgencies: Agency[] = agenciesRes.ok ? await agenciesRes.json() : [];
   const stateMetaArr: StateMeta[] = metaRes.ok ? await metaRes.json() : [];
+  const legislationByState: Record<string, StateIndexLegislation> = legislationRes.ok
+    ? await legislationRes.json()
+    : {};
   const metaByState = new Map(stateMetaArr.map((s) => [s.state, s]));
 
   const agencyCount = new Map<string, number>();
@@ -109,6 +113,7 @@ export const load = async ({ fetch }): Promise<StatesIndexData> => {
     localLeAgencies: metaByState.get(abbr)?.local_le_agencies ?? null,
     localParticipating: metaByState.get(abbr)?.participating ?? null,
     news: newsByState.get(abbr) ?? null,
+    legislation: legislationByState[abbr] ?? null,
   }));
 
   // Most-participating first (a quick leaderboard). Ties — notably the whole

@@ -51,6 +51,31 @@
     ? `/glossary#term-${termSlug(modelName)}`
     : null;
   const seen = new Set<string>([modelName.toLowerCase()]);
+
+  // Structured data (schema.org DefinedTerm + BreadcrumbList): same rationale
+  // as the glossary's DefinedTermSet — lets a crawler or AI tool cite this
+  // model's definition directly rather than only summarizing the page.
+  const jsonLd = JSON.stringify({
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "DefinedTerm",
+        name: modelName,
+        description: definition,
+        url: canonicalUrl,
+        ...(glossaryEntryHref
+          ? { inDefinedTermSet: siteUrl + localizeHref("/glossary") }
+          : {}),
+      },
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: m.agency_breadcrumb_home(), item: siteUrl + localizeHref("/") },
+          { "@type": "ListItem", position: 2, name: modelName, item: canonicalUrl },
+        ],
+      },
+    ],
+  });
 </script>
 
 <svelte:head>
@@ -64,6 +89,7 @@
   <meta property="og:image:height" content="630" />
   <meta property="twitter:card" content="summary_large_image" />
   <meta property="twitter:image" content={ogImage(`model/${slug}.png`)} />
+  {@html `<script type="application/ld+json">${jsonLd}</` + `script>`}
 </svelte:head>
 
 <main id="main-content" class="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
