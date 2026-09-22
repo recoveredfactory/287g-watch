@@ -10,10 +10,14 @@
   import ModelLink from "$lib/components/ModelLink.svelte";
   import NewsAiWarning from "$lib/components/NewsAiWarning.svelte";
   import LegislationBadge from "$lib/components/LegislationBadge.svelte";
+  import Gloss from "$lib/components/Gloss.svelte";
   import { SHOW_LEGISLATION_STANCE } from "$lib/features";
   import { ogImage } from "$lib/ogImage";
 
   export let data: PageData;
+  // Shared across the TL;DR and the expanded body so a term already glossed
+  // in the TL;DR doesn't get a second dotted-underline in the body below it.
+  const newsSeen = new Set<string>();
 
   $: ({ abbr, stateName, agencyCountRank, agencyCountRankTotal, agencies, stateMeta, snapshotDate, modelCounts, agencyTypeCounts, trendMonths, trend } = data);
 
@@ -339,7 +343,7 @@
           newsExpanded = !newsExpanded;
         }}
       >
-        {@html data.news.tldr_html}
+        <Gloss text={data.news.tldr_html} html={true} seen={newsSeen} />
       </div>
 
       {#if data.news.body_html || data.news.articles?.length}
@@ -365,7 +369,7 @@
           <div id="news-expand">
             {#if data.news.body_html}
               <div class="news-prose news-body mt-5 max-w-prose">
-                {@html data.news.body_html}
+                <Gloss text={data.news.body_html} html={true} seen={newsSeen} />
               </div>
             {/if}
 

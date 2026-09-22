@@ -3,6 +3,7 @@
   import { m } from "$lib/paraglide/messages.js";
   import { env } from "$env/dynamic/public";
   import { ogImage } from "$lib/ogImage";
+  import Gloss from "$lib/components/Gloss.svelte";
   import type { PageData } from "./$types";
 
   export let data: PageData;
@@ -112,7 +113,7 @@
   <h1 class="text-2xl font-black text-ink-900 sm:text-4xl">{m.downloads_heading()}</h1>
 
   <div class="prose-editorial mt-6 sm:mt-8">
-    <p>{m.downloads_intro()}</p>
+    <p><Gloss text={m.downloads_intro()} /></p>
   </div>
 
   <!-- Cuts, newest-first: since-April expansion, then the vertical 9:16 map+trend

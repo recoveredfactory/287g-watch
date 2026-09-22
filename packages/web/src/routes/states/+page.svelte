@@ -9,6 +9,7 @@
   import { m } from "$lib/paraglide/messages.js";
   import NewsAiWarning from "$lib/components/NewsAiWarning.svelte";
   import LegislationBadge from "$lib/components/LegislationBadge.svelte";
+  import Gloss from "$lib/components/Gloss.svelte";
   import { SHOW_LEGISLATION_STANCE } from "$lib/features";
   import { ogImage } from "$lib/ogImage";
 
@@ -327,7 +328,7 @@
                   class="underline decoration-paper-200 underline-offset-2 hover:text-ink-900"
                 >{m.news_ai_promptql()}</a>
               </p>
-              <div class="news-prose news-tldr mt-2 max-w-prose">{@html row.news.tldr_html}</div>
+              <div class="news-prose news-tldr mt-2 max-w-prose"><Gloss text={row.news.tldr_html} html={true} /></div>
             {/if}
             <a
               href={localizeHref(`/state/${row.abbr.toLowerCase()}`)}

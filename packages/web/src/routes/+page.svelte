@@ -273,7 +273,7 @@
 
       {#if userStateCallout}
         <p class="mt-4 max-w-2xl border-l-4 border-[#BE6079] bg-rose-50/40 px-3 py-2 text-sm sm:mt-5" style="color: var(--color-ink-700);">
-          {@html userStateCallout}
+          <Gloss text={userStateCallout} html={true} />
         </p>
       {/if}
 

@@ -5,6 +5,7 @@
   import { MODEL_COLORS, MODEL_SHORT, MODEL_ORDER } from "$lib/colors";
   import { STATE_NAMES } from "$lib/states";
   import { ogImage } from "$lib/ogImage";
+  import Gloss from "$lib/components/Gloss.svelte";
 
   export let data: TimelineData;
 
@@ -46,11 +47,11 @@
 <main id="main-content" class="mx-auto max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
   <p class="text-xs font-semibold uppercase tracking-widest text-ink-500">{m.timeline_eyebrow()}</p>
   <h1 class="mt-1 text-2xl font-black text-ink-900 sm:text-3xl">{m.timeline_title()}</h1>
-  <p class="mt-3 max-w-prose text-sm text-ink-700 sm:text-base">{m.timeline_subtitle()}</p>
+  <p class="mt-3 max-w-prose text-sm text-ink-700 sm:text-base"><Gloss text={m.timeline_subtitle()} /></p>
   {#if data.snapshotDate}
     <p class="mt-2 text-xs italic text-ink-500">{m.timeline_as_of({ date: dateFmt.format(new Date(data.snapshotDate)) })}</p>
   {/if}
-  <p class="mt-2 text-xs italic leading-snug text-ink-500">{m.timeline_data_caveat()}</p>
+  <p class="mt-2 text-xs italic leading-snug text-ink-500"><Gloss text={m.timeline_data_caveat()} /></p>
 
   <p class="mt-6 border-y border-paper-200 py-4 font-serif text-lg font-bold text-ink-900 sm:text-xl">
     {m.timeline_growth_headline({ baseline: intFmt.format(data.baselineTotal), current: intFmt.format(data.currentTotal) })}
