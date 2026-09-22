@@ -194,7 +194,7 @@
            <slot/> API for its own children, and the two can't mix in one
            component — a real subcomponent sidesteps that without forcing a
            full runes-mode migration of this already-large layout file.) -->
-      <div class="py-3 sm:flex sm:h-14 sm:items-center sm:py-0">
+      <div class="py-3 sm:flex sm:min-h-14 sm:items-center sm:py-2">
 
         <!-- Row 1 on mobile: logo + inline search + lang switcher (lang
              switcher uses ml-auto to push right now that there are 3 items —
@@ -214,7 +214,7 @@
 
         <!-- Row 2 on mobile / middle+right on desktop -->
         <div class="mt-2.5 flex flex-wrap items-center gap-y-1.5 sm:mt-0 sm:flex-1">
-          <nav class="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm font-semibold sm:ml-8 sm:gap-5">
+          <nav class="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm font-semibold sm:ml-4 sm:gap-x-4 lg:ml-8 lg:gap-x-5">
             <a
               href={localizeHref("/states")}
               class="no-underline {isNavActive('/states', basePath) ? 'text-ink-900 underline underline-offset-4 decoration-2' : 'text-ink-700 hover:text-ink-900'}"
@@ -236,9 +236,9 @@
               aria-current={isNavActive('/about', basePath) ? 'page' : undefined}
             >{m.nav_about()}</a>
             <a
-              href={localizeHref("/use-the-map")}
-              class="no-underline {isNavActive('/use-the-map', basePath) ? 'text-ink-900 underline underline-offset-4 decoration-2' : 'text-ink-700 hover:text-ink-900'}"
-              aria-current={isNavActive('/use-the-map', basePath) ? 'page' : undefined}
+              href={localizeHref("/downloads")}
+              class="no-underline {isNavActive('/downloads', basePath) ? 'text-ink-900 underline underline-offset-4 decoration-2' : 'text-ink-700 hover:text-ink-900'}"
+              aria-current={isNavActive('/downloads', basePath) ? 'page' : undefined}
             >{m.nav_downloads()}</a>
           </nav>
           <LanguageSwitcher {hrefFor} extraClass="ml-auto hidden border-l border-paper-200 pl-5 sm:flex" />
@@ -278,7 +278,7 @@
         <span class="mx-1.5 text-ink-500">·</span>
         <a href={localizeHref("/about")} class="text-ink-700 hover:text-ink-900">{m.footer_about()}</a>
         <span class="mx-1.5 text-ink-500">·</span>
-        <a href={localizeHref("/use-the-map")} class="text-ink-700 hover:text-ink-900">{m.nav_downloads()}</a>
+        <a href={localizeHref("/downloads")} class="text-ink-700 hover:text-ink-900">{m.nav_downloads()}</a>
       </p>
       <p class="text-xs" style="color: var(--color-ink-500);">
         {m.footer_credit_prefix()}

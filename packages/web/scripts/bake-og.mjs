@@ -431,7 +431,7 @@ const STR = {
     home: "Every active agreement between local police and ICE.",
     glossary: "287(g) terms, explained.",
     about: "Why we built 287(g) Watch.",
-    "use-the-map": "Free videos and images about the growth of 287(g).",
+    downloads: "Free videos and images about the growth of 287(g).",
     explore: "Search and compare every state and agency in the program.",
     timeline: "Month-by-month growth of ICE's 287(g) program, nationally.",
     modelDef: MODEL_DEFINITIONS,
@@ -444,7 +444,7 @@ const STR = {
     home: "Cada acuerdo activo entre la policía local e ICE.",
     glossary: "Términos de 287(g), explicados.",
     about: "Por qué creamos 287(g) Watch.",
-    "use-the-map": "Videos e imágenes gratuitos sobre el crecimiento de 287(g).",
+    downloads: "Videos e imágenes gratuitos sobre el crecimiento de 287(g).",
     explore: "Busca y compara cada estado y agencia del programa.",
     timeline: "El crecimiento mes a mes del programa 287(g) de ICE, a nivel nacional.",
     modelDef: MODEL_DEFINITIONS_ES,
@@ -479,7 +479,7 @@ async function bakeHome(locale) {
 }
 
 async function bakePages(locale) {
-  for (const slug of ["glossary", "about", "use-the-map", "explore", "timeline"]) {
+  for (const slug of ["glossary", "about", "downloads", "explore", "timeline"]) {
     await bakeCard(path.join(OG_DIR, locale, `${slug}.png`), { title: STR[locale][slug] });
     console.log(`✓ ${locale}/${slug}.png`);
   }

@@ -62,7 +62,7 @@ const PNG = { ext: "png", type: "image/png" };
 //                #167). Optional: skipped with a note if it wasn't baked, so a
 //                square-only publish still works.
 //   expansion  — the 9:16 "network expansion" card (bake:surge --only=card).
-//                Optional: the /use-the-map network-expansion cut. Baked EN + ES
+//                Optional: the /downloads network-expansion cut. Baked EN + ES
 //                by the surge script into expansion-<lang>.{mp4,gif}.
 const ASSETS = [
   { prefix: "map", bake: "map-video", required: true, formats: [MP4, GIF, PNG] },

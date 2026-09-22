@@ -68,7 +68,7 @@
     { key: "timeline", label: () => m.search_palette_page_timeline(), href: "/timeline" },
     { key: "glossary", label: () => m.search_palette_page_glossary(), href: "/glossary" },
     { key: "about", label: () => m.search_palette_page_about(), href: "/about" },
-    { key: "use-the-map", label: () => m.search_palette_page_use_the_map(), href: "/use-the-map" },
+    { key: "downloads", label: () => m.search_palette_page_downloads(), href: "/downloads" },
   ];
 
   const norm = (s: string) => s.toLowerCase();

@@ -470,7 +470,7 @@
     <!-- Below the map: free download / licensing page (not in nav) -->
     <div class="border-t px-4 py-3 text-center sm:px-6" style="border-color: var(--color-paper-200); background: var(--color-paper-100);">
       <a
-        href={localizeHref("/use-the-map")}
+        href={localizeHref("/downloads")}
         class="text-sm font-semibold underline-offset-2 hover:underline"
         style="color: var(--color-ink-700);"
       >{m.home_map_use_cta()}</a>
