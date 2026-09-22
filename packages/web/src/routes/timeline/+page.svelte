@@ -14,11 +14,15 @@
   const dateFmt = new Intl.DateTimeFormat(localeTag, { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
   const monthFmt = new Intl.DateTimeFormat(localeTag, { year: "numeric", month: "long", timeZone: "UTC" });
   const monthLabel = (ym: string) => monthFmt.format(new Date(`${ym}-01T00:00:00Z`));
+  // Short form ("Sep '26") for the row label, which needs to stay on one
+  // line for the bar row to stay vertically aligned — the long form (used
+  // in the section headings elsewhere) wraps in Spanish ("SEPTIEMBRE DE
+  // 2026") and throws the bar off-center against the label.
+  const monthShortFmt = new Intl.DateTimeFormat(localeTag, { year: "2-digit", month: "short", timeZone: "UTC" });
+  const monthLabelShort = (ym: string) => monthShortFmt.format(new Date(`${ym}-01T00:00:00Z`));
 
   $: title = m.timeline_meta_title();
   $: description = m.timeline_meta_description();
-
-  $: maxAbsDelta = Math.max(1, ...data.months.map((mo) => Math.abs(mo.delta)));
 
   const modelCounts = (mo: TimelineData["months"][number]): Record<string, number> => ({
     "Jail Enforcement Model": mo.jail,
@@ -52,45 +56,28 @@
     {m.timeline_growth_headline({ baseline: intFmt.format(data.baselineTotal), current: intFmt.format(data.currentTotal) })}
   </p>
 
-  <ol class="mt-10 space-y-0 border-l-2 pl-5" style="border-color: var(--color-paper-200);">
+  <ol class="mt-10 space-y-1">
     {#each data.months as mo (mo.ym)}
-      {@const barPct = Math.round((Math.abs(mo.delta) / maxAbsDelta) * 100)}
-      <li id={mo.ym} class="relative scroll-mt-24 pb-8 last:pb-0">
-        <span
-          class="absolute -left-[1.6875rem] top-0.5 h-3.5 w-3.5 rounded-full border-2"
-          style="background: var(--color-paper-200); border-color: var(--color-paper-50);"
-          aria-hidden="true"
-        ></span>
+      <li id={mo.ym} class="scroll-mt-24 border-b border-paper-100 py-2.5 last:border-0">
+        <div class="flex items-baseline justify-between gap-3">
+          <a
+            href="#{mo.ym}"
+            title={monthLabel(mo.ym)}
+            class="font-mono text-xs font-semibold uppercase tracking-wider text-ink-500 no-underline hover:underline"
+          >{monthLabelShort(mo.ym)}</a>
 
-        <a href="#{mo.ym}" class="block font-mono text-xs font-semibold uppercase tracking-wider text-ink-500 no-underline hover:underline">
-          {monthLabel(mo.ym)}
-        </a>
+          <span class="font-mono text-xs font-semibold tabular-nums sm:text-sm" style="color: {mo.delta === 0 ? 'var(--color-ink-500)' : 'var(--color-ink-900)'};">
+            {mo.delta === 0 ? m.timeline_delta_flat_short() : signedIntFmt.format(mo.delta)}
+          </span>
+        </div>
 
-        <p class="mt-1 font-serif text-lg font-bold text-ink-900">
-          {intFmt.format(mo.total)} <span class="text-sm font-normal text-ink-500">{m.timeline_total_label()}</span>
-        </p>
-
-        <p class="mt-0.5 text-sm text-ink-700">
-          {#if mo.delta > 0}
-            {m.timeline_delta_up({ count: signedIntFmt.format(mo.delta) })}
-          {:else if mo.delta < 0}
-            {m.timeline_delta_down({ count: signedIntFmt.format(mo.delta) })}
-          {:else}
-            {m.timeline_delta_flat()}
-          {/if}
-        </p>
-
-        <!-- Delta bar: quick visual read of magnitude, direction by color. -->
-        <div class="mt-1.5 h-1.5 w-full max-w-[12rem] overflow-hidden rounded-full" style="background: var(--color-paper-100);">
-          <div
-            class="h-full rounded-full"
-            style="width: {barPct}%; background: {mo.delta >= 0 ? MODEL_COLORS['Warrant Service Officer'] : '#BE6079'};"
-          ></div>
+        <div class="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <span class="font-serif text-sm font-bold text-ink-900">{intFmt.format(mo.total)}</span>
+          <span class="text-xs text-ink-500">{m.timeline_total_label()}</span>
         </div>
 
         {#if mo.delta !== 0}
-          <div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span class="text-[10px] font-semibold uppercase tracking-wider text-ink-500">{m.timeline_models_label()}</span>
+          <div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
             {#each MODEL_ORDER as model}
               {@const count = modelCounts(mo)[model]}
               {#if count}
@@ -104,8 +91,7 @@
         {/if}
 
         {#if mo.states.length > 0}
-          <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span class="text-[10px] font-semibold uppercase tracking-wider text-ink-500">{m.timeline_states_label()}</span>
+          <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
             {#each mo.states as s (s.abbr)}
               <a
                 href={localizeHref(`/state/${s.abbr.toLowerCase()}`)}

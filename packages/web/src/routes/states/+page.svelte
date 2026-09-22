@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { PageData } from "./$types";
   import { onMount } from "svelte";
+  import { goto } from "$app/navigation";
   import { browser } from "$app/environment";
   import { getCachedGeo } from "$lib/geo";
   import { MODEL_ORDER, MODEL_COLORS, MODEL_SHORT } from "$lib/colors";
@@ -226,33 +227,42 @@
              of the redesign — 53 of these read as a scannable list, not the
              53 fully-expanded cards this page used to render regardless of
              whether anyone asked for the detail. -->
+        <!-- The whole row navigates to the state's page on click — not just
+             the name text. The chevron (when present) is a separate control
+             that stops propagation, since it toggles the inline preview
+             rather than navigating. -->
+        <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
         <div
-          class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 sm:px-5"
-          style="border-left: 3px solid {justJumped === row.abbr ? '#BE6079' : 'transparent'}; transition: border-color 300ms;"
+          class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 transition-colors hover:bg-paper-100 sm:px-5"
+          style="border-left: 3px solid {justJumped === row.abbr ? '#BE6079' : 'transparent'}; transition: border-color 300ms, background-color 150ms; cursor: pointer;"
+          on:click={(e) => {
+            if (e.target instanceof Element && e.target.closest("a, button")) return;
+            if (window.getSelection()?.toString()) return;
+            goto(localizeHref(`/state/${row.abbr.toLowerCase()}`));
+          }}
         >
           {#if canExpand}
             <button
               type="button"
-              on:click={() => toggle(row.abbr)}
+              on:click|stopPropagation={() => toggle(row.abbr)}
               aria-expanded={isExp}
               aria-controls={`exp-${row.abbr}`}
-              class="flex min-w-0 items-center gap-1.5 bg-transparent text-left"
+              aria-label={m.states_index_toggle_preview({ state: row.stateName })}
+              class="shrink-0 rounded-full bg-transparent p-2 transition-colors hover:bg-paper-200"
             >
               <svg
                 viewBox="0 0 20 20"
                 fill="currentColor"
-                class="h-3 w-3 shrink-0 text-ink-500 transition-transform"
+                class="h-3 w-3 text-ink-500 transition-transform"
                 style="transform: rotate({isExp ? 90 : 0}deg);"
                 aria-hidden="true"
               ><path d="M6 4l8 6-8 6V4z" /></svg>
-              <span class="truncate font-serif text-base font-bold text-ink-900 sm:text-lg">{row.stateName}</span>
             </button>
-          {:else}
-            <a
-              href={localizeHref(`/state/${row.abbr.toLowerCase()}`)}
-              class="min-w-0 truncate font-serif text-base font-bold text-ink-900 no-underline hover:underline sm:text-lg"
-            >{row.stateName}</a>
           {/if}
+          <a
+            href={localizeHref(`/state/${row.abbr.toLowerCase()}`)}
+            class="min-w-0 truncate font-serif text-base font-bold text-ink-900 no-underline hover:underline sm:text-lg"
+          >{row.stateName}</a>
 
           <div class="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-700 sm:text-sm">
             {#if SHOW_LEGISLATION_STANCE && row.news?.legislation}

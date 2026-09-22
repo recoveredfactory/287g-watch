@@ -112,12 +112,19 @@
   $: nationalPopulationServed = coveredPopAt(model, model.maxIdx) || null;
   $: nationalLocalPopulation = Object.values(data.stateMeta).reduce((sum, s) => sum + (s.state_local_population ?? 0), 0) || null;
 
-  // Top states by agency count — moved here from /explore per feedback.
+  // Top states by NEW agreements in the trailing 30 days — a rolling
+  // momentum leaderboard, not the all-time cumulative count (that full
+  // ranking lives on /states). Moved here from /explore per feedback;
+  // switched from all-time to rolling-30-days per follow-up feedback.
   type TopState = { abbr: string; agencyCount: number; modelCounts: Record<string, number> };
   $: topStatesByAgencyCount = ((): TopState[] => {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 30);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
     const agencyCountByState = new Map<string, number>();
     const modelCountsByState = new Map<string, Record<string, number>>();
     for (const a of data.agencies) {
+      if (!a.signed_date || a.signed_date < cutoffStr) continue;
       agencyCountByState.set(a.state, (agencyCountByState.get(a.state) ?? 0) + 1);
       const mc = modelCountsByState.get(a.state) ?? {};
       for (const m of a.models) mc[m] = (mc[m] ?? 0) + 1;
@@ -126,7 +133,7 @@
     return [...agencyCountByState.entries()]
       .map(([abbr, agencyCount]) => ({ abbr, agencyCount, modelCounts: modelCountsByState.get(abbr) ?? {} }))
       .sort((a, b) => b.agencyCount - a.agencyCount)
-      .slice(0, 10);
+      .slice(0, 5);
   })();
   // Which row's model breakdown is open — one at a time, click to toggle.
   let expandedTopState: string | null = null;
@@ -474,8 +481,9 @@
   <TrendCharts agencies={data.agencies} trendMonths={data.trendMonths} trend={data.trend} />
 
 
-  <!-- ── Top states by agency count ───────────────────────────────────────────
-       Moved here from /explore per feedback. -->
+  <!-- ── Top states by new agreements, last 30 days ────────────────────────────
+       Moved here from /explore per feedback; a rolling recent-activity
+       leaderboard rather than the all-time count (that lives on /states). -->
   <section class="px-4 py-6 sm:px-6 sm:py-8">
     <div class="mx-auto max-w-6xl">
       <div class="flex flex-wrap items-end justify-between gap-4">
@@ -494,6 +502,11 @@
         </div>
       </div>
 
+      {#if topStatesByAgencyCount.length === 0}
+        <p class="mt-6 rounded-lg border px-4 py-6 text-center text-sm" style="border-color: var(--color-paper-200); color: var(--color-ink-500);">
+          {m.leaderboard_no_recent_agreements()}
+        </p>
+      {:else}
       <ol class="mt-6 divide-y overflow-hidden rounded-lg border" style="border-color: var(--color-paper-200);">
         {#each topStatesByAgencyCount as row, i (row.abbr)}
           {@const expanded = expandedTopState === row.abbr}
@@ -524,7 +537,7 @@
                 href={localizeHref(`/state/${row.abbr.toLowerCase()}`)}
                 class="shrink-0 font-mono text-xs tabular-nums no-underline hover:underline"
                 style="color: var(--color-ink-500);"
-              >{intFmt.format(row.agencyCount)} {m.leaderboard_unit_agencies()}</a>
+              >{intFmt.format(row.agencyCount)} {row.agencyCount === 1 ? m.leaderboard_unit_new_agreement_one() : m.leaderboard_unit_new_agreement_other()}</a>
             </div>
             {#if expanded}
               <div class="flex flex-wrap gap-x-5 gap-y-1.5 border-t px-4 py-3 pl-[2.6rem] sm:px-5" style="border-color: var(--color-paper-100);">
@@ -541,6 +554,7 @@
           </li>
         {/each}
       </ol>
+      {/if}
     </div>
   </section>
 
