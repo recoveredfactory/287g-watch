@@ -5,6 +5,8 @@ import type { HomeAgency } from "$lib/homeData.types";
 import { buildTimeline, type TimelinePoint } from "$lib/timeline";
 import { MODEL_SLUG } from "$lib/colors";
 import { getLocale } from "$lib/paraglide/runtime";
+import type { DetainerOutcome, DetainerStats, ArrestCriminality, ArrestStats } from "../../agency/[slug]/+page.server";
+import { MIN_ARREST_STATS_TOTAL } from "$lib/arrestStats";
 
 export type TrendSeries = { jail: number[]; taskforce: number[]; wso: number[] };
 
@@ -26,6 +28,38 @@ export type StatePageData = {
   trendMonths: string[];
   trend: Record<string, TrendSeries>;
   news: StateNews | null;
+  detainerStats: StateDetainerStats | null;
+  arrestStats: StateArrestStats | null;
+};
+
+// State-level rollup of detainer_stats.json (see agency/[slug]/+page.server.ts
+// for the underlying per-agency data and build-detainer-stats.ts for how
+// it's built). Deliberately the SUM of already-matched agency-level records,
+// not a fresh count straight from the source data — keeps this number
+// consistent with what a reader sees by clicking into any agency on this
+// page, at the cost of excluding the ~32% of 287(g) detainer records that
+// don't confidently resolve to a specific agency.
+export type StateDetainerStats = {
+  total: number;
+  by_year: Record<string, number>;
+  by_outcome: Record<DetainerOutcome, number>;
+  by_year_outcome: Record<string, Record<DetainerOutcome, number>>;
+  // Agencies in this state with at least one matched detainer, sorted by
+  // total descending — the leaderboard a single agency page can't show.
+  topAgencies: Array<{ slug: string; name: string; total: number }>;
+};
+
+// Same rollup pattern as StateDetainerStats, for arrest_stats.json. See
+// packages/pipeline/build-arrest-stats.ts — coverage here is much patchier
+// (event_landmark is noisier than detainers' facility field), so this
+// section is only rendered when the statewide total clears a minimum (see
+// MIN_ARREST_STATS_TOTAL on the agency page server, reused here).
+export type StateArrestStats = {
+  total: number;
+  by_year: Record<string, number>;
+  by_criminality: Record<ArrestCriminality, number>;
+  by_year_criminality: Record<string, Record<ArrestCriminality, number>>;
+  topAgencies: Array<{ slug: string; name: string; total: number }>;
 };
 
 // The news program emits a short TL;DR plus the full statewide narrative, in
@@ -159,12 +193,14 @@ export const load = async ({ fetch, params }): Promise<StatePageData> => {
   const stateName = NAVIGABLE_STATES[abbr];
   if (!stateName) throw error(404, `No state page for: ${abbr}`);
 
-  const [agenciesRes, metaRes, terminatedRes, pendingRes, newsRes] = await Promise.all([
+  const [agenciesRes, metaRes, terminatedRes, pendingRes, newsRes, detainerStatsRes, arrestStatsRes] = await Promise.all([
     fetch("/data/dist/agency_index.json"),
     fetch("/data/dist/state_meta.json"),
     fetch("/data/dist/terminated_agencies.json"),
     fetch("/data/dist/pending_agencies.json"),
     fetch(`/data/dist/news/${abbr}.json`),
+    fetch("/data/dist/detainer_stats.json"),
+    fetch("/data/dist/arrest_stats.json"),
   ]);
   if (!agenciesRes.ok) throw error(503, "Data unavailable");
 
@@ -176,6 +212,97 @@ export const load = async ({ fetch, params }): Promise<StatePageData> => {
   // No agency-count gate: non-participating states get a page too (an empty-state
   // plus their news summary). Only abbrs outside NAVIGABLE_STATES 404 (above).
   const agencies = allAgencies.filter((a) => a.state === abbr);
+
+  // Detainer stats: sum the already-matched per-agency records (including
+  // terminated agencies, same as the agency page resolves slugs against —
+  // a detainer from a few years ago may belong to an agency that's since
+  // left the program) for every agency in this state.
+  let detainerStats: StateDetainerStats | null = null;
+  try {
+    const allDetainerStats: Record<string, DetainerStats> = detainerStatsRes.ok
+      ? await detainerStatsRes.json()
+      : {};
+    const stateAgencySlugs = new Set([...agencies, ...terminatedRaw.filter((a) => a.state === abbr)].map((a) => a.slug));
+    const nameBySlug = new Map(
+      [...agencies, ...terminatedRaw.filter((a) => a.state === abbr)].map((a) => [a.slug, a.name]),
+    );
+    const matchedEntries = Object.entries(allDetainerStats).filter(([slug]) => stateAgencySlugs.has(slug));
+    if (matchedEntries.length) {
+      const by_year: Record<string, number> = {};
+      const by_outcome: Record<DetainerOutcome, number> = {
+        booked: 0, released: 0, declined_by_agency: 0, pending: 0, other: 0,
+      };
+      const by_year_outcome: Record<string, Record<DetainerOutcome, number>> = {};
+      let total = 0;
+      const topAgencies: Array<{ slug: string; name: string; total: number }> = [];
+      for (const [slug, stats] of matchedEntries) {
+        total += stats.total;
+        for (const [year, count] of Object.entries(stats.by_year)) {
+          by_year[year] = (by_year[year] ?? 0) + count;
+        }
+        for (const [outcome, count] of Object.entries(stats.by_outcome) as Array<[DetainerOutcome, number]>) {
+          by_outcome[outcome] += count;
+        }
+        for (const [year, outcomes] of Object.entries(stats.by_year_outcome ?? {})) {
+          by_year_outcome[year] = by_year_outcome[year] ?? {
+            booked: 0, released: 0, declined_by_agency: 0, pending: 0, other: 0,
+          };
+          for (const [outcome, count] of Object.entries(outcomes) as Array<[DetainerOutcome, number]>) {
+            by_year_outcome[year][outcome] += count;
+          }
+        }
+        topAgencies.push({ slug, name: nameBySlug.get(slug) ?? slug, total: stats.total });
+      }
+      topAgencies.sort((a, b) => b.total - a.total);
+      detainerStats = { total, by_year, by_outcome, by_year_outcome, topAgencies: topAgencies.slice(0, 10) };
+    }
+  } catch (e) {
+    console.warn(`detainer stats unreadable, rendering without them: ${e}`);
+  }
+
+  // Arrest stats: same sum-of-matched-agencies rollup as detainers above,
+  // gated on a minimum statewide total (see MIN_ARREST_STATS_TOTAL) since
+  // coverage is much patchier than detainers.
+  let arrestStats: StateArrestStats | null = null;
+  try {
+    const allArrestStats: Record<string, ArrestStats> = arrestStatsRes.ok
+      ? await arrestStatsRes.json()
+      : {};
+    const stateAgencySlugs = new Set([...agencies, ...terminatedRaw.filter((a) => a.state === abbr)].map((a) => a.slug));
+    const nameBySlug = new Map(
+      [...agencies, ...terminatedRaw.filter((a) => a.state === abbr)].map((a) => [a.slug, a.name]),
+    );
+    const matchedEntries = Object.entries(allArrestStats).filter(([slug]) => stateAgencySlugs.has(slug));
+    if (matchedEntries.length) {
+      const by_year: Record<string, number> = {};
+      const by_criminality: Record<ArrestCriminality, number> = { convicted: 0, pending_charges: 0, other: 0 };
+      const by_year_criminality: Record<string, Record<ArrestCriminality, number>> = {};
+      let total = 0;
+      const topAgencies: Array<{ slug: string; name: string; total: number }> = [];
+      for (const [slug, stats] of matchedEntries) {
+        total += stats.total;
+        for (const [year, count] of Object.entries(stats.by_year)) {
+          by_year[year] = (by_year[year] ?? 0) + count;
+        }
+        for (const [criminality, count] of Object.entries(stats.by_criminality) as Array<[ArrestCriminality, number]>) {
+          by_criminality[criminality] += count;
+        }
+        for (const [year, criminalities] of Object.entries(stats.by_year_criminality ?? {})) {
+          by_year_criminality[year] = by_year_criminality[year] ?? { convicted: 0, pending_charges: 0, other: 0 };
+          for (const [criminality, count] of Object.entries(criminalities) as Array<[ArrestCriminality, number]>) {
+            by_year_criminality[year][criminality] += count;
+          }
+        }
+        topAgencies.push({ slug, name: nameBySlug.get(slug) ?? slug, total: stats.total });
+      }
+      if (total >= MIN_ARREST_STATS_TOTAL) {
+        topAgencies.sort((a, b) => b.total - a.total);
+        arrestStats = { total, by_year, by_criminality, by_year_criminality, topAgencies: topAgencies.slice(0, 10) };
+      }
+    }
+  } catch (e) {
+    console.warn(`arrest stats unreadable, rendering without them: ${e}`);
+  }
 
   // National, slim, map-only projection — the same shape the homepage ships to
   // NationalMap (#135). Lets the state map render every dot while keeping the
@@ -296,5 +423,7 @@ export const load = async ({ fetch, params }): Promise<StatePageData> => {
     trendMonths,
     trend: { "": sampleMonthly(stateForTrend) },
     news,
+    detainerStats,
+    arrestStats,
   };
 };

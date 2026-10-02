@@ -9,17 +9,32 @@
   import AgencySearch from "$lib/components/AgencySearch.svelte";
   import AgencyMap from "$lib/components/AgencyMap.svelte";
   import Gloss from "$lib/components/Gloss.svelte";
+  import { SHOW_SUCCESS_STORIES } from "$lib/features";
+  import {
+    DETAINER_OUTCOME_ORDER,
+    DETAINER_OUTCOME_COLORS,
+    ARREST_CRIMINALITY_ORDER,
+    ARREST_CRIMINALITY_COLORS,
+  } from "$lib/deportationDataColors";
 
   export let data: PageData;
   const seen = new Set<string>();
 
   // Reactive destructure so navigating between agencies via the sticky search
   // (same dynamic route, same component instance) actually refreshes content.
-  $: ({ agency, agencies, muckrock } = data);
+  $: ({ agency, agencies, muckrock, successStories, detainerStats, arrestStats } = data);
 
   $: agencyBySlug = new Map(agencies.map((a) => [a.slug, a]));
 
   const MUCKROCK_SIGNUP_URL = "https://accounts.muckrock.com/accounts/signup/";
+
+  // Only JEM/TFM/WSO have a short display form (MODEL_SHORT) — the story
+  // PDFs also use officer-title phrases ("Designated Immigration Officer",
+  // "Deportation Officer") that aren't 287(g) program models at all, so
+  // those fall back to their own raw text rather than being forced into
+  // MODEL_SHORT's three-entry map.
+  const storyModelLabel = (modelType: string | null): string | null =>
+    modelType ? (MODEL_SHORT[modelType] ?? modelType) : null;
 
   const statusLabel = (status: string): string => {
     switch (status) {
@@ -570,6 +585,171 @@
     {/if}
   </dl>
 
+  {#if detainerStats}
+    {@const years = Object.keys(detainerStats.by_year).sort()}
+    {@const maxYearCount = Math.max(...Object.values(detainerStats.by_year))}
+    {@const topCountries = Object.entries(detainerStats.by_country).sort((a, b) => b[1] - a[1]).slice(0, 8)}
+    <section class="mt-10">
+      <h2 class="font-serif text-xl font-bold text-ink-900">{m.agency_detainers_heading()}</h2>
+      <p class="mt-2 text-ink-700">
+        <Gloss text={m.agency_detainers_intro()} {seen} />
+      </p>
+      <p class="mt-1 text-sm text-ink-500">
+        {m.agency_detainers_source_dek()}
+        <a
+          href="https://deportationdata.org"
+          target="_blank"
+          rel="noreferrer"
+          title={m.agency_detainers_source_title()}
+          class="font-semibold no-underline hover:underline"
+        >{m.agency_detainers_source_short()}</a>.
+      </p>
+
+      <p class="mt-5 font-serif text-3xl font-bold text-ink-900">
+        {intFmt.format(detainerStats.total)}
+        <span class="text-base font-normal text-ink-500">{detainerStats.total === 1 ? m.agency_detainers_total_label_one() : m.agency_detainers_total_label_other()}</span>
+      </p>
+      <p class="text-xs text-ink-500">{m.agency_detainers_since()}</p>
+
+      <!-- Year-by-year bars: vertical, stacked by outcome, softened fill,
+           capped width so a single year doesn't stretch full-row. -->
+      <div class="mt-4 flex items-end gap-2">
+        {#each years as year}
+          {@const yearOutcomes = detainerStats.by_year_outcome?.[year]}
+          {@const count = detainerStats.by_year[year]}
+          {@const barHeight = maxYearCount > 0 ? Math.max(Math.round((count / maxYearCount) * 44), 3) : 3}
+          <div class="flex w-12 flex-col items-center gap-1">
+            <span class="font-mono text-[11px] tabular-nums text-ink-700">{intFmt.format(count)}</span>
+            {#if yearOutcomes && count > 0}
+              <div class="flex w-full flex-col-reverse overflow-hidden rounded-t-sm opacity-70" style="height: {barHeight}px;">
+                {#each DETAINER_OUTCOME_ORDER as outcome}
+                  {@const segCount = yearOutcomes[outcome]}
+                  {#if segCount > 0}
+                    <div style="height: {(segCount / count) * 100}%; background: {DETAINER_OUTCOME_COLORS[outcome]};"></div>
+                  {/if}
+                {/each}
+              </div>
+            {:else}
+              <div class="w-full rounded-t-sm opacity-70" style="height: {barHeight}px; background: {MODEL_COLORS['Task Force Model']};"></div>
+            {/if}
+            <span class="font-mono text-[11px] text-ink-500">{year}</span>
+          </div>
+        {/each}
+      </div>
+
+      <!-- Outcome breakdown (also the stacked bar's legend) -->
+      <div class="mt-5 flex flex-wrap gap-x-4 gap-y-1.5 text-sm">
+        {#if detainerStats.by_outcome.booked}
+          <span class="text-ink-700"><span class="font-semibold text-ink-900">{intFmt.format(detainerStats.by_outcome.booked)}</span> {m.agency_detainers_outcome_booked()}</span>
+        {/if}
+        {#if detainerStats.by_outcome.released}
+          <span class="text-ink-700"><span class="font-semibold text-ink-900">{intFmt.format(detainerStats.by_outcome.released)}</span> {m.agency_detainers_outcome_released()}</span>
+        {/if}
+        {#if detainerStats.by_outcome.declined_by_agency}
+          <span class="text-ink-700"><span class="font-semibold text-ink-900">{intFmt.format(detainerStats.by_outcome.declined_by_agency)}</span> {m.agency_detainers_outcome_declined()}</span>
+        {/if}
+        {#if detainerStats.by_outcome.pending}
+          <span class="text-ink-500"><span class="font-semibold">{intFmt.format(detainerStats.by_outcome.pending)}</span> {m.agency_detainers_outcome_pending()}</span>
+        {/if}
+      </div>
+
+      <!-- Top countries of origin -->
+      {#if topCountries.length > 0}
+        <div class="mt-5">
+          <p class="text-xs font-semibold uppercase tracking-wider text-ink-500">{m.agency_detainers_countries_heading()}</p>
+          <div class="mt-2 flex flex-wrap gap-1.5">
+            {#each topCountries as [country, count]}
+              <span class="rounded bg-paper-100 px-2.5 py-1 text-xs font-medium text-ink-700">
+                {country} <span class="text-ink-500">{intFmt.format(count)}</span>
+              </span>
+            {/each}
+          </div>
+        </div>
+      {/if}
+
+      <p class="mt-4 text-xs italic leading-relaxed text-ink-500">{m.agency_detainers_disclaimer()}</p>
+    </section>
+  {/if}
+
+  {#if arrestStats}
+    {@const years = Object.keys(arrestStats.by_year).sort()}
+    {@const maxYearCount = Math.max(...Object.values(arrestStats.by_year))}
+    {@const topCountries = Object.entries(arrestStats.by_country).sort((a, b) => b[1] - a[1]).slice(0, 8)}
+    <section class="mt-10">
+      <h2 class="font-serif text-xl font-bold text-ink-900">{m.agency_arrests_heading()}</h2>
+      <p class="mt-2 text-ink-700">
+        <Gloss text={m.agency_arrests_intro()} {seen} />
+      </p>
+      <p class="mt-1 text-sm text-ink-500">
+        {m.agency_detainers_source_dek()}
+        <a
+          href="https://deportationdata.org"
+          target="_blank"
+          rel="noreferrer"
+          title={m.agency_detainers_source_title()}
+          class="font-semibold no-underline hover:underline"
+        >{m.agency_detainers_source_short()}</a>.
+      </p>
+
+      <p class="mt-5 font-serif text-3xl font-bold text-ink-900">
+        {intFmt.format(arrestStats.total)}
+        <span class="text-base font-normal text-ink-500">{arrestStats.total === 1 ? m.agency_arrests_total_label_one() : m.agency_arrests_total_label_other()}</span>
+      </p>
+      <p class="text-xs text-ink-500">{m.agency_arrests_since()}</p>
+
+      <div class="mt-4 flex items-end gap-2">
+        {#each years as year}
+          {@const yearCriminalities = arrestStats.by_year_criminality?.[year]}
+          {@const count = arrestStats.by_year[year]}
+          {@const barHeight = maxYearCount > 0 ? Math.max(Math.round((count / maxYearCount) * 44), 3) : 3}
+          <div class="flex w-12 flex-col items-center gap-1">
+            <span class="font-mono text-[11px] tabular-nums text-ink-700">{intFmt.format(count)}</span>
+            {#if yearCriminalities && count > 0}
+              <div class="flex w-full flex-col-reverse overflow-hidden rounded-t-sm opacity-70" style="height: {barHeight}px;">
+                {#each ARREST_CRIMINALITY_ORDER as criminality}
+                  {@const segCount = yearCriminalities[criminality]}
+                  {#if segCount > 0}
+                    <div style="height: {(segCount / count) * 100}%; background: {ARREST_CRIMINALITY_COLORS[criminality]};"></div>
+                  {/if}
+                {/each}
+              </div>
+            {:else}
+              <div class="w-full rounded-t-sm opacity-70" style="height: {barHeight}px; background: {MODEL_COLORS['Warrant Service Officer']};"></div>
+            {/if}
+            <span class="font-mono text-[11px] text-ink-500">{year}</span>
+          </div>
+        {/each}
+      </div>
+
+      <div class="mt-5 flex flex-wrap gap-x-4 gap-y-1.5 text-sm">
+        {#if arrestStats.by_criminality.convicted}
+          <span class="text-ink-700"><span class="font-semibold text-ink-900">{intFmt.format(arrestStats.by_criminality.convicted)}</span> {m.agency_arrests_criminality_convicted()}</span>
+        {/if}
+        {#if arrestStats.by_criminality.pending_charges}
+          <span class="text-ink-700"><span class="font-semibold text-ink-900">{intFmt.format(arrestStats.by_criminality.pending_charges)}</span> {m.agency_arrests_criminality_pending()}</span>
+        {/if}
+        {#if arrestStats.by_criminality.other}
+          <span class="text-ink-500"><span class="font-semibold">{intFmt.format(arrestStats.by_criminality.other)}</span> {m.agency_arrests_criminality_other()}</span>
+        {/if}
+      </div>
+
+      {#if topCountries.length > 0}
+        <div class="mt-5">
+          <p class="text-xs font-semibold uppercase tracking-wider text-ink-500">{m.agency_detainers_countries_heading()}</p>
+          <div class="mt-2 flex flex-wrap gap-1.5">
+            {#each topCountries as [country, count]}
+              <span class="rounded bg-paper-100 px-2.5 py-1 text-xs font-medium text-ink-700">
+                {country} <span class="text-ink-500">{intFmt.format(count)}</span>
+              </span>
+            {/each}
+          </div>
+        </div>
+      {/if}
+
+      <p class="mt-4 text-xs italic leading-relaxed text-ink-500">{m.agency_arrests_disclaimer()}</p>
+    </section>
+  {/if}
+
   <!-- Agreement intro (multi-agreement view only: it sits above the per-model
        cards. The single-agreement view renders its own heading + card below). -->
   {#if showAgreements && agency.moa_url}
@@ -774,5 +954,42 @@
       </li>
     </ul>
   </section>
+
+  <!-- 287(g) Encounter Reports — a separate section from "Dive deeper" on
+       purpose: MuckRock above is about REQUESTING records; this is ICE's
+       own already-published narrative content, a different kind of source
+       entirely, and conflating the two would misrepresent this as
+       independently obtained. -->
+  {#if SHOW_SUCCESS_STORIES && successStories.length > 0}
+    <section class="mt-10">
+      <h2 class="font-serif text-xl font-bold text-ink-900">{m.agency_stories_heading()}</h2>
+      <p class="mt-2 text-ink-700"><Gloss text={m.agency_stories_intro()} {seen} /></p>
+      <p class="mt-2 text-xs italic leading-relaxed text-ink-500">{m.agency_stories_disclaimer()}</p>
+
+      <ul class="mt-5 space-y-3">
+        {#each successStories as story (story.id)}
+          <li class="overflow-hidden rounded-lg border border-paper-200 shadow-sm">
+            <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 bg-paper-100 px-4 py-2">
+              <p class="font-sans text-xs font-bold uppercase tracking-widest text-ink-700">
+                {story.date_encountered ? dateFmt(story.date_encountered) : m.agency_stories_date_unknown()}
+              </p>
+              {#if storyModelLabel(story.model_type)}
+                <p class="text-xs text-ink-500">{storyModelLabel(story.model_type)}</p>
+              {/if}
+            </div>
+            <div class="bg-paper-50 px-4 py-3">
+              <p class="text-sm leading-relaxed text-ink-900">{story.raw_text}</p>
+              <p class="mt-2 text-xs text-ink-500">
+                {m.agency_stories_source_label({
+                  period: story.source_period,
+                  page: story.page_number ?? "—",
+                })}
+              </p>
+            </div>
+          </li>
+        {/each}
+      </ul>
+    </section>
+  {/if}
 
 </main>

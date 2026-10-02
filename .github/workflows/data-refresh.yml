@@ -93,6 +93,10 @@ on:
         description: Build fresh news summaries (default carries the live site's forward)
         type: boolean
         default: false
+      build_ice_stats:
+        description: Rebuild ICE detainer/arrest stats from the Deportation Data Project (default carries the live site's forward, except the Sunday 21:00 tick)
+        type: boolean
+        default: false
   # Twice daily, both AFTER the upstream auto-commit window: appelson/
   # Tracking_287g lands its daily "Auto-commit from GitHub Actions" around
   # 17:00–20:00 UTC. 21:00 catches that day's update; 01:00 is a safety net for
@@ -227,6 +231,36 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm pipeline
+
+      # ── ICE detainer/arrest stats (Deportation Data Project) ──────────
+      # Gitignored, and copy-static-data hard-fails without them, so every
+      # deploy from this job must carry a copy. Upstream is FOIA-litigation
+      # data that moves on the order of weeks, so only the Sunday 21:00 tick
+      # (or a build_ice_stats dispatch) re-downloads the ~60MB of parquet;
+      # every other tick carries the live copies forward. A live site with no
+      # copy yet (first deploy) builds fresh. Runs after ingest because the
+      # matchers read the fresh agency_index.json.
+      - name: ICE detainer/arrest stats
+        env:
+          SCHEDULE: ${{ github.event.schedule }}
+          BUILD_ICE_STATS: ${{ inputs.build_ice_stats || 'false' }}
+        run: |
+          case "$STAGE" in
+            prod) HOST="$WEB_DOMAIN" ;;
+            staging) HOST="$WEB_STAGING_DOMAIN" ;;
+            *) echo "Unknown stage: $STAGE" >&2; exit 1 ;;
+          esac
+          rebuild=$BUILD_ICE_STATS
+          [ "$SCHEDULE" = "0 21 * * *" ] && [ "$(date -u +%u)" = 7 ] && rebuild=true
+          for f in detainer arrest; do
+            out="packages/pipeline/data/${f}_stats.json"
+            if [ "$rebuild" != "true" ] && curl -fsSL --retry 3 "https://$HOST/data/dist/${f}_stats.json" -o "$out"; then
+              echo "${f}_stats.json: carried forward from https://$HOST"
+            else
+              pnpm -F pipeline "build:${f}-stats"
+            fi
+            test -s "$out"
+          done
 
       # ── Keep the language in step with the numbers (issue #233) ─────────
       # Data refreshes twice daily; the FULL news build is weekly, so a state's
@@ -448,6 +482,19 @@ jobs:
           fi
           echo "commit: local=$local_commit remote=$remote_commit"
           [ "$local_commit" != "$remote_commit" ] && code_changed=true
+          # ICE stats: a site-only change like news — nothing in the bake or
+          # the social post reads them. Carried-forward copies hash equal.
+          stats_changed=false
+          for f in detainer_stats arrest_stats; do
+            local_hash=$(sha256sum "packages/pipeline/data/$f.json" | awk '{print $1}')
+            if curl -fsSL --retry 3 "https://$HOST/data/dist/$f.json" -o /tmp/remote.json; then
+              remote_hash=$(sha256sum /tmp/remote.json | awk '{print $1}')
+            else
+              remote_hash=missing
+            fi
+            echo "$f: local=$local_hash remote=$remote_hash"
+            [ "$local_hash" != "$remote_hash" ] && stats_changed=true
+          done
           if [ "$FORCE" = "true" ]; then
             echo "force=true → full deploy regardless of change gate"
             data_changed=true
@@ -455,7 +502,8 @@ jobs:
           echo "data_changed=$data_changed" >> "$GITHUB_OUTPUT"
           echo "news_changed=$news_changed" >> "$GITHUB_OUTPUT"
           echo "code_changed=$code_changed" >> "$GITHUB_OUTPUT"
-          echo "### Data refresh ($STAGE): data_changed=$data_changed news_changed=$news_changed code_changed=$code_changed" >> "$GITHUB_STEP_SUMMARY"
+          echo "stats_changed=$stats_changed" >> "$GITHUB_OUTPUT"
+          echo "### Data refresh ($STAGE): data_changed=$data_changed news_changed=$news_changed code_changed=$code_changed stats_changed=$stats_changed" >> "$GITHUB_STEP_SUMMARY"
 
       # Expose the ICE release date (latest snapshot) for the social caption.
       - name: Read snapshot date
@@ -519,10 +567,10 @@ jobs:
       # change goes live, skipping the (slow, data-driven) video/OG bake and the
       # social release — nothing in either reads news, and a code change is not
       # something to announce.
-      - name: Deploy site only (news- or code-only change)
+      - name: Deploy site only (news-, code-, or ICE-stats-only change)
         if: >-
           steps.gate.outputs.data_changed != 'true' &&
-          (steps.gate.outputs.news_changed == 'true' || steps.gate.outputs.code_changed == 'true')
+          (steps.gate.outputs.news_changed == 'true' || steps.gate.outputs.code_changed == 'true' || steps.gate.outputs.stats_changed == 'true')
         run: pnpm "deploy:${STAGE}"
 
       - name: Summary
@@ -531,16 +579,19 @@ jobs:
           DATA_CHANGED: ${{ steps.gate.outputs.data_changed }}
           NEWS_CHANGED: ${{ steps.gate.outputs.news_changed }}
           CODE_CHANGED: ${{ steps.gate.outputs.code_changed }}
+          STATS_CHANGED: ${{ steps.gate.outputs.stats_changed }}
           NEWS_FAILED: ${{ steps.news_health.outputs.news_failed }}
           CHANGED_STATES: ${{ steps.changed.outputs.states }}
           CHANGED_OUTCOME: ${{ steps.changed.outcome }}
         run: |
           if [ "$DATA_CHANGED" = "true" ]; then
             echo "Deployed $STAGE and refreshed map video + OG cards." >> "$GITHUB_STEP_SUMMARY"
-          elif [ "$NEWS_CHANGED" = "true" ] || [ "$CODE_CHANGED" = "true" ]; then
-            what=$([ "$NEWS_CHANGED" = "true" ] && echo "News" || echo "Code")
-            [ "$NEWS_CHANGED" = "true" ] && [ "$CODE_CHANGED" = "true" ] && what="News + code"
-            echo "$what change — deployed $STAGE without re-baking assets or posting social." >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$NEWS_CHANGED" = "true" ] || [ "$CODE_CHANGED" = "true" ] || [ "$STATS_CHANGED" = "true" ]; then
+            what=""
+            [ "$NEWS_CHANGED" = "true" ] && what="${what:+$what + }news"
+            [ "$CODE_CHANGED" = "true" ] && what="${what:+$what + }code"
+            [ "$STATS_CHANGED" = "true" ] && what="${what:+$what + }ICE stats"
+            echo "Change in $what — deployed $STAGE without re-baking assets or posting social." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "No change in the upstream snapshot or the codebase — nothing deployed." >> "$GITHUB_STEP_SUMMARY"
           fi

@@ -1,6 +1,19 @@
 import { error, redirect } from "@sveltejs/kit";
 import { AGENCY_SLUG_REDIRECTS } from "$lib/agencyRedirects";
+import { SHOW_SUCCESS_STORIES } from "$lib/features";
+import { MIN_ARREST_STATS_TOTAL } from "$lib/arrestStats";
 import type { Agency } from "../../+page.server";
+
+export type SuccessStory = {
+  id: string;
+  agency_slug: string;
+  date_encountered: string | null;
+  model_type: string | null;
+  raw_text: string;
+  source_pdf: string;
+  source_period: string;
+  page_number: number | null;
+};
 
 export type MuckrockRequest = {
   foia_id: number;
@@ -30,6 +43,36 @@ export type AgencyPageData = {
     multirequest: MuckrockSnapshot["multirequest"];
     reporter_guide: MuckrockSnapshot["reporter_guide"];
   };
+  successStories: SuccessStory[];
+  detainerStats: DetainerStats | null;
+  arrestStats: ArrestStats | null;
+};
+
+// Real per-agency ICE detainer counts from the Deportation Data Project
+// (UC Berkeley Law + UCLA) — FOIA-obtained, CC-0. See
+// packages/pipeline/build-detainer-stats.ts for how this is built/matched.
+export type DetainerOutcome = "booked" | "released" | "declined_by_agency" | "pending" | "other";
+export type DetainerStats = {
+  total: number;
+  by_year: Record<string, number>;
+  by_outcome: Record<DetainerOutcome, number>;
+  by_year_outcome: Record<string, Record<DetainerOutcome, number>>;
+  by_country: Record<string, number>;
+};
+
+// Real per-agency ICE arrest counts, same source as DetainerStats. See
+// packages/pipeline/build-arrest-stats.ts. Coverage here is much patchier
+// than detainers (event_landmark is noisier than detainers' facility
+// field) — the web side requires a minimum matched count before rendering
+// the section at all, so a page never shows a stray "1 arrest" that reads
+// as noise rather than signal.
+export type ArrestCriminality = "convicted" | "pending_charges" | "other";
+export type ArrestStats = {
+  total: number;
+  by_year: Record<string, number>;
+  by_criminality: Record<ArrestCriminality, number>;
+  by_year_criminality: Record<string, Record<ArrestCriminality, number>>;
+  by_country: Record<string, number>;
 };
 
 export const load = async ({ fetch, params, url }): Promise<AgencyPageData> => {
@@ -40,11 +83,17 @@ export const load = async ({ fetch, params, url }): Promise<AgencyPageData> => {
   const mergedInto = AGENCY_SLUG_REDIRECTS[params.slug];
   if (mergedInto) redirect(301, url.pathname.replace(/[^/]+$/, mergedInto) + url.search);
 
-  const [agenciesRes, terminatedRes, pendingRes, muckrockRes] = await Promise.all([
+  const [agenciesRes, terminatedRes, pendingRes, muckrockRes, storiesRes, detainerStatsRes, arrestStatsRes] = await Promise.all([
     fetch("/data/dist/agency_index.json"),
     fetch("/data/dist/terminated_agencies.json"),
     fetch("/data/dist/pending_agencies.json"),
     fetch("/data/dist/muckrock_requests.json"),
+    // Skip the fetch entirely while the feature is flagged off — no reason
+    // to ship the request on every agency page load for a section nobody
+    // can see yet.
+    SHOW_SUCCESS_STORIES ? fetch("/data/dist/success_stories.json") : Promise.resolve(null),
+    fetch("/data/dist/detainer_stats.json"),
+    fetch("/data/dist/arrest_stats.json"),
   ]);
   if (!agenciesRes.ok) throw error(503, "Data unavailable");
 
@@ -76,6 +125,29 @@ export const load = async ({ fetch, params, url }): Promise<AgencyPageData> => {
     console.warn(`muckrock snapshot unreadable, rendering without it: ${e}`);
   }
 
+  // Same defensive shape as the muckrock fetch above — storiesRes is null
+  // outright when the flag is off (no fetch was made).
+  let allStories: SuccessStory[] = [];
+  try {
+    if (storiesRes?.ok) allStories = (await storiesRes.json()) as SuccessStory[];
+  } catch (e) {
+    console.warn(`success stories unreadable, rendering without them: ${e}`);
+  }
+
+  let allDetainerStats: Record<string, DetainerStats> = {};
+  try {
+    if (detainerStatsRes.ok) allDetainerStats = (await detainerStatsRes.json()) as Record<string, DetainerStats>;
+  } catch (e) {
+    console.warn(`detainer stats unreadable, rendering without them: ${e}`);
+  }
+
+  let allArrestStats: Record<string, ArrestStats> = {};
+  try {
+    if (arrestStatsRes.ok) allArrestStats = (await arrestStatsRes.json()) as Record<string, ArrestStats>;
+  } catch (e) {
+    console.warn(`arrest stats unreadable, rendering without them: ${e}`);
+  }
+
   return {
     agency,
     agencies,
@@ -93,5 +165,9 @@ export const load = async ({ fetch, params, url }): Promise<AgencyPageData> => {
         publisher: "MuckRock",
       },
     },
+    successStories: allStories.filter((s) => s.agency_slug === agency.slug),
+    detainerStats: allDetainerStats[agency.slug] ?? null,
+    arrestStats:
+      (allArrestStats[agency.slug]?.total ?? 0) >= MIN_ARREST_STATS_TOTAL ? allArrestStats[agency.slug] : null,
   };
 };

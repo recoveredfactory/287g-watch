@@ -12,10 +12,18 @@
   import LegislationBadge from "$lib/components/LegislationBadge.svelte";
   import { SHOW_LEGISLATION_STANCE } from "$lib/features";
   import { ogImage } from "$lib/ogImage";
+  import Gloss from "$lib/components/Gloss.svelte";
+  import {
+    DETAINER_OUTCOME_ORDER,
+    DETAINER_OUTCOME_COLORS,
+    ARREST_CRIMINALITY_ORDER,
+    ARREST_CRIMINALITY_COLORS,
+  } from "$lib/deportationDataColors";
 
   export let data: PageData;
+  const seen = new Set<string>();
 
-  $: ({ abbr, stateName, agencies, stateMeta, snapshotDate, modelCounts, agencyTypeCounts, trendMonths, trend } = data);
+  $: ({ abbr, stateName, agencies, stateMeta, snapshotDate, modelCounts, agencyTypeCounts, trendMonths, trend, detainerStats, arrestStats } = data);
 
   // Shared by <title>/description and the og:/twitter: tags so a share preview
   // can never drift from the page itself.
@@ -390,6 +398,184 @@
         >{m.news_license_link()}</a>
         {m.news_license_suffix()}
       </p>
+    </section>
+  {/if}
+
+  <!-- ── ICE detainers (state rollup) ─────────────────────────────────────── -->
+  {#if detainerStats}
+    {@const years = Object.keys(detainerStats.by_year).sort()}
+    {@const maxYearCount = Math.max(...Object.values(detainerStats.by_year))}
+    {@const firstSignedDate = agencies.reduce((min, a) => (a.signed_date && (!min || a.signed_date < min) ? a.signed_date : min), null as string | null)}
+    <section class="mt-10">
+      <h2 class="font-serif text-lg font-bold text-ink-900 sm:text-xl">{m.state_detainers_heading()}</h2>
+      <p class="mt-2 text-ink-700">
+        <Gloss text={m.state_detainers_intro({ state: stateName })} {seen} />
+      </p>
+      <p class="mt-1 text-sm text-ink-500">
+        {m.agency_detainers_source_dek()}
+        <a
+          href="https://deportationdata.org"
+          target="_blank"
+          rel="noreferrer"
+          class="font-semibold no-underline hover:underline"
+        >{m.agency_detainers_source_short()}</a>.
+      </p>
+
+      <p class="mt-4 font-serif text-3xl font-bold text-ink-900">
+        {intFmt.format(detainerStats.total)}
+        <span class="text-base font-normal text-ink-500">
+          {detainerStats.total === 1 ? m.state_detainers_total_label_one() : m.state_detainers_total_label_other()}
+        </span>
+      </p>
+      <p class="text-xs text-ink-500">{m.agency_detainers_since()}</p>
+
+      <div class="mt-4 flex items-end gap-2">
+        {#each years as year}
+          {@const yearOutcomes = detainerStats.by_year_outcome?.[year]}
+          {@const count = detainerStats.by_year[year]}
+          {@const barHeight = maxYearCount > 0 ? Math.max(Math.round((count / maxYearCount) * 44), 3) : 3}
+          <div class="flex w-12 flex-col items-center gap-1">
+            <span class="font-mono text-[11px] tabular-nums text-ink-700">{intFmt.format(count)}</span>
+            {#if yearOutcomes && count > 0}
+              <div class="flex w-full flex-col-reverse overflow-hidden rounded-t-sm opacity-70" style="height: {barHeight}px;">
+                {#each DETAINER_OUTCOME_ORDER as outcome}
+                  {@const segCount = yearOutcomes[outcome]}
+                  {#if segCount > 0}
+                    <div style="height: {(segCount / count) * 100}%; background: {DETAINER_OUTCOME_COLORS[outcome]};"></div>
+                  {/if}
+                {/each}
+              </div>
+            {:else}
+              <div class="w-full rounded-t-sm opacity-70" style="height: {barHeight}px; background: {MODEL_COLORS['Task Force Model']};"></div>
+            {/if}
+            <span class="font-mono text-[11px] text-ink-500">{year}</span>
+          </div>
+        {/each}
+      </div>
+
+      <div class="mt-5 flex flex-wrap gap-x-4 gap-y-1.5 text-sm">
+        {#if detainerStats.by_outcome.booked}
+          <span class="text-ink-700"><span class="font-semibold text-ink-900">{intFmt.format(detainerStats.by_outcome.booked)}</span> {m.agency_detainers_outcome_booked()}</span>
+        {/if}
+        {#if detainerStats.by_outcome.released}
+          <span class="text-ink-700"><span class="font-semibold text-ink-900">{intFmt.format(detainerStats.by_outcome.released)}</span> {m.agency_detainers_outcome_released()}</span>
+        {/if}
+        {#if detainerStats.by_outcome.pending}
+          <span class="text-ink-500"><span class="font-semibold">{intFmt.format(detainerStats.by_outcome.pending)}</span> {m.agency_detainers_outcome_pending()}</span>
+        {/if}
+      </div>
+
+      {#if detainerStats.topAgencies.length > 0}
+        <div class="mt-5">
+          <p class="text-xs font-semibold uppercase tracking-wider text-ink-500">{m.state_detainers_top_agencies_heading()}</p>
+          {#if firstSignedDate}
+            <p class="mt-0.5 text-xs text-ink-500">{m.state_detainers_top_agencies_since({ date: dateFmt.format(new Date(firstSignedDate + "T00:00:00")) })}</p>
+          {/if}
+          <ol class="mt-2 divide-y overflow-hidden rounded-lg border" style="border-color: var(--color-paper-200);">
+            {#each detainerStats.topAgencies as top, i (top.slug)}
+              <li>
+                <a
+                  href={localizeHref(`/agency/${top.slug}`)}
+                  class="flex items-center gap-3 px-4 py-2.5 no-underline hover:bg-paper-100"
+                >
+                  <span class="w-5 shrink-0 font-mono text-xs tabular-nums text-ink-500">{i + 1}</span>
+                  <span class="min-w-0 flex-1 truncate text-sm font-semibold text-ink-900">{top.name}</span>
+                  <span class="shrink-0 font-mono text-xs tabular-nums text-ink-700">{intFmt.format(top.total)}</span>
+                </a>
+              </li>
+            {/each}
+          </ol>
+        </div>
+      {/if}
+
+      <p class="mt-4 text-xs italic leading-relaxed text-ink-500">{m.agency_detainers_disclaimer()}</p>
+    </section>
+  {/if}
+
+  <!-- ── ICE arrests (state rollup) ───────────────────────────────────────── -->
+  {#if arrestStats}
+    {@const arrestYears = Object.keys(arrestStats.by_year).sort()}
+    {@const maxArrestYearCount = Math.max(...Object.values(arrestStats.by_year))}
+    <section class="mt-10">
+      <h2 class="font-serif text-lg font-bold text-ink-900 sm:text-xl">{m.state_arrests_heading()}</h2>
+      <p class="mt-2 text-ink-700">
+        <Gloss text={m.state_arrests_intro({ state: stateName })} {seen} />
+      </p>
+      <p class="mt-1 text-sm text-ink-500">
+        {m.agency_detainers_source_dek()}
+        <a
+          href="https://deportationdata.org"
+          target="_blank"
+          rel="noreferrer"
+          class="font-semibold no-underline hover:underline"
+        >{m.agency_detainers_source_short()}</a>.
+      </p>
+
+      <p class="mt-4 font-serif text-3xl font-bold text-ink-900">
+        {intFmt.format(arrestStats.total)}
+        <span class="text-base font-normal text-ink-500">
+          {arrestStats.total === 1 ? m.state_arrests_total_label_one() : m.state_arrests_total_label_other()}
+        </span>
+      </p>
+      <p class="text-xs text-ink-500">{m.agency_arrests_since()}</p>
+
+      <div class="mt-4 flex items-end gap-2">
+        {#each arrestYears as year}
+          {@const yearCriminalities = arrestStats.by_year_criminality?.[year]}
+          {@const count = arrestStats.by_year[year]}
+          {@const barHeight = maxArrestYearCount > 0 ? Math.max(Math.round((count / maxArrestYearCount) * 44), 3) : 3}
+          <div class="flex w-12 flex-col items-center gap-1">
+            <span class="font-mono text-[11px] tabular-nums text-ink-700">{intFmt.format(count)}</span>
+            {#if yearCriminalities && count > 0}
+              <div class="flex w-full flex-col-reverse overflow-hidden rounded-t-sm opacity-70" style="height: {barHeight}px;">
+                {#each ARREST_CRIMINALITY_ORDER as criminality}
+                  {@const segCount = yearCriminalities[criminality]}
+                  {#if segCount > 0}
+                    <div style="height: {(segCount / count) * 100}%; background: {ARREST_CRIMINALITY_COLORS[criminality]};"></div>
+                  {/if}
+                {/each}
+              </div>
+            {:else}
+              <div class="w-full rounded-t-sm opacity-70" style="height: {barHeight}px; background: {MODEL_COLORS['Warrant Service Officer']};"></div>
+            {/if}
+            <span class="font-mono text-[11px] text-ink-500">{year}</span>
+          </div>
+        {/each}
+      </div>
+
+      <div class="mt-5 flex flex-wrap gap-x-4 gap-y-1.5 text-sm">
+        {#if arrestStats.by_criminality.convicted}
+          <span class="text-ink-700"><span class="font-semibold text-ink-900">{intFmt.format(arrestStats.by_criminality.convicted)}</span> {m.agency_arrests_criminality_convicted()}</span>
+        {/if}
+        {#if arrestStats.by_criminality.pending_charges}
+          <span class="text-ink-700"><span class="font-semibold text-ink-900">{intFmt.format(arrestStats.by_criminality.pending_charges)}</span> {m.agency_arrests_criminality_pending()}</span>
+        {/if}
+        {#if arrestStats.by_criminality.other}
+          <span class="text-ink-500"><span class="font-semibold">{intFmt.format(arrestStats.by_criminality.other)}</span> {m.agency_arrests_criminality_other()}</span>
+        {/if}
+      </div>
+
+      {#if arrestStats.topAgencies.length > 0}
+        <div class="mt-5">
+          <p class="text-xs font-semibold uppercase tracking-wider text-ink-500">{m.state_arrests_top_agencies_heading()}</p>
+          <ol class="mt-2 divide-y overflow-hidden rounded-lg border" style="border-color: var(--color-paper-200);">
+            {#each arrestStats.topAgencies as top, i (top.slug)}
+              <li>
+                <a
+                  href={localizeHref(`/agency/${top.slug}`)}
+                  class="flex items-center gap-3 px-4 py-2.5 no-underline hover:bg-paper-100"
+                >
+                  <span class="w-5 shrink-0 font-mono text-xs tabular-nums text-ink-500">{i + 1}</span>
+                  <span class="min-w-0 flex-1 truncate text-sm font-semibold text-ink-900">{top.name}</span>
+                  <span class="shrink-0 font-mono text-xs tabular-nums text-ink-700">{intFmt.format(top.total)}</span>
+                </a>
+              </li>
+            {/each}
+          </ol>
+        </div>
+      {/if}
+
+      <p class="mt-4 text-xs italic leading-relaxed text-ink-500">{m.agency_arrests_disclaimer()}</p>
     </section>
   {/if}
 

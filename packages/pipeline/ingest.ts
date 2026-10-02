@@ -22,6 +22,7 @@ import { fileURLToPath } from 'node:url'
 import slugifyLib from 'slugify'
 import { read as xlsxRead, utils as xlsxUtils } from 'xlsx'
 import { parse as parseYaml } from 'yaml'
+import { editDistance } from './lib/editDistance'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const OUT_DIR = resolve(__dirname, '../web/static/data/dist')
@@ -333,20 +334,6 @@ function distinctiveTokens(name: string): Set<string> {
 }
 const sameSet = (a: Set<string>, b: Set<string>): boolean =>
   a.size === b.size && [...a].every((x) => b.has(x))
-
-// Levenshtein edit distance (small strings; iterative two-row would be leaner
-// but agency names are short enough that the full matrix is fine).
-function editDistance(a: string, b: string): number {
-  const m = a.length, n = b.length
-  if (!m) return n
-  if (!n) return m
-  const d: number[][] = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)])
-  for (let j = 0; j <= n; j++) d[0][j] = j
-  for (let i = 1; i <= m; i++)
-    for (let j = 1; j <= n; j++)
-      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1))
-  return d[m][n]
-}
 
 type GHEntry = { name: string; type: string; url: string }
 
