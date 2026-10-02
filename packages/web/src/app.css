@@ -220,7 +220,7 @@
   }
 
   .model-badge {
-    @apply inline-block rounded px-2 py-0.5 text-xs font-semibold uppercase tracking-wide;
+    @apply inline-block rounded px-2 py-0.5 text-xs font-semibold tracking-wide;
   }
 
   .model-badge--jail {
