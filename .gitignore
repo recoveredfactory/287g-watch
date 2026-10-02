@@ -12,6 +12,18 @@ packages/pipeline/__pycache__
 packages/pipeline/.cache
 packages/pipeline/.venv
 packages/pipeline/data/csllea_*.tsv
+# ICE 287(g) Encounter Report source PDFs — not committed yet (see success
+# stories feature plan). Conventional location so the extraction script's
+# default path is correct once these are committed.
+packages/pipeline/data/success_stories_pdfs/
+# Pipeline output, never committed. Detainer/arrest stats are produced in CI
+# by data-refresh.yml (rebuilt weekly, carried forward from the live site
+# otherwise). Success stories are local-only until their source PDFs are
+# committed; success_stories_overrides.yaml (human corrections) stays tracked.
+packages/pipeline/data/detainer_stats.json
+packages/pipeline/data/arrest_stats.json
+packages/pipeline/data/success_stories.json
+packages/pipeline/data/success_stories_raw.json
 *.pyc
 .DS_Store
 

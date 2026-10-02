@@ -24,6 +24,8 @@ const DIST = resolve(__dirname, '../static/data/dist')
 
 const FILES = [
   ['../../pipeline/data/muckrock_snapshot.json', 'muckrock_requests.json'],
+  ['../../pipeline/data/detainer_stats.json', 'detainer_stats.json'],
+  ['../../pipeline/data/arrest_stats.json', 'arrest_stats.json'],
 ]
 
 mkdirSync(DIST, { recursive: true })

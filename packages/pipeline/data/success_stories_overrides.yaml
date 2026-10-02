@@ -1,0 +1,30 @@
+# Success-stories human-review overlay
+#
+# Hand-maintained. Applied on top of the auto-matcher's output
+# (success_stories_raw.json) by build-success-stories.ts. Keys are story
+# ids (stable per source_pdf + index-within-pdf, survives extraction-regex
+# tweaks as long as paragraph order/count per PDF doesn't change).
+#
+# Use this to:
+#   - Correct a wrong or low-confidence agency match (set agency_slug).
+#   - Permanently exclude a story that extraction garbled beyond repair, or
+#     that shouldn't publish for any other reason (set exclude: true).
+#
+# A story only ever reaches the public site if it's exact/high confidence
+# OR has an agency_slug set here — see build-success-stories.ts's publish
+# policy. Run `pnpm -F pipeline match:success-stories -- --report` to see
+# the current low/none review queue this file is meant to resolve.
+#
+# Example:
+#
+# "3f9a1b2c4d5e6f70":
+#   agency_slug: "gwinnett-county-sheriffs-office-ga"
+#   reviewed_by: "David"
+#   reviewed_date: "2026-09-25"
+#   note: >-
+#     Auto-matcher found no candidate in the active roster — Gwinnett
+#     County left the 287(g) program and is in terminated_agencies.json,
+#     which the matcher does search; verified this is the same agency.
+#   exclude: false
+
+{}

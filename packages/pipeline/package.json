@@ -13,10 +13,17 @@
     "build:agreement-index": "tsx build-agreement-index.ts",
     "scrape:contacts": "tsx scrape-contacts.ts",
     "extract:moa-signers": "tsx extract-moa-signers.ts",
+    "extract:success-stories": "tsx extract-success-stories.ts",
+    "match:success-stories": "tsx match-success-stories.ts",
+    "build:success-stories": "tsx build-success-stories.ts",
+    "build:detainer-stats": "tsx build-detainer-stats.ts",
+    "build:arrest-stats": "tsx build-arrest-stats.ts",
     "check:agreements": "tsx check-agreements.ts"
   },
   "dependencies": {
     "adm-zip": "^0.5.16",
+    "hyparquet": "^1.31.1",
+    "hyparquet-compressors": "^1.1.2",
     "slugify": "^1.6.6",
     "xlsx": "0.18.5",
     "yaml": "^2.6.0"
