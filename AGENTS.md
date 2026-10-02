@@ -62,10 +62,10 @@ When something breaks, report what you measured, not a story that fits the times
 
 After any change to `packages/pipeline/ingest.ts`, run `pnpm pipeline` and verify the output makes sense:
 
-- Active agency count should be in the range of 1,750–1,900 (1,846 as of the 2026-07-21 snapshot). `agency_index.json` is **active-only**; departures live in `terminated_agencies.json` (86)
+- Active agency count should be in the range of 2,100–2,400 (2,231 as of the 2026-10-01 snapshot). `agency_index.json` is **active-only**; departures live in `terminated_agencies.json` (112)
 - All or nearly all agencies should have a `signed_date` (currently 100%)
-- Geocoded percentage should be above 90% (95.6% as of 2026-07-21)
-- Model breakdown should show Task Force as the plurality (1,465 / 533 WSO / 179 JEM)
+- Geocoded percentage should be above 90% (95.4% as of 2026-10-01; most of the rest are statewide agencies kept off-map by design)
+- Model breakdown should show Task Force as the plurality (1,855 TFM / 566 WSO / 184 JEM)
 
 Update these figures when they drift rather than working around them — a sanity range that lags reality trains everyone to ignore it.
 
