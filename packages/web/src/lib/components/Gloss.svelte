@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { processGloss } from "$lib/glossary/process";
+  import { processGloss, processGlossHtml } from "$lib/glossary/process";
   import { TERMS_MAP, termSlug } from "$lib/glossary/terms";
 
   export let text: string;
@@ -9,12 +9,17 @@
   // term page-wide rather than per-block. Omit for per-block first-mention
   // (the default).
   export let seen: Set<string> | undefined = undefined;
+  // Set when `text` is already-rendered HTML (e.g. the AI-generated state
+  // news tldr_html/body_html), not plain text — switches to the HTML-safe
+  // matcher so glossing can't corrupt existing tags or nest inside an
+  // existing <a>. The hover/popover behavior below is identical either way.
+  export let html = false;
 
   let container: HTMLElement;
   let popover = { visible: false, term: "", def: "", slug: "", key: "", x: 0, y: 0 };
   let hideTimer: ReturnType<typeof setTimeout>;
 
-  $: processed = processGloss(text, seen);
+  $: processed = html ? processGlossHtml(text, seen) : processGloss(text, seen);
 
   function getEntry(el: HTMLElement) {
     const key = decodeURIComponent(el.dataset.term ?? "").toLowerCase();

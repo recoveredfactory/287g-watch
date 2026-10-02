@@ -4,8 +4,8 @@
 // Templates baked (all share the homepage map snapshot as background):
 //   static/og/home.png          launch tagline
 //   static/og/glossary.png      "GLOSSARY" — 287(g) terms explained
-//   static/og/about.png         "ABOUT" — About 287(g) Watch
-//   static/og/methodology.png   "METHODOLOGY" — How we built this
+//   static/og/about.png         "ABOUT" — About 287(g) Watch (now also covers
+//                                methodology, merged onto the same page)
 //   static/og/model/{slug}.png  per-program-model (jail, taskforce, wso)
 //   static/og/agency/{slug}.png per-agency (name + city/state + model accent)
 //
@@ -390,10 +390,12 @@ async function bakeCard(outPath, fields) {
 
 // ---------- model metadata ----------
 
+// KEEP IN SYNC WITH packages/web/src/lib/colors.ts (MODEL_COLORS) — Satori
+// bake scripts can't import the .ts file directly, so this is a duplicate.
 const MODEL_COLORS = {
-  "Jail Enforcement Model": "#BE6079",
-  "Task Force Model": "#3C97E2",
-  "Warrant Service Officer": "#5E9148",
+  "Jail Enforcement Model": "#C87899",
+  "Task Force Model": "#59A7E6",
+  "Warrant Service Officer": "#70A263",
 };
 const MODEL_SLUG = {
   "Jail Enforcement Model": "jail",
@@ -429,9 +431,9 @@ const STR = {
     home: "Every active agreement between local police and ICE.",
     glossary: "287(g) terms, explained.",
     about: "Why we built 287(g) Watch.",
-    methodology: "How we built this dataset.",
-    "use-the-map": "Free videos and images about the growth of 287(g).",
-    states: "State-by-state 287(g) news summaries and data.",
+    downloads: "Free videos and images about the growth of 287(g).",
+    explore: "Search and compare every state and agency in the program.",
+    timeline: "Month-by-month growth of ICE's 287(g) program, nationally.",
     modelDef: MODEL_DEFINITIONS,
     signed: "Signed",
     also: "Also",
@@ -442,9 +444,9 @@ const STR = {
     home: "Cada acuerdo activo entre la policía local e ICE.",
     glossary: "Términos de 287(g), explicados.",
     about: "Por qué creamos 287(g) Watch.",
-    methodology: "Cómo construimos estos datos.",
-    "use-the-map": "Videos e imágenes gratuitos sobre el crecimiento de 287(g).",
-    states: "Noticias y datos de 287(g), estado por estado.",
+    downloads: "Videos e imágenes gratuitos sobre el crecimiento de 287(g).",
+    explore: "Busca y compara cada estado y agencia del programa.",
+    timeline: "El crecimiento mes a mes del programa 287(g) de ICE, a nivel nacional.",
     modelDef: MODEL_DEFINITIONS_ES,
     signed: "Firmado",
     also: "También",
@@ -477,7 +479,7 @@ async function bakeHome(locale) {
 }
 
 async function bakePages(locale) {
-  for (const slug of ["glossary", "about", "methodology", "use-the-map", "states"]) {
+  for (const slug of ["glossary", "about", "downloads", "explore", "timeline"]) {
     await bakeCard(path.join(OG_DIR, locale, `${slug}.png`), { title: STR[locale][slug] });
     console.log(`✓ ${locale}/${slug}.png`);
   }

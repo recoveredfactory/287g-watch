@@ -92,31 +92,31 @@
   // shape instead of clipping the edges agency points don't reach.
   let statesGeoJson: { features: any[] } | null = null;
 
-  // Dark is the only palette — steely analytical mode, replaces the prior
-  // slate/dark toggle so map tone reads consistently across the site.
-  // Land is lifted to a readable slate (sea stays near-black) so the country
-  // shape separates and the dots read against a lighter ground — the OG cards'
-  // "treatment D" intent (linear(1.7,-8)) ported to the live style, without
-  // touching the dots themselves. See #118, #148.
+  // Light "documentary editorial" palette (kept as raw hex since MapLibre
+  // paint expressions can't read CSS custom properties; see app.css's
+  // @theme block for the rationale).
   const C = {
-    bg: "#0c1117",
-    state: "#212e3f",
-    line: "#42566c",
+    bg: "#BFC6CF",
+    state: "#F8F8F9",
+    line: "#656C75",
     lineWidth: 0.7,
-    county: "#283546",
-    roadCasing: "#231f1c",
-    roadFill: "#4f463f",
-    roadMajorCasing: "#221d1a",
-    roadMajorFill: "#4a4139",
-    roadMedium: "#231f1c",
-    dotStroke: "rgba(255,255,255,0.18)",
-    dotStrokeWidth: 0.25,
-    text: "#c2cad4",
-    textHalo: "rgba(8,12,18,0.9)",
+    county: "#DADEE2",
+    roadCasing: "#FDFDFD",
+    roadFill: "#7D8A99",
+    roadMajorCasing: "#FDFDFD",
+    roadMajorFill: "#6A798B",
+    roadMedium: "#7D8A99",
+    dotStroke: "rgba(253,253,253,0.9)",
+    dotStrokeWidth: 0.9,
+    text: "#393F46",
+    textHalo: "rgba(253,253,253,0.9)",
     // Focus mode (focusSelected): the selected state's fill is lifted above the
-    // base C.state and ringed with an accent border so it reads as the subject.
-    stateHighlight: "#34475e",
-    highlightLine: "#aab8c9",
+    // base C.state and ringed with a dark-grey accent border (matches
+    // AgencyMap's own state-highlight border below) so it reads as the
+    // subject without competing with the rose accent used for actual
+    // notices/CTAs elsewhere on the site.
+    stateHighlight: "#FDFDFD",
+    highlightLine: "#393F46",
     highlightLineWidth: 1.6,
   };
 

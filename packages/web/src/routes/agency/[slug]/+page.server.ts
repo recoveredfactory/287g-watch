@@ -1,5 +1,6 @@
 import { error, redirect } from "@sveltejs/kit";
 import { AGENCY_SLUG_REDIRECTS } from "$lib/agencyRedirects";
+import { resolveMoaUrl } from "$lib/moaDocuments";
 import type { Agency } from "../../+page.server";
 
 export type MuckrockRequest = {
@@ -25,6 +26,8 @@ export type MuckrockSnapshot = {
 export type AgencyPageData = {
   agency: Agency;
   agencies: Agency[];
+  officerCtRank: number;
+  officerCtRankTotal: number;
   muckrock: {
     requests: MuckrockRequest[];
     multirequest: MuckrockSnapshot["multirequest"];
@@ -76,9 +79,31 @@ export const load = async ({ fetch, params, url }): Promise<AgencyPageData> => {
     console.warn(`muckrock snapshot unreadable, rendering without it: ${e}`);
   }
 
+  // Rank by officer count among active agencies — same sort /states uses for
+  // its own rank numbers (officerCt desc, then name), so the figure matches
+  // what /states shows. 0 (not found) for terminated/pending agencies, which
+  // aren't in the active `agencies` list being ranked.
+  const officerCtRanked = [...agencies].sort(
+    (a, b) => (b.lee?.officer_ct ?? 0) - (a.lee?.officer_ct ?? 0) || a.name.localeCompare(b.name),
+  );
+  const officerCtRank = officerCtRanked.findIndex((a) => a.slug === agency.slug) + 1;
+  const officerCtRankTotal = officerCtRanked.length;
+
+  // ~10% of agencies have no structured `agreements[]`, so their only MOA
+  // link is this flat field — which upstream is a GitHub directory listing,
+  // not a document. Resolved server-side (the lookup is ~540KB, no reason
+  // to ship it to the client) so the template can keep reading
+  // agency.moa_url exactly as before. Agencies WITH structured agreements
+  // already carry correct per-model /blob/ links from the pipeline — this
+  // is a no-op passthrough for those (a /blob/ URL is never a key in the
+  // /tree/-keyed lookup).
+  const agencyResolved: Agency = { ...agency, moa_url: resolveMoaUrl(agency.moa_url, agency.primary_model) };
+
   return {
-    agency,
+    agency: agencyResolved,
     agencies,
+    officerCtRank,
+    officerCtRankTotal,
     muckrock: {
       requests: muckrock?.requests?.filter((r) => r.agency_slug === agency.slug) ?? [],
       multirequest: muckrock?.multirequest ?? {

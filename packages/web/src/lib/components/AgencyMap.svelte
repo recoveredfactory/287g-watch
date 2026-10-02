@@ -12,26 +12,27 @@
   // would draw foreign tiles. Affects 5 agencies total (AK, GU, MP).
   const INSET_STATES = new Set(["AK", "HI", "PR", "VI", "GU", "MP", "AS"]);
 
-  // Dark is the only palette — keeps map tone consistent with the homepage.
-  // The agency view has its own spec because it draws non-current states
-  // distinctly (so the current state pops without dimming neighbors as harshly).
+  // Light "documentary editorial" palette, kept consistent with the
+  // homepage map. The agency view has its own spec because it draws
+  // non-current states distinctly (so the current state pops without
+  // dimming neighbors as harshly).
   const p = {
-    bg: "#0c1117",
-    stateBg: "#161e27",
-    stateHighlight: "#27323e",
-    stateLines: "#42566c",
+    bg: "#BFC6CF",
+    stateBg: "#D4D8DD",
+    stateHighlight: "#FDFDFD",
+    stateLines: "#656C75",
     stateLineWidth: 0.7,
-    stateHighlightBorder: "#94a3b8",
+    stateHighlightBorder: "#393F46",
     stateHighlightBorderWidth: 1.8,
-    county: "#1c242e",
-    roadCasing: "#231f1c",
-    roadFill: "#4f463f",
-    roadMedium: "#231f1c",
-    haloFill: "#e8ecf2",
-    dotStroke: "rgba(255,255,255,0.18)",
-    dotStrokeWidth: 0.25,
-    text: "#c2cad4",
-    textHalo: "rgba(8,12,18,0.9)",
+    county: "#DADEE2",
+    roadCasing: "#FDFDFD",
+    roadFill: "#7D8A99",
+    roadMedium: "#7D8A99",
+    haloFill: "#FDFDFD",
+    dotStroke: "rgba(253,253,253,0.55)",
+    dotStrokeWidth: 0.35,
+    text: "#393F46",
+    textHalo: "rgba(253,253,253,0.9)",
   };
 
   export let lat: number | null | undefined = undefined;
