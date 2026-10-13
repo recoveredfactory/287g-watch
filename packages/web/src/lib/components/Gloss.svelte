@@ -1,7 +1,9 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { processGloss } from "$lib/glossary/process";
+  import { processGloss, processGlossHtml } from "$lib/glossary/process";
   import { TERMS_MAP, termSlug } from "$lib/glossary/terms";
+  import { localizeHref } from "$lib/localizeHref";
+  import { m } from "$lib/paraglide/messages.js";
 
   export let text: string;
   // Optional shared "already glossed" tracker. Pass a single Set to multiple
@@ -9,12 +11,17 @@
   // term page-wide rather than per-block. Omit for per-block first-mention
   // (the default).
   export let seen: Set<string> | undefined = undefined;
+  // Set when `text` is already-rendered HTML (e.g. the AI-generated state
+  // news tldr_html/body_html), not plain text — switches to the HTML-safe
+  // matcher so glossing can't corrupt existing tags or nest inside an
+  // existing <a>. The hover/popover behavior below is identical either way.
+  export let html = false;
 
   let container: HTMLElement;
   let popover = { visible: false, term: "", def: "", slug: "", key: "", x: 0, y: 0 };
   let hideTimer: ReturnType<typeof setTimeout>;
 
-  $: processed = processGloss(text, seen);
+  $: processed = html ? processGlossHtml(text, seen) : processGloss(text, seen);
 
   function getEntry(el: HTMLElement) {
     const key = decodeURIComponent(el.dataset.term ?? "").toLowerCase();
@@ -49,16 +56,21 @@
   }
 
   onMount(() => {
+    // Touch browsers emit a compatibility mouseover and focus before the click,
+    // which would open the popover and make the first tap follow the link.
+    const canHover = window.matchMedia("(hover: hover)").matches;
     const over = (e: MouseEvent) => {
+      if (!canHover) return;
       const el = (e.target as HTMLElement).closest<HTMLElement>(".gloss-term");
       if (el) openFor(el);
     };
     const out = (e: MouseEvent) => {
+      if (!canHover) return;
       if ((e.target as HTMLElement).closest(".gloss-term")) scheduleHide();
     };
     const focusin = (e: FocusEvent) => {
       const el = e.target as HTMLElement;
-      if (el.classList.contains("gloss-term")) openFor(el);
+      if (el.classList.contains("gloss-term") && el.matches(":focus-visible")) openFor(el);
     };
     const focusout = (e: FocusEvent) => {
       if ((e.target as HTMLElement).classList.contains("gloss-term")) scheduleHide();
@@ -111,8 +123,8 @@
   >
     <p class="gloss-popover-term">{popover.term}</p>
     <p class="gloss-popover-def">{popover.def}</p>
-    <a href="/glossary#term-{popover.slug}" on:click={close} class="gloss-popover-link">
-      Full entry →
+    <a href={localizeHref(`/glossary#term-${popover.slug}`)} on:click={close} class="gloss-popover-link">
+      {m.gloss_popover_full_entry()} →
     </a>
   </div>
 {/if}

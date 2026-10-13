@@ -1,6 +1,7 @@
 import { error } from "@sveltejs/kit";
 import type { Agency } from "../../+page.server";
 import { GLOSSARY_TERMS } from "$lib/glossary/terms";
+import { readStaticData } from "$lib/server/staticData";
 
 const SLUG_TO_MODEL: Record<string, string> = {
   jail: "Jail Enforcement Model",
@@ -13,19 +14,18 @@ export type ModelPageData = {
   slug: string;
   definition: string;
   seeAlso: string[];
-  agencies: Agency[];
+  agencyCount: number;
   snapshotDate: string | null;
   stateCount: number;
   allModelCounts: Record<string, number>;
 };
 
-export const load = async ({ fetch, params }): Promise<ModelPageData> => {
+export const load = async ({ params }): Promise<ModelPageData> => {
   const modelName = SLUG_TO_MODEL[params.slug];
   if (!modelName) throw error(404, `Unknown model: ${params.slug}`);
 
-  const res = await fetch("/data/dist/agency_index.json");
-  if (!res.ok) throw error(503, "Data unavailable");
-  const all: Agency[] = await res.json();
+  const all = await readStaticData<Agency[]>("agency_index.json");
+  if (!all) throw error(503, "Data unavailable");
 
   const agencies = all.filter((a) => a.models.includes(modelName));
 
@@ -52,7 +52,7 @@ export const load = async ({ fetch, params }): Promise<ModelPageData> => {
     slug: params.slug,
     definition: term?.definition ?? "",
     seeAlso: term?.seeAlso ?? [],
-    agencies,
+    agencyCount: agencies.length,
     snapshotDate,
     stateCount,
     allModelCounts,

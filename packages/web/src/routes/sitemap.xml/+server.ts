@@ -2,10 +2,21 @@ import type { RequestHandler } from "./$types";
 import type { Agency } from "../+page.server";
 import { locales, baseLocale } from "$lib/paraglide/runtime";
 import { NAVIGABLE_STATES } from "$lib/states";
+import { readStaticData } from "$lib/server/staticData";
 
 export const prerender = true;
 
-const STATIC_PATHS = ["/", "/states", "/about", "/glossary", "/methodology", "/model/jail", "/model/taskforce", "/model/wso"];
+const STATIC_PATHS = [
+  "/",
+  "/states",
+  "/downloads",
+  "/timeline",
+  "/about",
+  "/glossary",
+  "/model/jail",
+  "/model/taskforce",
+  "/model/wso",
+];
 
 const xmlEscape = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
@@ -30,22 +41,19 @@ const urlEntry = (siteUrl: string, path: string, lastmod: string | null): string
     .join("\n");
 };
 
-export const GET: RequestHandler = async ({ fetch, url }) => {
+export const GET: RequestHandler = async ({ url }) => {
   const siteUrl = (import.meta.env.PUBLIC_SITE_URL ?? "https://287g.recoveredfactory.net").replace(/\/$/, "");
 
   let agencies: Agency[] = [];
   let snapshotDate: string | null = null;
   try {
-    const res = await fetch("/data/dist/agency_index.json");
-    if (res.ok) {
-      agencies = await res.json();
-      snapshotDate =
-        agencies
-          .map((a) => (a as any).snapshot_date as string | undefined)
-          .filter(Boolean)
-          .sort()
-          .at(-1) ?? null;
-    }
+    agencies = (await readStaticData<Agency[]>("agency_index.json")) ?? [];
+    snapshotDate =
+      agencies
+        .map((a) => (a as any).snapshot_date as string | undefined)
+        .filter(Boolean)
+        .sort()
+        .at(-1) ?? null;
   } catch {}
 
   const entries: string[] = [];

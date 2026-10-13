@@ -203,7 +203,7 @@ for (const variant of VARIANT_LIST) {
 
   if (!KEEP_FRAMES) await rm(FRAMES_DIR, { recursive: true, force: true });
 
-  // The card is the /use-the-map "network expansion" download cut. Emit it under
+  // The card is the /downloads "network expansion" download cut. Emit it under
   // the asset-flow naming (`expansion-<lang>.<ext>` in OUT_DIR) so
   // publish-map-assets.mjs picks it up alongside map / map-trend. EN and ES
   // coexist because the name carries the lang; the variant-named

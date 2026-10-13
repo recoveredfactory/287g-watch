@@ -6,7 +6,7 @@ If you discover a security issue in 287(g) Explorer — the website, the data
 pipeline, or the deploy infrastructure — please report it privately rather than
 opening a public issue.
 
-Email **davideads@grupovisual.org** with a description of the issue and, if
+Email **287g@grupovisual.org** with a description of the issue and, if
 possible, steps to reproduce. We'll acknowledge your report and work with you on
 a fix and disclosure timeline.
 

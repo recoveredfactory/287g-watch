@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { PageData } from "./$types";
-  import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_DARK_COLORS, MODEL_SHORT, MODEL_MINI, MODEL_SLUG, MODEL_ORDER } from "$lib/colors";
-  import { STATE_NAMES, NAVIGABLE_STATES } from "$lib/states";
+  import { MODEL_COLORS, MODEL_TEXT_COLORS, MODEL_DARK_COLORS, MODEL_SLUG, MODEL_ORDER, MODEL_SHORT } from "$lib/colors";
+  import { STATE_NAMES } from "$lib/states";
   import NationalMap from "$lib/components/NationalMap.svelte";
   import MapTimelineScrubber from "$lib/components/MapTimelineScrubber.svelte";
   import TrendCharts from "$lib/components/TrendCharts.svelte";
@@ -10,13 +10,15 @@
   import { onMount } from "svelte";
   import { tweened } from "svelte/motion";
   import { cubicOut } from "svelte/easing";
-  import { localizeHref, getLocale } from "$lib/paraglide/runtime";
-  import { buildTimelineModel, activeCountAt, coveredPopAt, overlayMonthLabel, TIMELINE_START_IDX } from "$lib/timelineCursor";
+  import { getLocale } from "$lib/paraglide/runtime";
+  import { localizeHref } from "$lib/localizeHref";
+  import { activeCountAt, coveredPopAt, overlayMonthLabel, TIMELINE_START_IDX } from "$lib/timelineCursor";
+  import { loadMapPoints, loadTerminatedPoints } from "$lib/mapPoints";
+  import type { MapPoint, TerminatedPoint } from "$lib/homeData.types";
   import { m } from "$lib/paraglide/messages.js";
   import Gloss from "$lib/components/Gloss.svelte";
   import { ogImage } from "$lib/ogImage";
   import { getCachedGeo } from "$lib/geo";
-  import { VirtualList } from "svelte-virtuallists";
 
   export let data: PageData;
 
@@ -27,12 +29,14 @@
     ? m.home_meta_description_with_count({ count: intFmt.format(data.agencyCountUnique) })
     : m.home_meta_description_no_data();
 
-  const intFmt = new Intl.NumberFormat();
-  const popFmt = new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 });
+  const localeTag = getLocale() === "es" ? "es-MX" : "en-US";
+  const intFmt = new Intl.NumberFormat(localeTag);
+  const dateFmt = new Intl.DateTimeFormat(localeTag, { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
+  const popFmt = new Intl.NumberFormat(localeTag, { notation: "compact", maximumFractionDigits: 1 });
   // Overlay-only: round to the nearest million. The tweened value updates
   // many times per second; one-decimal precision makes the trailing digit
   // flicker. Whole-million steps still feel like a counter ticking up.
-  const popFmtOverlay = new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 0 });
+  const popFmtOverlay = new Intl.NumberFormat(localeTag, { notation: "compact", maximumFractionDigits: 0 });
 
   // ── Timeline cursor (experimental, #76) ────────────────────────────────────
   // Continuous fractional-month index relative to Jan 2025 (idx 0). The map
@@ -41,17 +45,17 @@
   // archived snapshot (#169), a clean pre-Trump baseline. The ORI-deduped
   // derivations and the at-cursor counts live in $lib/timelineCursor so the
   // /video/national route shares them verbatim and the numbers can't diverge.
-  $: model = buildTimelineModel(data.agencies, data.terminatedAgencies);
+  // The server builds the model (#308).
+  $: model = data.timeline;
   $: todayIdx = model.todayIdx;
   $: maxIdx = model.maxIdx;
-  // Statewide agencies (state police, corrections, etc.) are intentionally not
-  // plotted — a single dot would misrepresent a whole-state jurisdiction. We
-  // surface the count below the scrubber instead.
-  $: statewideCount = model.statewideCount;
   const minIdx = TIMELINE_START_IDX;
+  // cursorIdx stays a plain assignable var (not a `$:` derivation): the scrubber
+  // below binds it, and scripts/bake-map-video.mjs drives it frame-by-frame via
+  // window.__setCursor for the growth-animation video bake.
   let cursorIdx = NaN;
   $: if (Number.isNaN(cursorIdx) && Number.isFinite(maxIdx)) cursorIdx = maxIdx;
-  // Net active at the cursor (dips as departures cross), and local pop covered.
+  // Net active at the cursor, and local pop covered.
   $: countAtCursor = activeCountAt(model, cursorIdx);
   $: popAtCursor = coveredPopAt(model, cursorIdx);
 
@@ -70,9 +74,8 @@
   $: displayedCount.set(countAtCursor, bakeInstant ? { duration: 0 } : undefined);
   $: displayedPop.set(popAtCursor, bakeInstant ? { duration: 0 } : undefined);
 
-  // Card is a tap target: clicking it restarts the timeline animation from
-  // May 2025 so readers can replay the sweep without scrolling to the
-  // scrubber.
+  // The count card is a tap target: it restarts the sweep from the start so
+  // readers can replay it without scrolling to the scrubber.
   let scrubberRef: { restart: () => void } | null = null;
   const restartTimeline = () => scrubberRef?.restart();
 
@@ -80,24 +83,17 @@
   $: overlayDateLabel = overlayMonthLabel(
     cursorIdx,
     todayIdx,
-    getLocale() === "es" ? "es-MX" : "en-US",
+    localeTag,
   );
 
-  // ── Search + filter ────────────────────────────────────────────────────────
-  let searchQuery = "";
-  let activeModels: Set<string> = new Set();
+  // Highlighted/zoomed state on the map — set by the geo "Zoom to my state"
+  // button or a shared ?states= link. No longer paired with a browse/filter
+  // UI (that's /states now); this is purely the map's own state.
   let selectedStates: Set<string> = new Set();
-  let selectedYear = "";
-  let filterBarHeight = 0;
-  $: thTop = `calc(var(--site-header-height) + var(--staging-banner-height) + ${filterBarHeight}px)`;
 
   const ALL_MODELS = MODEL_ORDER;
 
   // ── URL state persistence ──────────────────────────────────────────────────
-  const SLUG_TO_MODEL = Object.fromEntries(
-    Object.entries(MODEL_SLUG).map(([full, slug]) => [slug, full])
-  );
-
   let urlSyncTimer: ReturnType<typeof setTimeout>;
   let mounted = false;
   let detectedState: string | null = null;
@@ -107,7 +103,34 @@
   // that field counts only local (County/Municipality) agencies, so a state
   // like MA whose only agreement is state-level (Dept. of Corrections) has
   // participating===0 yet is very much not 287(g)-free. See #138.
-  $: statesWithAnyAgreement = new Set(data.agencies.map((a) => a.state));
+  $: statesWithAnyAgreement = new Set(Object.keys(data.stateCounts));
+
+  // Top-of-page summary strip — moved here from /explore (the "most active
+  // this month" panel it replaced read as needless per feedback).
+  //
+  // "Participating agencies" and "Population covered" reuse the exact same
+  // ORI-deduped math as the map's own count-overlay (activeCountAt/
+  // coveredPopAt against `model`, the same TimelineModel the map builds) —
+  // NOT a raw agency count or stateMeta's population_served, which used
+  // to disagree with the map's numbers on this same page (a raw, non-deduped
+  // agency count and a different population source entirely). Evaluated at
+  // model.maxIdx specifically, not the live `cursorIdx`, so the strip always
+  // shows the true current total and doesn't wobble if someone scrubs the
+  // timeline elsewhere on the page.
+  $: statesWithAgencies = Object.keys(data.stateCounts).length;
+  $: totalAgencies = activeCountAt(model, model.maxIdx);
+  $: nationalPopulationServed = coveredPopAt(model, model.maxIdx) || null;
+  $: nationalLocalPopulation = Object.values(data.stateMeta).reduce((sum, s) => sum + (s.state_local_population ?? 0), 0) || null;
+
+  // Top states by NEW agreements in the trailing 30 days (built on the server).
+  $: topStatesByAgencyCount = data.topStates;
+
+  // The map's dots come from cached files shared with the state and agency maps
+  // (#308). It mounts once they're in, so its first idle (window.__mapReady,
+  // which the OG and video bakes wait on) already has every dot.
+  let mapPoints: { agencies: MapPoint[]; terminated: TerminatedPoint[] } | null = null;
+  // Which row's model breakdown is open — one at a time, click to toggle.
+  let expandedTopState: string | null = null;
 
   // Geo-aware participation callout. Renders once client-side geo resolves.
   // FL gets a distinct message because SB 168 (2019) mandates 287(g)
@@ -121,7 +144,7 @@
     // so link the name in both the "has agreements" and the "none" callout. (meta
     // exists only for the 50 states + DC, so detectedState here is always navigable.)
     const stateHref = localizeHref(`/state/${detectedState.toLowerCase()}`);
-    const linkedState = `<a href="${stateHref}" class="font-bold underline underline-offset-2 decoration-[#BE6079] hover:text-slate-900">${stateName}</a>`;
+    const linkedState = `<a href="${stateHref}" class="font-bold underline underline-offset-2 decoration-[#BE6079] hover:text-ink-900">${stateName}</a>`;
     if (!statesWithAnyAgreement.has(detectedState)) {
       return m.home_hero_state_callout_none({ state: linkedState });
     }
@@ -148,11 +171,7 @@
     clearTimeout(urlSyncTimer);
     urlSyncTimer = setTimeout(() => {
       const params = new URLSearchParams();
-      if (searchQuery.trim()) params.set("q", searchQuery.trim());
       if (selectedStates.size > 0) params.set("states", [...selectedStates].join(","));
-      if (selectedYear) params.set("year", selectedYear);
-      if (activeModels.size > 0)
-        params.set("models", [...activeModels].map((m) => MODEL_SLUG[m]).filter(Boolean).join(","));
       const qs = params.toString();
       history.replaceState(history.state, "", qs ? `?${qs}` : location.pathname);
     }, 300);
@@ -160,28 +179,33 @@
 
   // Only sync URL for user-initiated changes after mount. Initial-state setup
   // (URL params, geo default) runs inside onMount and intentionally skips sync.
-  $: { searchQuery; selectedStates; selectedYear; activeModels;
+  $: { selectedStates;
     if (mounted) scheduleUrlSync();
   }
 
   onMount(async () => {
+    Promise.all([
+      loadMapPoints(),
+      // Departures only show while the timeline is scrubbed, so the map doesn't
+      // wait on them: a failed fetch mounts it without the fade-outs.
+      loadTerminatedPoints().catch((e) => {
+        console.error(e);
+        return [];
+      }),
+    ]).then(([agencies, terminated]) => {
+      mapPoints = { agencies, terminated };
+    });
+
     const params = new URLSearchParams(location.search);
-    const q = params.get("q");
-    const models = params.get("models");
-    if (q) searchQuery = q;
     // Support both ?states=TX,FL (new) and legacy ?state=TX
     const statesParam = params.get("states") ?? params.get("state");
     if (statesParam) selectedStates = new Set(statesParam.split(",").filter(Boolean));
-    const year = params.get("year");
-    if (year) selectedYear = year;
-    if (models)
-      activeModels = new Set(models.split(",").map((s) => SLUG_TO_MODEL[s]).filter(Boolean));
 
     // Geo: detect the user's state for the hero callout (incl. the "no 287(g)
-    // here" message for states with zero agreements) and the filter button.
-    // Gate on a valid state code, NOT on allStates — allStates only contains
-    // states that *have* agencies, so gating on it suppressed the no-287(g)
-    // callout for the very states it's meant for (e.g. IL). See #138.
+    // here" message for states with zero agreements) and the map's zoom
+    // button. Gate on a valid state code, not on which states have agencies —
+    // that would suppress the no-287(g) callout for the very states it's
+    // meant for (e.g. IL). See #138.
     const geo = await getCachedGeo();
     if (geo.state && STATE_NAMES[geo.state]) {
       detectedState = geo.state;
@@ -194,58 +218,6 @@
     (window as any).__setCursor = (idx: number) => { bakeInstant = true; cursorIdx = idx; };
     (window as any).__getTimelineBounds = () => ({ minIdx, maxIdx, todayIdx });
   });
-
-  $: allStates = [...new Set(data.agencies.map((a) => a.state).filter(Boolean))].sort();
-  $: allYears = [...new Set(data.agencies.map((a) => a.signed_date?.slice(0, 4)).filter(Boolean))].sort();
-
-  $: filteredAgencies = data.agencies.filter((a) => {
-    const q = searchQuery.trim().toLowerCase();
-    const matchesSearch =
-      !q ||
-      a.name.toLowerCase().includes(q) ||
-      a.state.toLowerCase().includes(q) ||
-      (a.city ?? "").toLowerCase().includes(q) ||
-      (a.county ?? "").toLowerCase().includes(q);
-    const matchesModel =
-      activeModels.size === 0 || a.models.some((m) => activeModels.has(m));
-    const matchesState = selectedStates.size === 0 || selectedStates.has(a.state);
-    const matchesYear = !selectedYear || a.signed_date?.startsWith(selectedYear);
-    return matchesSearch && matchesModel && matchesState && matchesYear;
-  });
-
-  const toggleState = (state: string) => {
-    const next = new Set(selectedStates);
-    if (next.has(state)) next.delete(state);
-    else next.add(state);
-    selectedStates = next;
-  };
-
-  const toggleModel = (model: string) => {
-    const next = new Set(activeModels);
-    if (next.has(model)) next.delete(model);
-    else next.add(model);
-    activeModels = next;
-  };
-
-  const clearFilters = () => {
-    searchQuery = "";
-    activeModels = new Set();
-    selectedStates = new Set();
-    selectedYear = "";
-  };
-
-  $: hasActiveFilters = searchQuery.trim() !== "" || activeModels.size > 0 || selectedStates.size > 0 || selectedYear !== "";
-
-  // Signature of the active filter set. The virtual list keeps its scroll
-  // position when `items` changes, so narrowing a filter would otherwise
-  // strand the reader mid-list. Keying the list on this string remounts it —
-  // and a fresh viewport renders from the top — whenever any filter changes.
-  $: filterKey = JSON.stringify([
-    searchQuery.trim().toLowerCase(),
-    [...selectedStates].sort(),
-    selectedYear,
-    [...activeModels].sort(),
-  ]);
 
   function modelDesc(model: string): { short: string; detail: string } {
     switch (model) {
@@ -289,21 +261,21 @@
 <main id="main-content">
 
   <!-- ── Hero ─────────────────────────────────────────────────────────────── -->
-  <section class="border-b border-slate-200 bg-white px-4 py-10 sm:px-6 sm:py-20">
-    <div class="mx-auto max-w-3xl">
-      <p class="text-xs font-semibold uppercase tracking-widest text-slate-400 sm:text-sm">
-        {m.home_hero_eyebrow()}
-      </p>
-      <h1 class="mt-2 text-2xl font-black leading-tight text-slate-900 sm:mt-3 sm:text-4xl lg:text-5xl">
-        {m.home_hero_headline_line1()}<br class="hidden sm:block" /> {m.home_hero_headline_line2()}
+  <section class="border-b px-4 py-6 sm:px-6 sm:py-8" style="border-color: var(--color-paper-200); background: var(--color-paper-50);">
+    <div class="mx-auto max-w-6xl">
+      <h1
+        class="text-[length:var(--text-display)] font-black leading-[1.05] tracking-[-0.01em]"
+        style="color: var(--color-ink-900); text-wrap: balance; max-width: 16ch;"
+      >
+        {m.home_hero_headline_line1()} {m.home_hero_headline_line2()}
       </h1>
-      <p class="prose-editorial mt-4 text-base sm:mt-6 sm:text-lg">
+      <p class="prose-editorial mt-5 max-w-2xl text-[length:var(--text-body-lg)] sm:mt-6">
         <Gloss text={m.home_hero_lead()} />
       </p>
 
       {#if userStateCallout}
-        <p class="mt-4 border-l-4 border-[#BE6079] bg-rose-50/40 px-4 py-3 text-base text-slate-700 sm:text-lg">
-          {@html userStateCallout}
+        <p class="mt-4 max-w-2xl border-l-4 border-[#BE6079] bg-rose-50/40 px-3 py-2 text-sm sm:mt-5" style="color: var(--color-ink-700);">
+          <Gloss text={userStateCallout} html={true} />
         </p>
       {/if}
 
@@ -311,175 +283,152 @@
            shown on the map overlay, and the block read as plain/redundant.
            The snapshot date survives as the page's data-freshness signal. -->
       {#if data.snapshotDate}
-        <p class="mt-4 text-xs italic text-slate-400 sm:mt-6">
-          As of {new Intl.DateTimeFormat("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" }).format(new Date(data.snapshotDate))}
+        <p class="mt-5 max-w-2xl border-t pt-3 font-mono text-xs sm:mt-6" style="border-color: var(--color-paper-200); color: var(--color-ink-500);">
+          {m.home_as_of({ date: dateFmt.format(new Date(data.snapshotDate)) })}
         </p>
       {/if}
     </div>
   </section>
 
-  <!-- ── Map ──────────────────────────────────────────────────────────────── -->
-  <section class="border-b border-slate-200 bg-stone-50 pt-8 sm:pt-10">
-    <div class="mx-auto max-w-6xl px-4 sm:px-6">
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
-        <div>
-          <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">
-            {m.home_map_heading()}
-          </h2>
-          <p class="mt-1 text-xs text-slate-500 sm:text-sm">
-            {m.home_map_subhead()}
-          </p>
-          <p class="mt-1 text-xs text-slate-500 sm:text-sm">
-            {m.home_map_size_note()}
-          </p>
-        </div>
-        <!-- Legend -->
-        <div class="flex flex-col items-start gap-2 sm:items-end">
-          <div class="flex flex-wrap items-center gap-x-4 gap-y-2 sm:gap-x-6">
-            {#each MODEL_ORDER as full}
-              <span class="flex items-center gap-1.5 text-xs text-slate-600 sm:text-sm">
-                <span
-                  class="inline-block h-2.5 w-2.5 rounded-full border border-white shadow-sm sm:h-3 sm:w-3"
-                  style="background: {MODEL_COLORS[full]};"
-                ></span>
-                <ModelLink model={full} />
-              </span>
-            {/each}
-          </div>
-          <div class="flex items-center gap-3 text-xs text-slate-600 sm:text-sm">
-            <span class="flex items-center gap-1.5">
-              <span
-                class="inline-block h-[6px] w-[6px] rounded-full border border-white bg-slate-400 shadow-sm"
-                aria-hidden="true"
-              ></span>
-              10
-            </span>
-            <span class="flex items-center gap-1.5">
-              <span
-                class="inline-block h-[20px] w-[20px] rounded-full border border-white bg-slate-400 shadow-sm"
-                aria-hidden="true"
-              ></span>
-              1,000+ {m.home_map_size_legend_label()}
-            </span>
-          </div>
+  <!-- ── Top states by new agencies, last 30 days ────────────────────────────
+       A rolling recent-activity
+       leaderboard rather than the all-time count (that lives on /states). -->
+  <section class="border-b px-4 py-6 sm:px-6 sm:py-8" style="border-color: var(--color-paper-200); background: var(--color-paper-50);">
+    <div class="mx-auto max-w-6xl">
+      <div class="flex flex-wrap items-end justify-between gap-4">
+        <h2 class="font-serif text-[length:var(--text-h2)] font-bold" style="color: var(--color-ink-900);">{m.browse_top_states_heading()}</h2>
+        <div class="flex flex-col items-end gap-1 text-sm font-semibold">
+          <a
+            href={localizeHref("/states")}
+            class="no-underline hover:underline"
+            style="color: var(--color-ink-900);"
+          >{m.home_recent_browse_all()} →</a>
+          <a
+            href={localizeHref("/timeline")}
+            class="no-underline hover:underline"
+            style="color: var(--color-ink-700);"
+          >{m.home_recent_see_timeline()} →</a>
         </div>
       </div>
 
-      {#if detectedState && STATE_NAMES[detectedState] && data.stateMeta[detectedState]?.participating > 0 && !(selectedStates.size === 1 && selectedStates.has(detectedState))}
-        <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-500">
-          <button
-            type="button"
-            on:click={() => (selectedStates = new Set([detectedState!]))}
-            class="text-xs text-slate-500 underline-offset-2 hover:text-slate-900 hover:underline"
-          >Zoom to {STATE_NAMES[detectedState]} →</button>
-        </div>
-      {/if}
-    </div>
-
-    <!-- Map: full-bleed so the country breaks the column and reads at scale -->
-    <div class="relative mt-4 h-[360px] overflow-hidden border-y border-slate-200 shadow-sm sm:h-[560px] lg:h-[680px]">
-      {#if data.agencies.length === 0}
-        <div class="flex h-full items-center justify-center bg-slate-100 text-slate-500">
-          <div class="px-6 text-center">
-            <p class="font-medium text-slate-700">{m.home_map_empty_title()}</p>
-            <p class="mt-1 text-sm">{m.home_map_empty_subtitle()}</p>
-          </div>
-        </div>
+      {#if topStatesByAgencyCount.length === 0}
+        <p class="mt-6 rounded-lg border px-4 py-6 text-center text-sm" style="border-color: var(--color-paper-200); color: var(--color-ink-500);">
+          {m.leaderboard_no_recent_agencies()}
+        </p>
       {:else}
-        <NationalMap
-          agencies={data.agencies}
-          terminatedAgencies={data.terminatedAgencies}
-          {selectedStates}
-          {cursorIdx}
-        />
-        <div
-          class="count-overlay pointer-events-none absolute inset-x-0 top-2 flex flex-col items-center sm:top-auto sm:bottom-4"
-        >
-          <button
-            type="button"
-            on:click={restartTimeline}
-            class="count-card pointer-events-auto"
-            aria-label="Replay the 287(g) growth animation from January 2025"
-            title="Replay from January 2025"
-          >
-            <div class="count-stats">
-              <div class="count-stat">
-                <div class="count-number">{intFmt.format(Math.round($displayedCount))}</div>
-                <div class="count-label">agencies</div>
-              </div>
-              <div class="count-divider" aria-hidden="true"></div>
-              <div class="count-stat">
-                <div class="count-number">{popFmtOverlay.format(Math.max(0, $displayedPop))}</div>
-                <div class="count-label">Pop. covered</div>
-              </div>
-            </div>
-          </button>
-          <div class="count-date">{overlayDateLabel}</div>
-        </div>
-      {/if}
-    </div>
-    {#if data.agencies.length > 0 && Number.isFinite(maxIdx)}
-      <div class="bg-white">
-        <div class="mx-auto max-w-6xl">
-          <MapTimelineScrubber bind:this={scrubberRef} {minIdx} {maxIdx} labelMaxIdx={todayIdx} bind:cursorIdx bind:playing={timelinePlaying} {countAtCursor} />
-          <div class="px-4 pb-4 text-[11px] italic leading-snug text-slate-500 sm:px-6 sm:text-xs">
-            {#if statewideCount > 0}
-              <p>{m.home_map_statewide_note({ count: statewideCount })}</p>
-            {/if}
-            <p class="mt-1">{m.home_map_boundaries_note()}</p>
-            <p class="mt-1">
+      <ol class="mt-6 divide-y overflow-hidden rounded-lg border" style="border-color: var(--color-paper-200);">
+        {#each topStatesByAgencyCount as row, i (row.abbr)}
+          {@const expanded = expandedTopState === row.abbr}
+          <li style="border-color: var(--color-paper-100); background: var(--color-paper-50);">
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 sm:px-5">
+              <span class="w-6 shrink-0 font-mono text-xs tabular-nums" style="color: var(--color-ink-500);">{i + 1}</span>
+              <button
+                type="button"
+                on:click={() => (expandedTopState = expanded ? null : row.abbr)}
+                aria-expanded={expanded}
+                aria-label={m.home_top_states_breakdown_toggle({ state: STATE_NAMES[row.abbr] ?? row.abbr })}
+                class="shrink-0 rounded-full bg-transparent p-2.5 transition-colors hover:bg-paper-100"
+              >
+                <svg
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  class="h-3 w-3 transition-transform"
+                  style="color: var(--color-ink-500); transform: rotate({expanded ? 90 : 0}deg);"
+                  aria-hidden="true"
+                ><path d="M6 4l8 6-8 6V4z" /></svg>
+              </button>
               <a
-                href="https://github.com/appelson/Tracking_287g"
-                target="_blank"
-                rel="noreferrer"
-                class="underline hover:text-slate-900"
-              >{m.home_map_download()} ↗</a>
-            </p>
-          </div>
-        </div>
-      </div>
-    {/if}
-    <!-- Below the map: free download / licensing page (not in nav) -->
-    <div class="border-t border-slate-200 bg-stone-50 px-4 py-3 text-center sm:px-6">
-      <a
-        href={localizeHref("/use-the-map")}
-        class="text-sm font-semibold text-slate-700 underline-offset-2 hover:text-slate-900 hover:underline"
-      >{m.home_map_use_cta()}</a>
+                href={localizeHref(`/state/${row.abbr.toLowerCase()}`)}
+                class="min-w-0 flex-1 truncate text-sm font-semibold no-underline hover:underline"
+                style="color: var(--color-ink-900);"
+              >{STATE_NAMES[row.abbr] ?? row.abbr}</a>
+              <a
+                href={localizeHref(`/state/${row.abbr.toLowerCase()}`)}
+                class="shrink-0 font-mono text-xs tabular-nums no-underline hover:underline"
+                style="color: var(--color-ink-500);"
+              >{intFmt.format(row.agencyCount)} {row.agencyCount === 1 ? m.leaderboard_unit_new_agency_one() : m.leaderboard_unit_new_agency_other()}</a>
+            </div>
+            {#if expanded}
+              <div class="flex flex-wrap gap-x-5 gap-y-1.5 border-t px-4 py-3 pl-[2.6rem] sm:px-5" style="border-color: var(--color-paper-100);">
+                {#each MODEL_ORDER as model}
+                  {#if row.modelCounts[model]}
+                    <span class="flex items-center gap-1.5 font-mono text-xs tabular-nums" style="color: var(--color-ink-700);">
+                      <span class="inline-block h-2 w-2 rounded-full" style="background: {MODEL_COLORS[model]};" aria-hidden="true"></span>
+                      {MODEL_SHORT[model]} {row.modelCounts[model]}
+                    </span>
+                  {/if}
+                {/each}
+              </div>
+            {/if}
+          </li>
+        {/each}
+      </ol>
+      {/if}
     </div>
   </section>
 
+  <!-- ── Summary strip ────────────────────────────────────────────────────────
+       Moved here from /explore, replacing "most active this month" per
+       feedback ("i think its needless"). -->
+  <section class="border-b px-4 py-4 sm:px-6 sm:py-5" style="border-color: var(--color-paper-200); background: var(--color-paper-100);">
+    <dl class="mx-auto grid max-w-6xl grid-cols-1 gap-x-4 gap-y-5 sm:grid-cols-3">
+      <div>
+        <dt class="stat-label">{m.browse_stat_states()}</dt>
+        <dd class="mt-1 flex items-baseline gap-1 font-mono text-2xl font-bold tabular-nums" style="color: var(--color-ink-900);">
+          {intFmt.format(statesWithAgencies)}
+        </dd>
+      </div>
+      <div>
+        <dt class="stat-label">{m.browse_stat_agencies()}</dt>
+        <dd class="mt-1 flex items-baseline gap-1 font-mono text-2xl font-bold tabular-nums" style="color: var(--color-ink-900);">
+          {intFmt.format(totalAgencies)}
+        </dd>
+      </div>
+      {#if nationalPopulationServed}
+        <div>
+          <dt class="stat-label">{m.browse_stat_population()}</dt>
+          <dd class="mt-1 flex items-baseline gap-1 font-mono text-2xl font-bold tabular-nums" style="color: var(--color-ink-900);">
+            {popFmt.format(nationalPopulationServed)}
+            {#if nationalLocalPopulation}<span class="text-sm font-semibold" style="color: var(--color-ink-500);">/{popFmtOverlay.format(nationalLocalPopulation)}</span>{/if}
+          </dd>
+        </div>
+      {/if}
+    </dl>
+  </section>
+
   <!-- ── What each model authorizes ───────────────────────────────────────── -->
-  <section class="border-b border-slate-200 bg-white px-4 py-10 sm:px-6 sm:py-12">
+  <section class="border-b px-4 py-6 sm:px-6 sm:py-8" style="border-color: var(--color-paper-200); background: var(--color-paper-50);">
     <div class="mx-auto max-w-6xl">
-      <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">
+      <h2 class="font-serif text-[length:var(--text-h2)] font-bold" style="color: var(--color-ink-900);">
         {m.home_models_heading()}
       </h2>
-      <div class="mt-5 grid items-stretch gap-4 sm:grid-cols-3">
+      <div class="mt-8 grid items-stretch gap-5 sm:grid-cols-3">
         {#each ALL_MODELS as model}
           {@const desc = modelDesc(model)}
           <a
             href={localizeHref(`/model/${MODEL_SLUG[model]}`)}
-            class="group flex flex-col overflow-hidden rounded border no-underline shadow-sm transition hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+            class="group flex flex-col overflow-hidden border no-underline shadow-sm transition hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
             style="border-color: {MODEL_COLORS[model]};"
           >
-            <div class="px-4 py-3" style="background: {MODEL_COLORS[model]};">
+            <div class="px-[1.1rem] py-[0.85rem]" style="background: {MODEL_COLORS[model]};">
               <h3
-                class="font-sans text-sm font-bold uppercase tracking-widest"
+                class="font-serif text-base font-bold tracking-[0.01em]"
                 style="color: {MODEL_TEXT_COLORS[model] ?? '#ffffff'};"
               >{model.replace(/ Model$/, '')}</h3>
             </div>
-            <div class="flex flex-1 flex-col gap-3 px-4 py-4" style="background: {MODEL_COLORS[model]}28;">
-              <p class="text-sm leading-relaxed text-slate-700">{@html desc.short}</p>
-              <div class="flex items-end justify-between gap-2">
+            <div class="flex flex-1 flex-col gap-3 px-[1.1rem] py-4" style="background: {MODEL_COLORS[model]}28;">
+              <p class="text-sm leading-relaxed" style="color: var(--color-ink-700);">{@html desc.short}</p>
+              <div class="mt-auto flex items-end justify-between gap-2">
                 <span
                   class="text-sm font-semibold group-hover:underline"
                   style="color: {MODEL_DARK_COLORS[model] ?? '#334155'};"
-                >Learn more →</span>
+                >{m.glossary_learn_more()} →</span>
                 {#if data.modelCounts[model]}
                   <p
-                    class="text-right text-xs italic text-slate-500"
-                    title={data.snapshotDate ? `As of ${data.snapshotDate}` : undefined}
-                  >{intFmt.format(data.modelCounts[model])} agencies</p>
+                    class="text-right font-mono text-xs"
+                    style="color: var(--color-ink-500);"
+                    title={data.snapshotDate ? m.home_as_of({ date: dateFmt.format(new Date(data.snapshotDate)) }) : undefined}
+                  >{data.modelCounts[model] === 1 ? m.trend_count_agencies_one({ count: intFmt.format(data.modelCounts[model]) }) : m.trend_count_agencies_other({ count: intFmt.format(data.modelCounts[model]) })}</p>
                 {/if}
               </div>
             </div>
@@ -489,217 +438,143 @@
     </div>
   </section>
 
-  <!-- ── National trend charts (experimental, #162) ───────────────────────── -->
-  <TrendCharts agencies={data.agencies} trendMonths={data.trendMonths} trend={data.trend} />
-
-
-  <!-- ── Search + filter + browse ──────────────────────────────────────────── -->
-  <section class="px-4 py-10 sm:px-6 sm:py-12">
-    <div class="mx-auto max-w-6xl">
-
-      <h2 class="font-serif text-xl font-bold text-slate-900 sm:text-2xl">{m.home_search_heading()}</h2>
-
-      <!-- Filter controls — sticky once scrolled into view -->
-      <div
-        bind:clientHeight={filterBarHeight}
-        class="sticky z-40 -mx-4 border-b border-slate-200 bg-stone-50/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6"
-        style="top: calc(var(--site-header-height) + var(--staging-banner-height));"
-      >
-        <div class="space-y-3">
-          <!-- Search input — full width on mobile -->
-          <div class="relative">
-            <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
-            </svg>
-            <input
-              type="search"
-              bind:value={searchQuery}
-              placeholder={m.home_search_placeholder()}
-              class="w-full rounded-md border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-base text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:text-sm"
-            />
+  <!-- ── Map ──────────────────────────────────────────────────────────────── -->
+  <section class="border-b pt-5 sm:pt-6" style="border-color: var(--color-paper-200); background: var(--color-paper-100);">
+    <div class="mx-auto max-w-6xl px-4 sm:px-6">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+        <div>
+          <h2 class="font-serif text-[length:var(--text-h2)] font-bold" style="color: var(--color-ink-900);">
+            {m.home_map_heading()}
+          </h2>
+          <p class="mt-1 text-xs sm:text-sm" style="color: var(--color-ink-500);">
+            {m.home_map_subhead()}
+          </p>
+          <p class="mt-1 text-xs sm:text-sm" style="color: var(--color-ink-500);">
+            {m.home_map_size_note()}
+          </p>
+          <p class="mt-1 text-xs sm:text-sm" style="color: var(--color-ink-500);">
+            {m.home_map_coverage_note()}
+          </p>
+        </div>
+        <!-- Legend -->
+        <div class="flex flex-col items-start gap-2 sm:items-end">
+          <div class="flex flex-wrap items-center gap-x-4 gap-y-2 sm:gap-x-6">
+            {#each MODEL_ORDER as full}
+              <span class="flex items-center gap-1.5 text-xs sm:text-sm" style="color: var(--color-ink-700);">
+                <span
+                  class="inline-block h-2.5 w-2.5 rounded-full border border-white shadow-sm sm:h-3 sm:w-3"
+                  style="background: {MODEL_COLORS[full]};"
+                ></span>
+                <ModelLink model={full} />
+              </span>
+            {/each}
           </div>
-
-          <!-- State + model row — wraps cleanly on mobile -->
-          <div class="flex flex-wrap items-center gap-2">
-            <select
-              class="max-w-[11rem] rounded-md border border-slate-300 bg-white py-2 pl-3 pr-7 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:max-w-none"
-              on:change={(e) => { if (e.currentTarget.value) { toggleState(e.currentTarget.value); e.currentTarget.value = ""; } }}
-            >
-              <option value="">{selectedStates.size === 0 ? m.home_search_all_states() : "Add state…"}</option>
-              {#each allStates.filter(s => !selectedStates.has(s)) as state}
-                <option value={state}>{STATE_NAMES[state] ?? state}</option>
-              {/each}
-            </select>
-
-            {#each [...selectedStates].sort() as state}
-              <button
-                type="button"
-                on:click={() => toggleState(state)}
-                class="flex items-center gap-1 rounded border px-3 py-1.5 text-xs font-semibold text-white"
-                style="background-color: #2c2c2c; border-color: #2c2c2c;"
-              >
-                {STATE_NAMES[state] ?? state}
-                <span aria-hidden="true" class="opacity-70">×</span>
-              </button>
-            {/each}
-
-            <!-- Narrowed to one state → offer a jump to its full page (the select
-                 above only filters the map/list). Guarded to navigable states. -->
-            {#if selectedStates.size === 1 && NAVIGABLE_STATES[[...selectedStates][0]]}
-              {@const only = [...selectedStates][0]}
-              <a
-                href={localizeHref(`/state/${only.toLowerCase()}`)}
-                class="text-xs font-medium underline underline-offset-2"
-                style="color: #BE6079;"
-              >
-                {m.home_view_state_page({ state: STATE_NAMES[only] ?? only })}
-                <span aria-hidden="true">→</span>
-              </a>
-            {/if}
-
-            {#if detectedState && statesWithAnyAgreement.has(detectedState) && !selectedStates.has(detectedState)}
-              <button
-                type="button"
-                on:click={() => toggleState(detectedState!)}
-                class="text-xs underline underline-offset-2" style="color: #23272b;"
-              >
-                {m.home_search_use_detected_state({ state: STATE_NAMES[detectedState] ?? detectedState })}
-              </button>
-            {/if}
-
-            <select
-              bind:value={selectedYear}
-              class="rounded-md border border-slate-300 bg-white py-2 pl-3 pr-7 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              <option value="">{m.home_search_year_signed()}</option>
-              {#each allYears as year}
-                <option value={year}>{year}</option>
-              {/each}
-            </select>
-
-            {#each ALL_MODELS as model}
-              {@const active = activeModels.has(model)}
-              <button
-                type="button"
-                on:click={() => toggleModel(model)}
-                class="rounded border px-3 py-1.5 text-xs font-semibold transition-colors"
-                style={active
-                  ? `background: ${MODEL_COLORS[model]}; border-color: ${MODEL_COLORS[model]}; color: ${MODEL_TEXT_COLORS[model] ?? '#fff'};`
-                  : `background: ${MODEL_COLORS[model]}22; border-color: ${MODEL_COLORS[model]}88; color: ${MODEL_DARK_COLORS[model] ?? '#334155'};`}
-              >
-                {MODEL_SHORT[model]}
-              </button>
-            {/each}
+          <div class="flex items-center gap-3 text-xs sm:text-sm" style="color: var(--color-ink-700);">
+            <span class="flex items-center gap-1.5">
+              <span
+                class="inline-block h-[6px] w-[6px] rounded-full border border-white shadow-sm"
+                style="background: var(--color-ink-500);"
+                aria-hidden="true"
+              ></span>
+              10
+            </span>
+            <span class="flex items-center gap-1.5">
+              <span
+                class="inline-block h-[20px] w-[20px] rounded-full border border-white shadow-sm"
+                style="background: var(--color-ink-500);"
+                aria-hidden="true"
+              ></span>
+              1,000+ {m.home_map_size_legend_label()}
+            </span>
           </div>
         </div>
       </div>
 
-      <!-- Result count -->
-      <p class="mt-4 text-sm text-slate-500">
-        {#if hasActiveFilters}
-          {m.home_search_match_count({
-            matched: intFmt.format(filteredAgencies.length),
-            total: intFmt.format(data.agencies.length),
-          })} —
-          <button
-            type="button"
-            on:click={clearFilters}
-            class="underline underline-offset-2" style="color: #23272b;"
-          >{m.home_search_clear_filters()}</button>
-        {:else}
-          {m.home_search_baseline({
-            rows: intFmt.format(data.agencies.length),
-            agencies: intFmt.format(data.agencyCountUnique),
-            states: String(data.stateCount),
-          })}
-        {/if}
-      </p>
+    </div>
 
-      <!-- Agency grid -->
-      {#if filteredAgencies.length === 0}
-        <div class="mt-5 rounded-lg border border-slate-200 bg-white px-6 py-12 text-center">
-          <p class="font-medium text-slate-700">{m.home_search_no_match()}</p>
-          <button
-            type="button"
-            on:click={clearFilters}
-            class="mt-2 text-sm underline underline-offset-2" style="color: #23272b;"
-          >
-            {m.home_search_clear_filters()}
-          </button>
+    <!-- Map: full-bleed so the country breaks the column and reads at scale -->
+    <div class="relative mt-4 h-[360px] overflow-hidden border-y shadow-sm sm:h-[560px] lg:h-[680px]" style="border-color: var(--color-paper-200);">
+      {#if data.agencyCount === 0}
+        <div class="flex h-full items-center justify-center" style="background: var(--color-paper-200); color: var(--color-ink-700);">
+          <div class="px-6 text-center">
+            <p class="font-medium" style="color: var(--color-ink-700);">{m.home_map_empty_title()}</p>
+            <p class="mt-1 text-sm">{m.home_map_empty_subtitle()}</p>
+          </div>
         </div>
       {:else}
-        <div class="agency-list mt-4 rounded-lg border border-slate-200 overflow-hidden text-sm">
-          <!-- Column headers -->
-          <div class="agency-row agency-row--header border-b border-slate-200 bg-slate-50 text-xs font-bold uppercase tracking-wider text-slate-700">
-            <div class="px-3 py-2 sm:px-4 sm:py-3">Agency</div>
-            <div class="px-2 py-2 sm:px-3 sm:py-3">Type</div>
-            <div class="px-2 py-2 sm:px-3 sm:py-3">Signed</div>
-            <div class="agency-col-pop px-2 py-2 sm:px-3 sm:py-3">Population</div>
-            <div class="px-2 py-2 sm:px-3 sm:py-3">MOA</div>
-            <div class="agency-col-foia px-2 py-2 sm:px-3 sm:py-3">FOIA</div>
-          </div>
-          <!-- Virtualized rows. Keyed on the filter signature so the list
-               remounts and scrolls back to the top whenever a filter changes. -->
-          {#key filterKey}
-          <VirtualList items={filteredAgencies} style="height: calc(100vh - 400px); scrollbar-gutter: stable;">
-            {#snippet vl_slot({ item: agency })}
-            <div class="agency-row border-b border-slate-100 hover:bg-slate-50">
-              <div class="px-3 py-2 sm:px-4 sm:py-3">
-                <a
-                  href={localizeHref(`/agency/${agency.slug}`)}
-                  class="font-semibold leading-snug text-slate-900 no-underline hover:underline"
-                >{agency.name}</a>
-                <p class="text-xs text-slate-600">
-                  {#if agency.city}{agency.city}{/if}{#if agency.city && agency.state}, {/if}{#if agency.state}<a
-                    href={localizeHref(`/state/${agency.state.toLowerCase()}`)}
-                    class="no-underline hover:underline"
-                  >{agency.state}</a>{/if}
-                </p>
+        {#if mapPoints}
+          <NationalMap
+            agencies={mapPoints.agencies}
+            terminatedAgencies={mapPoints.terminated}
+            {selectedStates}
+            {cursorIdx}
+          />
+        {/if}
+        <div
+          class="count-overlay pointer-events-none absolute inset-x-0 top-2 flex flex-col items-center sm:top-auto sm:bottom-4"
+        >
+          <button
+            type="button"
+            on:click={restartTimeline}
+            class="count-card pointer-events-auto"
+            aria-label={m.home_overlay_replay_aria()}
+            title={m.home_overlay_replay_title()}
+          >
+            <div class="count-stats">
+              <div class="count-stat">
+                <div class="count-number">{intFmt.format(Math.round($displayedCount))}</div>
+                <div class="count-label">{m.home_overlay_agencies_label()}</div>
               </div>
-              <div class="px-2 py-2 sm:px-3 sm:py-3">
-                <div class="flex flex-wrap gap-1">
-                  {#each agency.models as model}
-                    <span
-                      class="model-badge"
-                      class:model-badge--jail={model.includes("Jail")}
-                      class:model-badge--taskforce={model.includes("Task")}
-                      class:model-badge--wso={model.includes("Warrant")}
-                      title={model}
-                    >{MODEL_MINI[model] ?? model}</span>
-                  {/each}
-                </div>
-              </div>
-              <div class="px-2 py-2 tabular-nums text-slate-600 sm:px-3 sm:py-3">
-                {agency.signed_date ? agency.signed_date.slice(0, 4) : "—"}
-              </div>
-              <div class="agency-col-pop px-2 py-2 tabular-nums text-slate-600 sm:px-3 sm:py-3">
-                {agency.population ? popFmt.format(agency.population) : "—"}
-              </div>
-              <div class="px-2 py-2 text-xs font-semibold sm:px-3 sm:py-3">
-                {#if agency.moa_url}
-                  <a href={agency.moa_url} target="_blank" rel="noreferrer" class="no-underline hover:underline">↗</a>
-                {:else}
-                  <span class="text-slate-300">—</span>
-                {/if}
-              </div>
-              <div class="agency-col-foia px-2 py-2 text-xs font-semibold sm:px-3 sm:py-3">
-                <a href="https://www.muckrock.com/foi/create/" target="_blank" rel="noreferrer" class="no-underline hover:underline">→</a>
+              <div class="count-divider" aria-hidden="true"></div>
+              <div class="count-stat">
+                <div class="count-number">{popFmtOverlay.format(Math.max(0, $displayedPop))}</div>
+                <div class="count-label">{m.home_overlay_pop_label()}</div>
               </div>
             </div>
-            {/snippet}
-          </VirtualList>
-          {/key}
+          </button>
+          <div class="count-date">{overlayDateLabel}</div>
         </div>
       {/if}
-
+    </div>
+    {#if data.agencyCount > 0 && Number.isFinite(maxIdx)}
+      <div style="background: var(--color-paper-50);">
+        <div class="mx-auto max-w-6xl">
+          <MapTimelineScrubber bind:this={scrubberRef} {minIdx} {maxIdx} labelMaxIdx={todayIdx} bind:cursorIdx bind:playing={timelinePlaying} {countAtCursor} />
+          <div class="px-4 pb-4 text-[11px] italic leading-snug sm:px-6 sm:text-xs" style="color: var(--color-ink-500);">
+            <p>{m.home_map_boundaries_note()}</p>
+            <p class="mt-1">
+              <a
+                href="https://github.com/appelson/Tracking_287g"
+                target="_blank"
+                rel="noreferrer"
+                class="underline"
+                style="color: var(--color-ink-500);"
+              >{m.home_map_download()} ↗</a>
+            </p>
+          </div>
+        </div>
+      </div>
+    {/if}
+    <!-- Below the map: free download / licensing page (not in nav) -->
+    <div class="border-t px-4 py-3 text-center sm:px-6" style="border-color: var(--color-paper-200); background: var(--color-paper-100);">
+      <a
+        href={localizeHref("/downloads")}
+        class="text-sm font-semibold underline-offset-2 hover:underline"
+        style="color: var(--color-ink-700);"
+      >{m.home_map_use_cta()}</a>
     </div>
   </section>
+
+  <!-- ── National trend charts (experimental, #162) ───────────────────────── -->
+  <TrendCharts stateCounts={data.stateCounts} trendMonths={data.trendMonths} trend={data.trend} />
+
+
 
 </main>
 
 <style>
   /* Big-number overlay on the map. Always visible. The card itself is a
-     button — tapping it replays the growth animation from Jan 2025. */
+     button — tapping it replays the growth animation from the start. */
   .count-overlay {
     transform: translateZ(0);
   }
@@ -722,8 +597,8 @@
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
     box-shadow:
-      0 1px 3px rgba(15, 23, 42, 0.08),
-      0 8px 22px rgba(15, 23, 42, 0.10);
+      0 1px 3px rgba(36, 31, 22, 0.08),
+      0 8px 22px rgba(36, 31, 22, 0.10);
     transition: background-color 180ms ease-out, transform 180ms ease-out;
   }
   @media (min-width: 640px) {
@@ -736,7 +611,7 @@
     transform: scale(0.98);
   }
   button.count-card:focus-visible {
-    outline: 2px solid rgba(15, 23, 42, 0.4);
+    outline: 2px solid var(--color-ink-700);
     outline-offset: 2px;
   }
   .count-date {
@@ -771,7 +646,7 @@
   }
   .count-divider {
     width: 1px;
-    background: rgba(15, 23, 42, 0.12);
+    background: rgba(36, 31, 22, 0.12);
     align-self: stretch;
   }
   .count-number {
@@ -780,7 +655,7 @@
     font-weight: 800;
     font-size: 1.35rem;
     line-height: 1;
-    color: #0f172a;
+    color: var(--color-ink-900);
     letter-spacing: -0.02em;
   }
   @media (min-width: 640px) {
@@ -792,53 +667,11 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.14em;
-    color: #64748b;
+    color: var(--color-ink-500);
     text-align: center;
     white-space: nowrap;
   }
   @media (min-width: 640px) {
     .count-label { font-size: 0.62rem; }
-  }
-
-  /* Agency virtual list grid. Fixed column tracks (not `auto`) so every row —
-     header included — sizes its columns identically and they line up into a
-     real table. `auto` tracks size to each row's own content, which is what
-     broke the tabular alignment. minmax(0, …) lets the name column shrink and
-     wrap instead of forcing the grid wider than its container. */
-  .agency-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 7rem 3.25rem 2.5rem;
-    align-items: center;
-  }
-  /* The virtualized rows live inside a scrolling viewport; on classic
-     (space-consuming) scrollbars that viewport is ~15px narrower than the
-     header, which would shift every column. Reserve the same gutter on the
-     header so the two grids share an identical content width and the columns
-     line up. `scrollbar-gutter` is a no-op with overlay scrollbars, so this
-     doesn't disturb platforms where they already align. */
-  .agency-row--header {
-    overflow-y: auto;
-    scrollbar-gutter: stable;
-  }
-  .agency-col-pop,
-  .agency-col-foia {
-    display: none;
-  }
-  @media (min-width: 640px) {
-    .agency-row {
-      grid-template-columns: minmax(0, 1fr) 8.5rem 4rem 5.5rem 3.5rem 3.5rem;
-    }
-    .agency-col-pop,
-    .agency-col-foia {
-      display: block;
-    }
-  }
-  /* svelte-virtuallists' inner track. Full width so each grid row spans the
-     viewport and its columns line up with the header. (The viewport — .vtlist —
-     already gets overflow:auto from the lib; we add `scrollbar-gutter: stable`
-     via the component's style prop so its reserved gutter matches the header's
-     above and the columns don't shift.) */
-  :global(.vtlist-inner) {
-    width: 100%;
   }
 </style>

@@ -1,22 +1,28 @@
 import { error } from "@sveltejs/kit";
 import { NAVIGABLE_STATES } from "$lib/states";
 import type { Agency, StateMeta } from "../../+page.server";
-import type { HomeAgency } from "$lib/homeData.types";
 import { buildTimeline, type TimelinePoint } from "$lib/timeline";
 import { MODEL_SLUG } from "$lib/colors";
 import { getLocale } from "$lib/paraglide/runtime";
+import { readStaticData } from "$lib/server/staticData";
 
 export type TrendSeries = { jail: number[]; taskforce: number[]; wso: number[] };
+
+// Only the fields the state page reads off each agency (#292).
+export type StateAgencyRow = Pick<
+  Agency,
+  "slug" | "name" | "city" | "county" | "agency_type" | "models" | "signed_date" | "population" | "moa_url"
+>;
 
 export type StatePageData = {
   abbr: string;
   stateName: string;
-  agencies: Agency[];
-  // Slim, national, map-only list (every active agency). The map shows the
-  // whole footprint and dims dots outside the selected state; `agencies` above
-  // stays state-only for the table/counts/filters. See focusSelected in
-  // NationalMap.
-  mapAgencies: HomeAgency[];
+  agencyCountRank: number;
+  agencyCountRankTotal: number;
+  // State-only, for the table, its filters and the counts. The map draws the
+  // national layer from /data/map-points.json and dims dots outside the state
+  // (focusSelected in NationalMap).
+  agencies: StateAgencyRow[];
   stateMeta: StateMeta | null;
   snapshotDate: string | null;
   modelCounts: Record<string, number>;
@@ -26,6 +32,7 @@ export type StatePageData = {
   trendMonths: string[];
   trend: Record<string, TrendSeries>;
   news: StateNews | null;
+  legislation: NewsLegislation | null;
 };
 
 // The news program emits a short TL;DR plus the full statewide narrative, in
@@ -49,10 +56,12 @@ export type NewsArticle = {
   agencies: NewsAgencyRef[];
   counties: string;
 };
-// Statewide legislative posture toward 287(g): pro (a statute backs/mandates
-// participation), anti (a statute limits/bars it), or none. `active` flags a
-// currently-live bill; `description` is the program's English-only rationale,
-// carried through for a later bilingual pass but not rendered yet.
+// Statewide legislative posture toward 287(g): pro (a statute compels
+// participation/cooperation), anti (a statute restricts/bars it), or none.
+// Hand-maintained (not from the news program; see
+// packages/pipeline/data/legislation_stance.yaml) — its own fetch below,
+// independent of whether a state has a news summary at all. `active` is a
+// placeholder for a currently-live/pending bill, not surfaced in the UI yet.
 export type NewsLegislation = {
   stance: "pro" | "anti" | "none";
   active: boolean;
@@ -64,7 +73,6 @@ export type StateNews = {
   // `built_at` is the program's own last-built time (the real "generated" signal);
   // `generated_at` is our local pipeline write stamp, kept as a fallback.
   built_at: string;
-  legislation: NewsLegislation | null;
   articles: NewsArticle[];
 };
 
@@ -73,7 +81,6 @@ type NewsLangBlock = { tldr_html?: string; summary_html?: string };
 type NewsFile = {
   generated_at?: string;
   built_at?: string;
-  legislation?: NewsLegislation | null;
   en?: NewsLangBlock;
   es?: NewsLangBlock;
   internal?: { relevant_articles?: RawArticle[] };
@@ -149,56 +156,30 @@ const pickNews = (
     tldr_html: block.tldr_html ?? "",
     body_html: block.summary_html ?? "",
     built_at: raw.built_at ?? raw.generated_at ?? "",
-    legislation: raw.legislation ?? null,
     articles: shapeArticles(raw.internal?.relevant_articles ?? [], roster),
   };
 };
 
-export const load = async ({ fetch, params }): Promise<StatePageData> => {
+export const load = async ({ params }): Promise<StatePageData> => {
   const abbr = params.abbr.toUpperCase();
   const stateName = NAVIGABLE_STATES[abbr];
   if (!stateName) throw error(404, `No state page for: ${abbr}`);
 
-  const [agenciesRes, metaRes, terminatedRes, pendingRes, newsRes] = await Promise.all([
-    fetch("/data/dist/agency_index.json"),
-    fetch("/data/dist/state_meta.json"),
-    fetch("/data/dist/terminated_agencies.json"),
-    fetch("/data/dist/pending_agencies.json"),
-    fetch(`/data/dist/news/${abbr}.json`),
+  const [allAgencies, stateMetaArr, terminatedRaw, pendingRaw, newsRaw, legislationByState] = await Promise.all([
+    readStaticData<Agency[]>("agency_index.json"),
+    readStaticData<StateMeta[]>("state_meta.json").then((v) => v ?? []),
+    readStaticData<Agency[]>("terminated_agencies.json").then((v) => v ?? []),
+    // Pending agencies (absent 1–2 snapshots) feed the trend/timeline only, so their
+    // history replays; they are not treated as departures. #245
+    readStaticData<Agency[]>("pending_agencies.json").then((v) => v ?? []),
+    readStaticData<NewsFile>(`news/${abbr}.json`),
+    readStaticData<Record<string, NewsLegislation>>("legislation_stance.json").then((v) => v ?? {}),
   ]);
-  if (!agenciesRes.ok) throw error(503, "Data unavailable");
-
-  const allAgencies: Agency[] = await agenciesRes.json();
-  const terminatedRaw: Agency[] = terminatedRes.ok ? await terminatedRes.json() : [];
-  // Pending agencies (absent 1–2 snapshots) feed the trend/timeline only, so their
-  // history replays; they are not treated as departures. #245
-  const pendingRaw: Agency[] = pendingRes.ok ? await pendingRes.json() : [];
+  if (!allAgencies) throw error(503, "Data unavailable");
   // No agency-count gate: non-participating states get a page too (an empty-state
   // plus their news summary). Only abbrs outside NAVIGABLE_STATES 404 (above).
   const agencies = allAgencies.filter((a) => a.state === abbr);
 
-  // National, slim, map-only projection — the same shape the homepage ships to
-  // NationalMap (#135). Lets the state map render every dot while keeping the
-  // selected state's dots in focus and the rest dimmed.
-  const mapAgencies: HomeAgency[] = allAgencies.map((a) => ({
-    slug: a.slug,
-    name: a.name,
-    state: a.state,
-    county: a.county,
-    city: a.city,
-    agency_type: a.agency_type,
-    models: a.models,
-    primary_model: a.primary_model,
-    signed_date: a.signed_date,
-    population: a.population,
-    lat: a.lat,
-    lng: a.lng,
-    moa_url: a.moa_url,
-    ori: a.ori,
-    lee: a.lee ? { officer_ct: a.lee.officer_ct } : null,
-  }));
-
-  const stateMetaArr: StateMeta[] = metaRes.ok ? await metaRes.json() : [];
   const stateMeta = stateMetaArr.find((s) => s.state === abbr) ?? null;
 
   const snapshotDate = allAgencies
@@ -220,6 +201,22 @@ export const load = async ({ fetch, params }): Promise<StatePageData> => {
       agencyTypeCounts[a.agency_type] = (agencyTypeCounts[a.agency_type] ?? 0) + 1;
     }
   }
+
+  // This state's rank by agency count among all navigable states — same
+  // sort (agencyCount desc, then name) /states uses for its own rank
+  // numbers, computed here from the same national roster already fetched
+  // above (no extra request), so the number matches what /states shows.
+  const agencyCountByState = new Map<string, number>();
+  for (const a of allAgencies) {
+    agencyCountByState.set(a.state, (agencyCountByState.get(a.state) ?? 0) + 1);
+  }
+  const rankedStateAbbrs = Object.keys(NAVIGABLE_STATES).sort(
+    (a, b) =>
+      (agencyCountByState.get(b) ?? 0) - (agencyCountByState.get(a) ?? 0) ||
+      NAVIGABLE_STATES[a].localeCompare(NAVIGABLE_STATES[b]),
+  );
+  const agencyCountRank = rankedStateAbbrs.indexOf(abbr) + 1;
+  const agencyCountRankTotal = rankedStateAbbrs.length;
 
   // ── Trend computation ────────────────────────────────────────────────────────
   const TREND_START = "2024-12";
@@ -281,12 +278,22 @@ export const load = async ({ fetch, params }): Promise<StatePageData> => {
     return out;
   };
 
-  const newsRaw = newsRes.ok ? await newsRes.json() : null;
   // Pass the state roster so the news table can link named agencies to their pages.
   const news = pickNews(newsRaw, agencies.map((a) => ({ name: a.name, slug: a.slug })));
 
   return {
-    abbr, stateName, agencies, mapAgencies, stateMeta, snapshotDate, modelCounts, agencyTypeCounts,
+    abbr, stateName, agencyCountRank, agencyCountRankTotal, stateMeta, snapshotDate, modelCounts, agencyTypeCounts,
+    agencies: agencies.map((a) => ({
+      slug: a.slug,
+      name: a.name,
+      city: a.city,
+      county: a.county,
+      agency_type: a.agency_type,
+      models: a.models,
+      signed_date: a.signed_date,
+      population: a.population,
+      moa_url: a.moa_url,
+    })),
     timeline: buildTimeline([
       ...agencies,
       ...terminatedRaw.filter((a) => a.state === abbr),
@@ -296,5 +303,6 @@ export const load = async ({ fetch, params }): Promise<StatePageData> => {
     trendMonths,
     trend: { "": sampleMonthly(stateForTrend) },
     news,
+    legislation: legislationByState[abbr] ?? null,
   };
 };

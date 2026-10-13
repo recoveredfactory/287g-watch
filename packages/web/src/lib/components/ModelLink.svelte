@@ -9,7 +9,7 @@
   import { onDestroy } from "svelte";
   import { MODEL_COLORS, MODEL_SLUG, MODEL_SHORT } from "$lib/colors";
   import { TERMS_MAP } from "$lib/glossary/terms";
-  import { localizeHref } from "$lib/paraglide/runtime";
+  import { localizeHref } from "$lib/localizeHref";
 
   export let model: string;
   // Dotted-underline affordance — on for inline text (legends), off when the

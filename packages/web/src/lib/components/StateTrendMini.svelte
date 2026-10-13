@@ -10,9 +10,9 @@
 
   // Bright stroke + dark text tint + mini code per model (matches $lib/colors).
   const LINES = [
-    { key: "wso", code: "WSO", stroke: "#5E9148", text: "#2F4A22" },
-    { key: "taskforce", code: "TFM", stroke: "#3C97E2", text: "#1A4A7A" },
-    { key: "jail", code: "JEM", stroke: "#BE6079", text: "#6B1F33" },
+    { key: "wso", code: "WSO", stroke: "#70A263", text: "#2F4A22" },
+    { key: "taskforce", code: "TFM", stroke: "#59A7E6", text: "#1A4A7A" },
+    { key: "jail", code: "JEM", stroke: "#C87899", text: "#6B1F33" },
   ] as const;
 
   const W = 150;
@@ -55,13 +55,13 @@
 
 <svg viewBox="0 0 {W} {H}" class="block h-full w-full" role="img" aria-label={label} preserveAspectRatio="xMidYMid meet">
   <!-- axes: zero baseline + peak gridline -->
-  <line x1={PAD.l} y1={PAD.t + plotH} x2={PAD.l + plotW} y2={PAD.t + plotH} stroke="#94a3b8" stroke-width="0.9" />
-  <line x1={PAD.l} y1={PAD.t} x2={PAD.l + plotW} y2={PAD.t} stroke="#d7dee7" stroke-width="0.9" />
+  <line x1={PAD.l} y1={PAD.t + plotH} x2={PAD.l + plotW} y2={PAD.t + plotH} stroke="#656C75" stroke-width="0.9" />
+  <line x1={PAD.l} y1={PAD.t} x2={PAD.l + plotW} y2={PAD.t} stroke="#DBDDE1" stroke-width="0.9" />
 
   <!-- labels: y peak + month range -->
-  <text x={PAD.l} y={PAD.t - 2.5} fill="#64748b" style="font-size:6.5px; font-weight:600;">{max}</text>
-  <text x={PAD.l} y={H - 3.5} fill="#64748b" style="font-size:6.5px;">{startLabel}</text>
-  <text x={PAD.l + plotW} y={H - 3.5} text-anchor="end" fill="#64748b" style="font-size:6.5px;">{endLabel}</text>
+  <text x={PAD.l} y={PAD.t - 2.5} fill="#5A6068" style="font-size:6.5px; font-weight:600;">{max}</text>
+  <text x={PAD.l} y={H - 3.5} fill="#5A6068" style="font-size:6.5px;">{startLabel}</text>
+  <text x={PAD.l + plotW} y={H - 3.5} text-anchor="end" fill="#5A6068" style="font-size:6.5px;">{endLabel}</text>
 
   <!-- model trajectories -->
   {#each lines as l}

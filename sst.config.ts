@@ -113,9 +113,16 @@ export default $config({
       ? new sst.aws.Email("Notify", { sender: env.NOTIFY_EMAIL_SENDER })
       : undefined;
 
+    // SST 3.19 hardcodes the SvelteKit warmer to nodejs20.x (end-of-life) and
+    // exposes no transform for it, so bump it here alongside the server. #295
+    $transform(sst.aws.Function, (args) => {
+      if (args.runtime === "nodejs20.x") args.runtime = "nodejs22.x";
+    });
+
     new sst.aws.SvelteKit("Web", {
       path: "packages/web",
       domain: webDomain,
+      server: { runtime: "nodejs22.x" },
       warm: isProdStage ? 1 : 0,
       link: [mapArchive, ...(notifyEmail ? [notifyEmail] : [])],
       environment: {

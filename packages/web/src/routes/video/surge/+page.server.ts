@@ -36,7 +36,7 @@ const isNew = (d?: string | null): boolean => !!d && d.length >= 10 && d >= SURG
 const dayNum = (d: string): number => Date.parse(d + "T00:00:00Z") / 86_400_000;
 
 export const load = async ({ fetch }) => {
-  const home = await buildHomeData(fetch);
+  const home = await buildHomeData();
   const geometry = await getStateGeometry(fetch);
 
   // National new-signing count (headline) + newest new-signing date, so the

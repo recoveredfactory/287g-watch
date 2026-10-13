@@ -20,6 +20,12 @@ export default defineConfig({
   server: {
     cors: true,
   },
+  // Emit JSON imports as JSON.parse("…"), not object literals: the server
+  // bundles the /data/dist files (lib/server/staticData.ts), and parsing the
+  // 4.4 MB agency index that way is ~3x faster on a cold start.
+  json: {
+    stringify: true,
+  },
   plugins: [
     paraglideVitePlugin({
       project: "./project.inlang",

@@ -1,14 +1,16 @@
 <script lang="ts">
   import type { PageData } from "./$types";
   import { onMount } from "svelte";
+  import { goto } from "$app/navigation";
   import { browser } from "$app/environment";
   import { getCachedGeo } from "$lib/geo";
   import { MODEL_ORDER, MODEL_COLORS, MODEL_SHORT } from "$lib/colors";
-  import { localizeHref, getLocale } from "$lib/paraglide/runtime";
+  import { getLocale } from "$lib/paraglide/runtime";
+  import { localizeHref } from "$lib/localizeHref";
   import { m } from "$lib/paraglide/messages.js";
-  import StateMiniMap from "$lib/components/StateMiniMap.svelte";
   import StateTrendMini from "$lib/components/StateTrendMini.svelte";
   import StateTopAgencies from "$lib/components/StateTopAgencies.svelte";
+  import Gloss from "$lib/components/Gloss.svelte";
   import NewsAiWarning from "$lib/components/NewsAiWarning.svelte";
   import LegislationBadge from "$lib/components/LegislationBadge.svelte";
   import { SHOW_LEGISLATION_STANCE } from "$lib/features";
@@ -76,6 +78,22 @@
   export let data: PageData;
   $: ({ rows, trendMonths } = data);
 
+  // "rank" keeps the server's own order (agency count, then population, then name).
+  let query = "";
+  type SortKey = "rank" | "name" | "population";
+  let sortKey: SortKey = "rank";
+  $: q = query.trim().toLowerCase();
+  $: filteredRows = rows
+    .filter((r) => !q || r.stateName.toLowerCase().includes(q) || r.abbr.toLowerCase() === q)
+    .slice()
+    .sort(
+      sortKey === "name"
+        ? (a, b) => a.stateName.localeCompare(b.stateName)
+        : sortKey === "population"
+          ? (a, b) => (b.populationServed ?? 0) - (a.populationServed ?? 0)
+          : (a, b) => rows.indexOf(a) - rows.indexOf(b),
+    );
+
   const localeTag = getLocale() === "es" ? "es-MX" : "en-US";
   const intFmt = new Intl.NumberFormat(localeTag);
   const popFmt = new Intl.NumberFormat(localeTag, { notation: "compact", maximumFractionDigits: 1 });
@@ -99,6 +117,22 @@
   $: metaTitle = m.states_index_meta_title();
   $: metaDescription = m.states_index_meta_description({ count: intFmt.format(rows.length) });
 
+  const siteUrl = import.meta.env.PUBLIC_SITE_URL ?? "https://287g.recoveredfactory.net";
+  $: canonicalUrl = siteUrl + localizeHref("/states");
+  $: jsonLd = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: metaTitle,
+    description: metaDescription,
+    url: canonicalUrl,
+    itemListElement: rows.map((row, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: row.stateName,
+      url: siteUrl + localizeHref(`/state/${row.abbr.toLowerCase()}`),
+    })),
+  });
+
   // Umami custom event (mirrors +layout's trackConversion; no-ops in dev where
   // the script isn't loaded). Passes the state so opens are filterable per state.
   const track = (event: string, data?: Record<string, unknown>) => {
@@ -120,7 +154,7 @@
     // Fire only on open — the "read the summary" engagement signal.
     if (opening) track("states_index_read_summary", { state: abbr });
   };
-  $: expandable = rows.filter((r) => r.news?.body_html || r.topAgencies.length);
+  $: expandable = filteredRows.filter((r) => r.news?.body_html || r.topAgencies.length);
   const expandAll = () => {
     expanded = new Set(expandable.map((r) => r.abbr));
     track("states_index_expand_all", { count: expandable.length });
@@ -137,9 +171,19 @@
   let justJumped: string | null = null; // brief highlight on the jumped-to card
   $: detectedRow = detectedState ? rows.find((r) => r.abbr === detectedState) ?? null : null;
 
+  let detectedShownTracked = false;
+  $: if (detectedRow && !bannerDismissed && !detectedShownTracked) {
+    track("states_index_detected_shown", { state: detectedRow.abbr });
+    detectedShownTracked = true;
+  }
+
   onMount(async () => {
     const geo = await getCachedGeo();
-    if (geo.state && rows.some((r) => r.abbr === geo.state)) detectedState = geo.state;
+    if (geo.state && rows.some((r) => r.abbr === geo.state)) {
+      detectedState = geo.state;
+    } else {
+      track("states_index_detected_failed");
+    }
   });
 
   const jumpToDetected = () => {
@@ -148,6 +192,7 @@
     track("states_index_jump_detected", { state: abbr });
     // Open the card so its summary is visible on arrival. Its top anchor doesn't
     // move as it expands (growth is downward), so we can scroll right away.
+    if (query) query = "";
     if (canExpandRow(abbr)) expanded = new Set(expanded).add(abbr);
     const scroll = () => {
       document
@@ -171,23 +216,22 @@
   <meta name="description" content={metaDescription} />
   <meta property="og:title" content={metaTitle} />
   <meta property="og:description" content={metaDescription} />
+  <meta property="og:url" content={canonicalUrl} />
   <meta property="og:image" content={ogImage("states.png")} />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta property="twitter:card" content="summary_large_image" />
   <meta property="twitter:image" content={ogImage("states.png")} />
+  {@html `<script type="application/ld+json">${jsonLd}</` + `script>`}
 </svelte:head>
 
 <main id="main-content" class="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
   <!-- ── Header ──────────────────────────────────────────────────────────────── -->
   <header>
-    <p class="text-xs font-semibold uppercase tracking-widest text-amber-600">
-      {m.states_index_eyebrow()}
-    </p>
-    <h1 class="mt-1 text-2xl font-black text-slate-900 sm:text-3xl">
+    <h1 class="text-2xl font-black text-ink-900 sm:text-3xl">
       {m.states_index_title()}
     </h1>
-    <p class="mt-3 max-w-prose text-sm leading-relaxed text-slate-600">
+    <p class="mt-3 max-w-prose text-sm leading-relaxed text-ink-700">
       {m.states_index_subtitle({ count: intFmt.format(rows.length) })}
     </p>
 
@@ -198,11 +242,32 @@
       <NewsAiWarning />
     </div>
 
-    <div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+    <div class="mt-4 flex flex-wrap items-center gap-2">
+      <div class="relative max-w-sm flex-1">
+        <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+        </svg>
+        <input
+          type="search"
+          bind:value={query}
+          placeholder={m.states_index_search_placeholder()}
+          aria-label={m.states_index_search_placeholder()}
+          class="w-full rounded-md border border-paper-200 bg-paper-50 py-2 pl-9 pr-3 text-sm text-ink-900 placeholder:text-ink-500 focus:border-ink-700 focus:outline-none focus:ring-1 focus:ring-ink-700"
+        />
+      </div>
+      <select
+        bind:value={sortKey}
+        aria-label={m.browse_sort_size()}
+        class="rounded-md border border-paper-200 bg-paper-50 py-2 pl-3 pr-7 text-sm text-ink-700 focus:border-ink-700 focus:outline-none focus:ring-1 focus:ring-ink-700"
+      >
+        <option value="rank">{m.browse_sort_size()}</option>
+        <option value="name">{m.browse_sort_name()}</option>
+        <option value="population">{m.browse_sort_population_opt()}</option>
+      </select>
       <button
         type="button"
         on:click={allExpanded ? collapseAll : expandAll}
-        class="rounded-full border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:border-slate-500 hover:text-slate-900"
+        class="rounded-full border border-paper-200 px-3 py-1.5 text-sm font-medium text-ink-700 transition-colors hover:border-ink-700 hover:text-ink-900"
       >
         {allExpanded ? m.states_index_collapse_all() : m.states_index_expand_all()}
       </button>
@@ -213,10 +278,11 @@
          shared geo cache. -->
     {#if detectedRow && !bannerDismissed}
       <div
-        class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5"
+        class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-2.5"
+        style="border-color: #C87899; background: var(--color-paper-100);"
       >
-        <p class="flex items-center gap-2 text-sm text-slate-700">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-4 w-4 shrink-0 text-amber-600" aria-hidden="true">
+        <p class="flex items-center gap-2 text-sm text-ink-700">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-4 w-4 shrink-0 text-ink-500" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
             <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
           </svg>
@@ -226,15 +292,15 @@
           <button
             type="button"
             on:click={jumpToDetected}
-            class="whitespace-nowrap rounded-full bg-slate-900 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-slate-700"
+            class="whitespace-nowrap rounded bg-ink-900 px-3 py-1.5 text-sm font-semibold text-paper-50 transition-colors hover:bg-ink-700"
           >
             {m.states_index_detected_jump()}
           </button>
           <button
             type="button"
-            on:click={() => (bannerDismissed = true)}
+            on:click={() => { bannerDismissed = true; track("states_index_detected_dismissed", { state: detectedRow?.abbr }); }}
             aria-label={m.states_index_detected_dismiss()}
-            class="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-amber-100 hover:text-slate-600"
+            class="rounded-full p-3.5 text-ink-500 transition-colors hover:bg-paper-200 hover:text-ink-900"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-4 w-4" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -246,38 +312,68 @@
   </header>
 
   <!-- ── State cards ─────────────────────────────────────────────────────────── -->
+  {#if filteredRows.length === 0}
+    <div class="mt-8 rounded-lg border border-paper-200 bg-paper-50 px-6 py-12 text-center">
+      <p class="font-medium text-ink-700">{m.browse_no_results()}</p>
+    </div>
+  {/if}
   <div class="mt-8 space-y-4">
-    {#each rows as row (row.abbr)}
+    {#each filteredRows as row (row.abbr)}
       {@const isExp = expanded.has(row.abbr)}
       {@const canExpand = Boolean(row.news?.body_html) || row.topAgencies.length > 0}
       {@const leePct = leePctLabel(row.localLeAgencies, row.localParticipating)}
       <article
         id={`state-${row.abbr}`}
-        class="scroll-mt-24 rounded-lg border bg-white p-5 shadow-sm transition duration-300 sm:p-6 {justJumped ===
-        row.abbr
-          ? 'border-amber-400 ring-2 ring-amber-300'
-          : 'border-slate-200'}"
+        class="scroll-mt-24 rounded-lg border border-paper-200 bg-paper-50 p-5 shadow-sm transition duration-300 sm:p-6"
+        style={justJumped === row.abbr ? "border-color: #C87899; box-shadow: 0 0 0 2px #C87899;" : ""}
       >
-        <!-- Topline header: state name + dead-simple figures -->
-        <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <!-- Topline header: the whole row goes to the state page; the chevron is
+             its own control (stopPropagation) that toggles the card. -->
+        <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
+        <div
+          class="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-1"
+          on:click={(e) => {
+            if (e.target instanceof Element && e.target.closest("a, button")) return;
+            if (window.getSelection()?.toString()) return;
+            goto(localizeHref(`/state/${row.abbr.toLowerCase()}`));
+          }}
+        >
+          {#if canExpand}
+            <button
+              type="button"
+              on:click|stopPropagation={() => toggle(row.abbr)}
+              aria-expanded={isExp}
+              aria-controls={`exp-${row.abbr}`}
+              aria-label={m.states_index_toggle_preview({ state: row.stateName })}
+              class="-ml-2 -mr-3 shrink-0 rounded-full bg-transparent p-3 transition-colors hover:bg-paper-200"
+            >
+              <svg
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                class="h-3 w-3 text-ink-500 transition-transform"
+                style="transform: rotate({isExp ? 90 : 0}deg);"
+                aria-hidden="true"
+              ><path d="M6 4l8 6-8 6V4z" /></svg>
+            </button>
+          {/if}
           <h2 class="font-serif text-lg font-bold sm:text-xl">
             <a
               href={localizeHref(`/state/${row.abbr.toLowerCase()}`)}
-              class="text-slate-900 no-underline hover:underline"
+              class="text-ink-900 no-underline hover:underline"
               aria-label={m.states_index_open_state({ state: row.stateName })}
             >{row.stateName}</a>
           </h2>
-          <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-600">
-            {#if SHOW_LEGISLATION_STANCE && row.news?.legislation}
-              <LegislationBadge legislation={row.news.legislation} />
+          <div class="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-700">
+            {#if SHOW_LEGISLATION_STANCE && row.legislation}
+              <LegislationBadge legislation={row.legislation} />
             {/if}
             <span>
-              <span class="font-semibold text-slate-900">{intFmt.format(row.agencyCount)}</span>
+              <span class="font-semibold text-ink-900">{intFmt.format(row.agencyCount)}</span>
               {row.agencyCount === 1 ? m.state_agency_one() : m.state_agency_other()}
             </span>
             {#if leePct !== null}
               <span>
-                <span class="font-semibold text-slate-900">{leePct}%</span>
+                <span class="font-semibold text-ink-900">{leePct}%</span>
                 {m.states_index_local_le_pct()}
               </span>
             {/if}
@@ -285,14 +381,14 @@
               {#if row.modelCounts[model]}
                 <span class="flex items-center gap-1.5">
                   <span class="inline-block h-2 w-2 rounded-full" style="background: {MODEL_COLORS[model]};"></span>
-                  <span class="font-semibold text-slate-900">{row.modelCounts[model]}</span>
+                  <span class="font-semibold text-ink-900">{row.modelCounts[model]}</span>
                   {MODEL_SHORT[model]}
                 </span>
               {/if}
             {/each}
             {#if row.populationServed}
               <span>
-                <span class="font-semibold text-slate-900">{popFmt.format(row.populationServed)}</span>
+                <span class="font-semibold text-ink-900">{popFmt.format(row.populationServed)}</span>
                 {m.state_covered()}
               </span>
             {/if}
@@ -320,34 +416,30 @@
             {#if row.news}
               <!-- This state's own last-built date, ahead of the summary (the
                    stance pill rides up in the card's topline figures). -->
-              <p class="mb-2 text-xs italic text-slate-400">
+              <p class="mb-2 text-xs italic text-ink-500">
                 {m.news_updated({ date: builtDate(row.news.built_at) })} ·
                 {m.news_generated_with()}
                 <a
                   href="https://promptql.io"
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="underline decoration-slate-300 underline-offset-2 hover:text-slate-600"
+                  class="underline decoration-paper-200 underline-offset-2 hover:text-ink-700"
                 >{m.news_ai_promptql()}</a>
               </p>
-              <div class="news-prose news-tldr max-w-prose">{@html row.news.tldr_html}</div>
+              <div class="news-prose news-tldr max-w-prose"><Gloss text={row.news.tldr_html} html={true} /></div>
             {:else}
-              <p class="text-sm italic text-slate-400">{m.states_index_no_summary()}</p>
+              <p class="text-sm italic text-ink-500">{m.states_index_no_summary()}</p>
             {/if}
           </div>
-          {#if row.map}
-            <div class="mt-4 aspect-[3/2] w-full sm:mt-0">
-              <StateMiniMap
-                id={row.abbr}
-                w={row.map.w}
-                h={row.map.h}
-                outline={row.map.outline}
-                highways={row.map.highways}
-                dots={row.map.dots}
-                label={m.states_index_map_aria({ state: row.stateName })}
-              />
-            </div>
-          {/if}
+          <div class="mt-4 aspect-[3/2] w-full sm:mt-0">
+            <img
+              src="/data/state-maps/{row.abbr.toLowerCase()}.svg"
+              alt={m.states_index_map_aria({ state: row.stateName })}
+              loading="lazy"
+              decoding="async"
+              class="block h-full w-full object-contain"
+            />
+          </div>
         </div>
 
         {#if row.spark || canExpand}
@@ -383,7 +475,7 @@
                 <p class="mt-4 text-sm">
                   <a
                     href={localizeHref(`/state/${row.abbr.toLowerCase()}`)}
-                    class="font-medium text-slate-600 underline decoration-slate-300 underline-offset-2 hover:text-slate-900"
+                    class="font-medium text-ink-700 underline decoration-paper-200 underline-offset-2 hover:text-ink-900"
                   >{m.states_index_explore_state({ state: row.stateName })}
                     <span aria-hidden="true">→</span></a>
                 </p>
@@ -420,7 +512,7 @@
                clipped tease — the chart included — as the inducement to click. -->
           {#if canExpand}
             <div class="mt-5 flex items-center gap-3">
-              <span class="h-px flex-1 bg-slate-200" aria-hidden="true"></span>
+              <span class="h-px flex-1 bg-paper-200" aria-hidden="true"></span>
               <button
                 type="button"
                 class="news-toggle"
@@ -431,7 +523,7 @@
                 {isExp ? m.states_index_hide_summary() : m.states_index_read_summary()}
                 <span class="news-chev" class:rotate-180={isExp} aria-hidden="true">▾</span>
               </button>
-              <span class="h-px flex-1 bg-slate-200" aria-hidden="true"></span>
+              <span class="h-px flex-1 bg-paper-200" aria-hidden="true"></span>
             </div>
           {/if}
 
@@ -473,7 +565,7 @@
             <!-- Foot collapse (like the state page) so a long expanded card
                  doesn't force a scroll back up to close it. -->
             <div class="mt-6 flex items-center gap-3">
-              <span class="h-px flex-1 bg-slate-200" aria-hidden="true"></span>
+              <span class="h-px flex-1 bg-paper-200" aria-hidden="true"></span>
               <button
                 type="button"
                 class="news-toggle"
@@ -484,7 +576,7 @@
                 {m.states_index_hide_summary()}
                 <span class="news-chev rotate-180" aria-hidden="true">▾</span>
               </button>
-              <span class="h-px flex-1 bg-slate-200" aria-hidden="true"></span>
+              <span class="h-px flex-1 bg-paper-200" aria-hidden="true"></span>
             </div>
           {/if}
         {/if}
@@ -516,7 +608,7 @@
     /* Transparent edge sits at the start of line 3 (6rem − 2.4rem = 3.6rem ≈ 2
        lines), so lines 1–2 read clean and only line 3 fades out. */
     height: 2.4rem;
-    background: linear-gradient(to bottom, transparent, #fff);
+    background: linear-gradient(to bottom, transparent, var(--color-paper-50));
     pointer-events: none;
     opacity: 1;
     transition: opacity 240ms ease;

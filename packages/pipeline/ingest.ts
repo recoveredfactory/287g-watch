@@ -22,6 +22,7 @@ import { fileURLToPath } from 'node:url'
 import slugifyLib from 'slugify'
 import { read as xlsxRead, utils as xlsxUtils } from 'xlsx'
 import { parse as parseYaml } from 'yaml'
+import { writeAgencyDownloads } from './lib/downloads'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const OUT_DIR = resolve(__dirname, '../web/static/data/dist')
@@ -284,6 +285,20 @@ function historyKey(name: string, state: string): string {
   return `${state.toUpperCase()}\x00${normalized}`
 }
 
+// Upstream rows whose TYPE (and sometimes COUNTY) is wrong. TYPE picks both the
+// geocode cascade and the FBI LEE bucket, so a town department typed "County" got
+// its county's centroid, ORI and population. #322
+const ROSTER_FIXES: Record<string, { agency_type?: string; county?: string }> = {
+  [historyKey('Gordonsville Department of Public Safety', 'VA')]: { agency_type: 'Municipality' },
+  [historyKey('Shirley Police Department', 'IN')]: { agency_type: 'Municipality' },
+  [historyKey('Livingston Police Department', 'LA')]: { agency_type: 'Municipality' },
+  [historyKey('Fayetteville Police Department', 'NC')]: { agency_type: 'Municipality', county: 'Cumberland County' }, // sheet: Union County
+  [historyKey('Stamford Police Department', 'TX')]: { agency_type: 'Municipality' },
+  // Sheet says Yoakum County, ~350 mi away. The city straddles DeWitt/Lavaca; its Census point is in Lavaca.
+  [historyKey('Yoakum Police Department', 'TX')]: { agency_type: 'Municipality', county: 'Lavaca County' },
+  [historyKey('Shoshoni Police Department', 'WY')]: { agency_type: 'Municipality' },
+}
+
 // ── Rename resolution ───────────────────────────────────────────────────────
 //
 // The upstream sheet relabels agencies constantly — "Miami Dade" → "Miami-Dade",
@@ -438,12 +453,13 @@ function parseSnapshot(buf: Buffer): Map<string, SnapshotAgency> {
     const key = historyKey(row.name, state)
     let e = result.get(key)
     if (!e) {
+      const fix = ROSTER_FIXES[key]
       e = {
         models: new Set(),
         name: row.name,
         state,
-        county: row.county,
-        agency_type: row.agencyType,
+        county: fix?.county ?? row.county,
+        agency_type: fix?.agency_type ?? row.agencyType,
         signed_date: parseSignedDate(row.signedRaw),
       }
       result.set(key, e)
@@ -727,11 +743,12 @@ for (const row of rawRows) {
   if (!name) { dropped++; continue }
 
   const moa = str(row.MOA)
+  const fix = ROSTER_FIXES[historyKey(name, state)]
   normalizedRows.push({
     name,
     state,
-    county: str(row.COUNTY) || null,
-    agency_type: str(row.TYPE) || null,
+    county: fix?.county ?? (str(row.COUNTY) || null),
+    agency_type: fix?.agency_type ?? (str(row.TYPE) || null),
     model: normalizeModel(str(row['SUPPORT TYPE'])) || null,
     signed_date: parseSignedDate(row.SIGNED),
     moa_url: moa.startsWith('http') ? moa : null,
@@ -803,6 +820,18 @@ for (const rows of byAgency.values()) {
 }
 
 console.log(`  ${grouped.length} unique agencies`)
+
+// A new upstream mislabel would otherwise ship silently onto the county centroid. #322
+const looksMunicipal = grouped.filter(
+  (g) =>
+    g.agency_type === 'County' &&
+    /\b(police|public safety|marshal)\b/i.test(g.name) &&
+    !/\b(county|parish|borough|sheriff|regional|metro|consolidated|authority)\b/i.test(g.name),
+)
+if (looksMunicipal.length > 0) {
+  console.warn(`  ⚠ ${looksMunicipal.length} "County"-typed agencies look municipal — add to ROSTER_FIXES if so:`)
+  for (const g of looksMunicipal) console.warn(`      ${g.state} | ${g.name} | ${g.county}`)
+}
 
 // ── 4. Geocode via Census gazetteers ────────────────────────────────────────────
 //
@@ -2090,6 +2119,7 @@ console.log(`Wrote ${terminatedAgencies.length} terminated agencies → ${resolv
 // their history replays in the trend charts, but with terminated_date null (#245).
 writeFileSync(resolve(OUT_DIR, 'pending_agencies.json'), JSON.stringify(pendingAgencies, null, 2))
 console.log(`Wrote ${pendingAgencies.length} pending agencies → ${resolve(OUT_DIR, 'pending_agencies.json')}`)
+writeAgencyDownloads(OUT_DIR, agencies, terminatedAgencies, snapshotDate)
 
 const geocoded = agencies.filter((a) => a.lat !== null).length
 const stateAgencies = agencies.filter((a) => a.agency_type === 'State Agency').length

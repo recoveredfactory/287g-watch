@@ -11,6 +11,7 @@
     "build:muckrock": "tsx build-muckrock-snapshot.ts",
     "build:moa-index": "tsx build-moa-index.ts",
     "build:agreement-index": "tsx build-agreement-index.ts",
+    "build:legislation": "tsx build-legislation-stance.ts",
     "scrape:contacts": "tsx scrape-contacts.ts",
     "extract:moa-signers": "tsx extract-moa-signers.ts",
     "check:agreements": "tsx check-agreements.ts"

@@ -87,4 +87,33 @@ const paraglideHandle: Handle = ({ event, resolve }) => {
   });
 };
 
-export const handle: Handle = sequence(redirectBarePathToLocale, paraglideHandle);
+// Pages render the same for every viewer: the locale comes from the URL, and
+// cookies, Accept-Language and geo are read only by the bare-path redirect and
+// /api/geo, which both send no-store. So CloudFront can hold them, revalidated
+// by browsers and cleared by the /* invalidation every deploy runs (#292). An
+// hour rather than the day SST gives the /data JSON, because the homepage's
+// "last 30 days" leaderboard is cut at render time. Client-side navigation's
+// __data.json gets the same in place of SvelteKit's blanket private/no-store,
+// unless a load failed: that still answers 200, with an error node, and a
+// transient 503 shouldn't stick.
+const EDGE_CACHE_CONTROL = "public, max-age=0, s-maxage=3600, stale-while-revalidate=3600";
+
+const cacheAtEdge: Handle = async ({ event, resolve }) => {
+  const response = await resolve(event);
+  if (event.request.method !== "GET" || response.status !== 200) return response;
+  const cacheControl = response.headers.get("cache-control");
+  if (event.isDataRequest) {
+    if (cacheControl !== "private, no-store") return response;
+    if (!response.headers.get("content-type")?.startsWith("application/json")) return response;
+    const payload = await response.clone().json();
+    if (payload.type !== "data" || payload.nodes.some((node: { type?: string } | null) => node?.type === "error")) {
+      return response;
+    }
+  } else if (cacheControl !== null) {
+    return response;
+  }
+  response.headers.set("cache-control", EDGE_CACHE_CONTROL);
+  return response;
+};
+
+export const handle: Handle = sequence(cacheAtEdge, redirectBarePathToLocale, paraglideHandle);

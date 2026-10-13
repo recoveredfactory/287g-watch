@@ -25,7 +25,8 @@
  * array (every PDF) plus flat top-level fields copied from a chosen "primary"
  * agreement (JEM>TFM>WSO>first) so back-compat consumers keep working.
  *
- * Runs incrementally: already-processed agencies are skipped unless --force.
+ * Runs incrementally: already-processed agencies are skipped unless --force or
+ * they were parsed by an older PARSER_VERSION.
  *
  * Usage:
  *   pnpm -F pipeline extract:moa-signers
@@ -62,6 +63,10 @@ if (!GH_TOKEN) {
 
 const args = process.argv.slice(2);
 const FORCE = args.includes("--force");
+// CI restores the extracts from cache every run and only parses new agencies, so a
+// parser fix never reaches records already on file. Bump this to re-parse them.
+// 2: signature columns split per line (#321)
+const PARSER_VERSION = 2;
 const limitArg = args.indexOf("--limit");
 const LIMIT = limitArg >= 0 ? parseInt(args[limitArg + 1], 10) : Infinity;
 
@@ -104,6 +109,7 @@ type MoaExtract = ParsedFields & {
   model: string | null;        // primary agreement's model
   agreements: AgreementExtract[];
   extracted_at: string;
+  parser_version?: number;
   error?: string;              // agency-level error (e.g. no agreements on file)
 };
 
@@ -203,6 +209,27 @@ const ICE_TITLE_RE = /Title:\s*[-– \t]*(Acting\s*Director|Deputy\s*Director|Fi
 // each starting uppercase. Does NOT require a third word after a middle initial.
 const FULL_NAME_RE = /[A-Z][a-zA-Z'-]+(?: +[A-Z](?:\.[a-zA-Z'-]*|[a-zA-Z'-]+))+/;
 
+// A "Name:" label, tolerating OCR'd "Nam e·"/"Name;" and blank-line underscores,
+// followed by a typed name. Space runs are capped at 20: in the corpus a name sits
+// ≤13 spaces past its own label, and an empty "Name: ______" is ≥28 from the other
+// party's unlabeled name across the column gap.
+const SIG_BLANK = `[ \\t]{0,20}(?:[-–_]+(?:[ \\t]{1,20}[-–_]+)*[ \\t]{0,20})?`;
+const SIG_NAME_RE = new RegExp(`Nam ?e\\s*[:·;]${SIG_BLANK}(${FULL_NAME_RE.source})`);
+
+// pdftotext -layout sets the LEA (left) and ICE (right) signature columns side by
+// side, so one line can carry both parties' fields:
+//   "Nam e· Keith A. Conley                        Name: Madison Sheahan"
+// The right column starts at the first label past column 30; a line with no label
+// there belongs to the side its indent puts it on. Matching the whole line let an
+// unparseable LEA name fall through to ICE's. #321
+const SIG_LABEL_RE = /\b(?:Nam ?e|Title|Date|Signature)\s*[:·;]/g;
+function sigColumns(line: string): { left: string; right: string } {
+  const split =
+    [...line.matchAll(SIG_LABEL_RE)].find((m) => m.index! >= 30)?.index ??
+    (/^\s{30,}/.test(line) ? 0 : line.length);
+  return { left: line.slice(0, split), right: line.slice(split) };
+}
+
 // Field office city. Multiple sources:
 //
 // 1. Section VII POC (JEM template): "For ICE: New Orleans Field Office Director"
@@ -260,22 +287,21 @@ function parseIceName(text: string): string | null {
   const titleIdx = text.search(ICE_TITLE_RE);
   if (titleIdx < 0) return null;
 
-  // Scan backwards ~600 chars for a right-column "Name:" label (≥30 leading
-  // spaces) followed by a name on the same line — new template pattern:
+  // Scan back for a right-column "Name:" label followed by a name — new template:
   //   "                                          Name: Madison Sheahan"
-  // Left-column "Name: Bill Franklin" (LEA signer) has ≤10 spaces and is
-  // intentionally excluded by the indentation requirement.
   // Use a 1200-char window so the sig page isn't missed when there are many
   // blank lines or table-border dashes between Name: and Title: in the layout.
   const before = text.slice(Math.max(0, titleIdx - 1200), titleIdx);
-  const m1 = before.match(/^ {30,}Name:\s*[-– \t]*([A-Z][a-zA-Z'-]+(?: +[A-Z](?:\.[a-zA-Z'-]*|[a-zA-Z'-]+))+)\s*$/m);
-  if (m1) return m1[1].trim();
+  const lines = before.split("\n");
+  for (const line of lines) {
+    const m = sigColumns(line).right.match(SIG_NAME_RE);
+    if (m) return m[1].trim();
+  }
 
   // Old template: ICE name is a right-indented standalone line (≥30 leading spaces)
   // that appears between "Signature:" and the "Name:" blank and ICE title.
   //   "                                                   Todd M. Lyons"
   //   "                                         Name:"
-  const lines = before.split("\n");
   for (let i = lines.length - 1; i >= 0; i--) {
     const leading = lines[i].match(/^(\s+)/)?.[1]?.length ?? 0;
     if (leading < 30) continue;
@@ -302,12 +328,9 @@ function parseLeaName(text: string): string | null {
   const sigIdx = text.search(/For the LEA:\s*\n[\s\S]{0,50}For ICE:/m);
   const chunk = sigIdx >= 0 ? text.slice(sigIdx, sigIdx + 1200) : text;
 
-  // Left-column "Name:" (≤40 leading spaces)
   for (const line of chunk.split("\n")) {
-    const leading = line.match(/^(\s*)/)?.[1]?.length ?? 0;
-    if (leading > 40) continue; // right column
-    const m = line.match(/Name:\s*([-– ]*)\s*([A-Z][a-zA-Z'-]+(?:\s+[A-Z][a-zA-Z'-]+)+)/);
-    if (m) return m[2].trim();
+    const m = sigColumns(line).left.match(SIG_NAME_RE);
+    if (m) return m[1].trim();
   }
   return null;
 }
@@ -610,7 +633,7 @@ const toProcess = FORCE
   ? entries
   : RETRY
   ? entries.filter(([key]) => needsRetry(existing[key]))
-  : entries.filter(([key]) => !existing[key] || existing[key].error);
+  : entries.filter(([key]) => !existing[key] || existing[key].error || existing[key].parser_version !== PARSER_VERSION);
 
 const totalPdfs = entries.reduce((n, [, ags]) => n + ags.length, 0);
 console.log(
@@ -660,6 +683,7 @@ async function processAgency(agencyKey: string, ags: IndexedAgreement[], tmpPdf:
     ...flat,
     agreements,
     extracted_at: new Date().toISOString(),
+    parser_version: PARSER_VERSION,
   };
   // Agency-level error only when every agreement failed (nothing usable extracted).
   if (agreements.length > 0 && agreements.every((a) => a.error)) {
@@ -677,9 +701,13 @@ async function worker(slot: number): Promise<void> {
     if (i >= work.length) return;
     const [agencyKey, ags] = work[i];
 
+    const prev = existing[agencyKey];
     const extract = await processAgency(agencyKey, ags, tmpPdf);
 
-    existing[agencyKey] = extract;
+    // A re-parse must not trade a good record for a failed download. Keep the old
+    // one — still on the old PARSER_VERSION, so the next run retries it.
+    const keptPrev = !!prev && !prev.error && extract.agreements.some((a) => a.error);
+    if (!keptPrev) existing[agencyKey] = extract;
     done++;
     pdfTotal += extract.agreements.length;
     pdfErrors += extract.agreements.filter((a) => a.error).length;
@@ -687,7 +715,9 @@ async function worker(slot: number): Promise<void> {
 
     const ok = extract.agreements.filter((a) => !a.error).length;
     const models = extract.agreements.map((a) => a.model ?? "?").join("/");
-    const status = extract.error
+    const status = keptPrev
+      ? `kept previous — ${extract.agreements.find((a) => a.error)!.error}`
+      : extract.error
       ? `✗ ${extract.error}`
       : `✓ ${ok}/${extract.agreements.length} PDF [${models}] — ${extract.ice_field_office ?? "?"} FOD / ${extract.ice_signer_name ?? "?"}`;
     process.stdout.write(`[${done}/${work.length}] ${agencyKey} … ${status}\n`);
@@ -710,3 +740,27 @@ console.log(
   `\nDone. ${done} agencies / ${pdfTotal} PDFs processed, ` +
     `${agencyErrors} agency errors, ${pdfErrors} PDF errors → ${OUT_PATH}`,
 );
+
+// An ICE official in the local-signer slot means the parser crossed signature
+// columns, and the agency page would print that official as the agency's own
+// signer. Fail rather than publish a misattributed name. #321
+const normSigner = (n: string) => n.toLowerCase().replace(/[^a-z ]/g, "").replace(/\s+/g, " ").trim();
+const iceSignerAgencies = new Map<string, Set<string>>();
+for (const [key, v] of Object.entries(existing)) {
+  for (const a of v.agreements ?? []) {
+    if (!a.ice_signer_name) continue;
+    const n = normSigner(a.ice_signer_name);
+    iceSignerAgencies.set(n, (iceSignerAgencies.get(n) ?? new Set()).add(key));
+  }
+}
+const iceSigners = new Set([...iceSignerAgencies].filter(([, ks]) => ks.size >= 5).map(([n]) => n));
+const crossed = [...new Set(Object.entries(existing).flatMap(([key, v]) =>
+  [v, ...(v.agreements ?? [])]
+    .filter((a) => a.lea_signer_name && iceSigners.has(normSigner(a.lea_signer_name)))
+    .map((a) => `${key}: ${a.lea_signer_name}`),
+))];
+if (crossed.length) {
+  console.error(`\n✗ ${crossed.length} LEA signer(s) are ICE officials — columns crossed:`);
+  for (const c of crossed) console.error(`  ${c}`);
+  process.exit(1);
+}

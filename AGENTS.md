@@ -62,10 +62,10 @@ When something breaks, report what you measured, not a story that fits the times
 
 After any change to `packages/pipeline/ingest.ts`, run `pnpm pipeline` and verify the output makes sense:
 
-- Active agency count should be in the range of 2,100–2,400 (2,231 as of the 2026-10-01 snapshot). `agency_index.json` is **active-only**; departures live in `terminated_agencies.json` (112)
+- Active agency count should be in the range of 2,100–2,400 (2,261 as of the 2026-10-07 snapshot). `agency_index.json` is **active-only**; departures live in `terminated_agencies.json` (112)
 - All or nearly all agencies should have a `signed_date` (currently 100%)
-- Geocoded percentage should be above 90% (95.4% as of 2026-10-01; most of the rest are statewide agencies kept off-map by design)
-- Model breakdown should show Task Force as the plurality (1,855 TFM / 566 WSO / 184 JEM)
+- Geocoded percentage should be above 90% (95.5% as of 2026-10-07; most of the rest are statewide agencies kept off-map by design)
+- Model breakdown should show Task Force as the plurality (1,887 TFM / 568 WSO / 183 JEM)
 
 Update these figures when they drift rather than working around them — a sanity range that lags reality trains everyone to ignore it.
 
@@ -93,7 +93,7 @@ When the upstream schema changes (it has before), the pipeline will fail noisily
 
 - **MOA links** — the `moa_url` field exists throughout but the sheets source currently only has placeholder "link" text. When real URLs arrive, the agency pages will show them automatically. No action needed now.
 - **Population data** — `population_policed` and `operating_budget` are attached for ~526 agencies from the vendored `agreements.csv` crosswalk (see Data source). They are frozen at upstream's last publication (2026-06-08), so agencies that signed after that date won't carry them until the crosswalk is refreshed. FBI LEE `population` (a different figure) covers the rest.
-- **City-level geocoding** — we currently place agencies at the county centroid. More precise geocoding (by address or agency name) is possible but not needed yet.
+- **Address-level geocoding** — placement is offline from Census gazetteers: municipal departments go to their town's place/county-subdivision centroid (matched by name), everyone else to the county centroid. Which path an agency takes depends on the upstream `TYPE` column, so a town department mislabeled "County" lands on the county centroid with the county's FBI row — correct those in `ROSTER_FIXES` (`ingest.ts`). Address-level precision is possible but not needed yet.
 - **Historical tracking** — the pipeline always takes the latest snapshot. Trend data over time is a future concern.
 - **Editorial content** — the About, Methodology, and Glossary pages are stubs. The placeholder text in the model description cards on the homepage ("Fill in: ...") also needs real copy. These are editorial tasks, not engineering.
 

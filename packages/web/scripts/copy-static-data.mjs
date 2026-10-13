@@ -13,6 +13,10 @@
  * a file — which returns a 200 whose body is already consumed, and `.json()`
  * throws "Body is unusable". That was the intermittent 500 on every agency page
  * (#267). Keep this list in sync with any tracked-but-not-generated data file.
+ *
+ * legislation_stance.json is the generated flavor of the same problem: its
+ * source YAML is tracked but nothing else in CI builds the JSON, so it is built
+ * here and the build fails if it doesn't appear.
  */
 import { copyFileSync, mkdirSync, existsSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
@@ -36,6 +40,22 @@ for (const [from, to] of FILES) {
   copyFileSync(src, resolve(DIST, to))
   console.log(`copy-static-data: ${to}`)
 }
+
+execFileSync('pnpm', ['-F', 'pipeline', 'build:legislation'], { stdio: 'inherit' })
+if (!existsSync(resolve(DIST, 'legislation_stance.json'))) {
+  console.error('copy-static-data: legislation_stance.json was not produced')
+  process.exit(1)
+}
+console.log('copy-static-data: legislation_stance.json')
+
+// Written by ingest (pipeline/lib/downloads.ts); the /downloads page links to them.
+for (const f of ['287g-agencies-latest.csv', '287g-agencies-data-dictionary.csv']) {
+  if (!existsSync(resolve(DIST, 'downloads', f))) {
+    console.error(`copy-static-data: downloads/${f} was not produced by the pipeline`)
+    process.exit(1)
+  }
+}
+console.log('copy-static-data: downloads/*.csv')
 
 // Stamp the commit this bundle was built from, so the CI change gate can tell a
 // code change from a data change. Without it the gate only hashes the data

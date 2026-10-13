@@ -1,17 +1,12 @@
 import { NAVIGABLE_STATES } from "$lib/states";
 import type { Agency, StateMeta } from "$lib/homeData.types";
 import { getLocale } from "$lib/paraglide/runtime";
-import { MODEL_COLORS, MODEL_SLUG } from "$lib/colors";
-import { getStateGeometry, projectDot } from "$lib/server/stateMaps";
+import { MODEL_SLUG } from "$lib/colors";
 import { buildTimeline } from "$lib/timeline";
+import { readStaticData } from "$lib/server/staticData";
 
-// ── Prototype state index ────────────────────────────────────────────────────
-// A throwaway preview surface (to be replaced/merged by the IA-redesign ticket):
-// every state on one page with dead-simple topline figures plus its news summary
-// (TL;DR always shown, full body behind a per-row expand). Lets us eyeball all
-// the generated summaries in one place before the real index lands.
-
-// Statewide 287(g) legislative posture (see the per-state page's NewsLegislation).
+// Statewide 287(g) legislative posture — hand-maintained (not from the news
+// program; see packages/pipeline/data/legislation_stance.yaml).
 export type StateIndexLegislation = {
   stance: "pro" | "anti" | "none";
   active: boolean;
@@ -23,20 +18,6 @@ export type StateIndexNews = {
   // Program's own last-built time (real "generated" signal); local write stamp is
   // the fallback. Rendered per-card so each state carries its own freshness.
   built_at: string;
-  legislation: StateIndexLegislation | null;
-};
-
-// Compact SVG mini-map: state outline + a hint of highways, both pre-projected
-// into `w`×`h` viewBox units, plus agency dots (x/y in the same space, c = model
-// color, o = sworn-officer count for sqrt radius scaling à la the homepage map).
-// WebGL-free so it scales to 53 small-multiples. Null if no geometry.
-export type StateMapDot = { x: number; y: number; c: string; o: number };
-export type StateMapMini = {
-  w: number;
-  h: number;
-  outline: string;
-  highways: string[];
-  dots: StateMapDot[];
 };
 
 // Model-split cumulative agency counts sampled onto the shared month grid — a
@@ -60,9 +41,9 @@ export type StateIndexRow = {
   localLeAgencies: number | null;
   localParticipating: number | null;
   news: StateIndexNews | null;
-  map: StateMapMini | null;
   spark: StateSpark | null;
   topAgencies: StateTopAgency[];
+  legislation: StateIndexLegislation | null;
 };
 
 export type StatesIndexData = {
@@ -75,7 +56,6 @@ type NewsLangBlock = { tldr_html?: string; summary_html?: string };
 type NewsFile = {
   generated_at?: string;
   built_at?: string;
-  legislation?: StateIndexLegislation | null;
   en?: NewsLangBlock;
   es?: NewsLangBlock;
 };
@@ -91,30 +71,25 @@ const pickNews = (raw: NewsFile | null): StateIndexNews | null => {
     tldr_html: block.tldr_html ?? "",
     body_html: block.summary_html ?? "",
     built_at: raw.built_at ?? raw.generated_at ?? "",
-    legislation: raw.legislation ?? null,
   };
 };
 
-export const load = async ({ fetch }): Promise<StatesIndexData> => {
+export const load = async (): Promise<StatesIndexData> => {
   const abbrs = Object.keys(NAVIGABLE_STATES);
 
-  const [agenciesRes, metaRes, terminatedRes, pendingRes] = await Promise.all([
-    fetch("/data/dist/agency_index.json"),
-    fetch("/data/dist/state_meta.json"),
-    fetch("/data/dist/terminated_agencies.json"),
-    fetch("/data/dist/pending_agencies.json"),
+  const [allAgencies, stateMetaArr, terminated, pending, legislationByState] = await Promise.all([
+    readStaticData<Agency[]>("agency_index.json").then((v) => v ?? []),
+    readStaticData<StateMeta[]>("state_meta.json").then((v) => v ?? []),
+    readStaticData<Agency[]>("terminated_agencies.json").then((v) => v ?? []),
+    readStaticData<Agency[]>("pending_agencies.json").then((v) => v ?? []),
+    readStaticData<Record<string, StateIndexLegislation>>("legislation_stance.json"),
   ]);
-  const allAgencies: Agency[] = agenciesRes.ok ? await agenciesRes.json() : [];
-  const terminated: Agency[] = terminatedRes.ok ? await terminatedRes.json() : [];
-  const pending: Agency[] = pendingRes.ok ? await pendingRes.json() : [];
-  const stateMetaArr: StateMeta[] = metaRes.ok ? await metaRes.json() : [];
+  if (!legislationByState) throw new Error("legislation_stance.json unavailable");
   const metaByState = new Map(stateMetaArr.map((s) => [s.state, s]));
 
-  // Per-state agency + model tallies (and the located agencies for map dots) in
-  // one pass.
+  // Per-state agency + model tallies in one pass.
   const agencyCount = new Map<string, number>();
   const modelCountsByState = new Map<string, Record<string, number>>();
-  const locatedByState = new Map<string, Agency[]>();
   const agenciesByState = new Map<string, Agency[]>();
   for (const a of allAgencies) {
     agencyCount.set(a.state, (agencyCount.get(a.state) ?? 0) + 1);
@@ -124,11 +99,6 @@ export const load = async ({ fetch }): Promise<StatesIndexData> => {
     const arr = agenciesByState.get(a.state) ?? [];
     arr.push(a);
     agenciesByState.set(a.state, arr);
-    if (a.lat != null && a.lng != null) {
-      const loc = locatedByState.get(a.state) ?? [];
-      loc.push(a);
-      locatedByState.set(a.state, loc);
-    }
   }
 
   // Ten biggest departments per state (by sworn officers) — for the nerds — in
@@ -208,27 +178,13 @@ export const load = async ({ fetch }): Promise<StatesIndexData> => {
     return some ? out : null;
   };
 
-  // Per-state SVG geometry (outline + highways), built once and cached. Dots are
-  // projected here so the client just draws prepared paths.
-  const geometry = await getStateGeometry(fetch);
-  const buildMap = (abbr: string): StateMapMini | null => {
-    const g = geometry[abbr];
-    if (!g) return null;
-    const dots: StateMapDot[] = (locatedByState.get(abbr) ?? []).map((a) => {
-      const [x, y] = projectDot(g, abbr, a.lng!, a.lat!);
-      return { x, y, c: MODEL_COLORS[a.primary_model] ?? "#64748b", o: a.lee?.officer_ct ?? 0 };
-    });
-    return { w: g.w, h: g.h, outline: g.outline, highways: g.highways, dots };
-  };
-
-  // One small JSON per state, fetched in parallel. Prototype-scale fan-out
-  // (~50 files); a failure degrades to a null summary for just that state.
+  // One small JSON per state; a failure degrades to a null summary for just
+  // that state.
   const newsByState = new Map<string, StateIndexNews | null>();
   await Promise.all(
     abbrs.map(async (abbr) => {
       try {
-        const res = await fetch(`/data/dist/news/${abbr}.json`);
-        newsByState.set(abbr, res.ok ? pickNews(await res.json()) : null);
+        newsByState.set(abbr, pickNews(await readStaticData<NewsFile>(`news/${abbr}.json`)));
       } catch {
         newsByState.set(abbr, null);
       }
@@ -244,9 +200,9 @@ export const load = async ({ fetch }): Promise<StatesIndexData> => {
     localLeAgencies: metaByState.get(abbr)?.local_le_agencies ?? null,
     localParticipating: metaByState.get(abbr)?.participating ?? null,
     news: newsByState.get(abbr) ?? null,
-    map: buildMap(abbr),
     spark: buildSpark(abbr),
     topAgencies: buildTopAgencies(abbr),
+    legislation: legislationByState[abbr] ?? null,
   }));
 
   // Most-participating first (a quick leaderboard). Ties — notably the whole

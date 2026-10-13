@@ -138,6 +138,20 @@ export type HomeAgency = {
   lee?: { officer_ct: number | null } | null;
 };
 
+// One agency in /data/search-index.json, the header search's list (#292).
+export type SearchIndexEntry = Pick<Agency, "slug" | "name" | "state" | "city" | "county" | "primary_model">;
+
+// One dot in /data/map-points.json, the national layer the state and agency
+// maps draw (#292).
+export type MapPoint = Pick<
+  HomeAgency,
+  "slug" | "name" | "state" | "city" | "models" | "primary_model" | "signed_date" | "population" | "lat" | "lng" | "lee"
+>;
+
+// A departed agency in /data/terminated-points.json, for the homepage map's
+// fade-outs (#308).
+export type TerminatedPoint = MapPoint & Pick<HomeAgency, "terminated_date">;
+
 export type TrendSeries = { jail: number[]; taskforce: number[]; wso: number[] };
 
 export type PageData = {

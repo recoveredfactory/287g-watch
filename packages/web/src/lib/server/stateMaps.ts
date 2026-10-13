@@ -3,6 +3,9 @@
 // paths once per process (dev server / warm Lambda container) and reuse them.
 import { buildStateGeometry, project, type StateGeom } from "$lib/stateGeometry";
 import { toInsetCoords } from "$lib/insetTransforms";
+import { MODEL_COLORS } from "$lib/colors";
+import type { Agency } from "$lib/homeData.types";
+import { readStaticData } from "$lib/server/staticData";
 
 type Fetch = typeof globalThis.fetch;
 
@@ -34,4 +37,35 @@ export function projectDot(
 ): [number, number] {
   const [ilng, ilat] = toInsetCoords(lng, lat, abbr);
   return project(geom.proj, ilng, ilat);
+}
+
+// Compact SVG mini-map: state outline + a hint of highways, both pre-projected
+// into `w`×`h` viewBox units, plus agency dots (x/y in the same space, c = model
+// color, o = sworn-officer count for sqrt radius scaling à la the homepage map).
+export type StateMapDot = { x: number; y: number; c: string; o: number };
+export type StateMapMini = {
+  w: number;
+  h: number;
+  outline: string;
+  highways: string[];
+  dots: StateMapDot[];
+};
+
+// One state's /states card map, or null without geometry. Dots keep the index's
+// order, which is their draw order.
+export async function getStateMiniMap(fetch: Fetch, abbr: string): Promise<StateMapMini | null> {
+  const [geometry, agencies] = await Promise.all([
+    getStateGeometry(fetch),
+    readStaticData<Agency[]>("agency_index.json"),
+  ]);
+  if (!agencies) throw new Error("agency_index.json unavailable");
+  const g = geometry[abbr];
+  if (!g) return null;
+  const dots = agencies
+    .filter((a) => a.state === abbr && a.lat != null && a.lng != null)
+    .map((a): StateMapDot => {
+      const [x, y] = projectDot(g, abbr, a.lng!, a.lat!);
+      return { x, y, c: MODEL_COLORS[a.primary_model] ?? "#64748b", o: a.lee?.officer_ct ?? 0 };
+    });
+  return { w: g.w, h: g.h, outline: g.outline, highways: g.highways, dots };
 }

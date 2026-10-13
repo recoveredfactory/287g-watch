@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { localizeHref, getLocale } from "$lib/paraglide/runtime";
+  import { getLocale } from "$lib/paraglide/runtime";
+  import { localizeHref } from "$lib/localizeHref";
   import { m } from "$lib/paraglide/messages.js";
   import { MODEL_COLORS } from "$lib/colors";
 
@@ -13,21 +14,21 @@
 </script>
 
 <div>
-  <div class="flex items-baseline justify-between border-b border-slate-200 pb-1">
-    <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">
+  <div class="flex items-baseline justify-between border-b border-paper-200 pb-1">
+    <p class="text-xs font-semibold uppercase tracking-wider text-ink-500">
       {m.states_index_top_agencies()}
     </p>
-    <p class="text-[10px] uppercase tracking-wider text-slate-400">{m.states_index_officers()}</p>
+    <p class="text-[10px] uppercase tracking-wider text-ink-500">{m.states_index_officers()}</p>
   </div>
   <ul class="mt-2 space-y-2.5">
     {#each agencies as a}
       <li class="flex items-start gap-2 text-sm">
-        <span class="mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full" style="background: {MODEL_COLORS[a.model] ?? '#94a3b8'};"></span>
+        <span class="mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full" style="background: {MODEL_COLORS[a.model] ?? '#656C75'};"></span>
         <a
           href={localizeHref(`/agency/${a.slug}`)}
-          class="text-slate-700 no-underline leading-snug hover:underline"
+          class="text-ink-700 no-underline leading-snug hover:underline"
         >{a.name}</a>
-        <span class="ml-auto mt-0.5 shrink-0 tabular-nums text-xs text-slate-400">
+        <span class="ml-auto mt-0.5 shrink-0 tabular-nums text-xs text-ink-500">
           {a.officers ? intFmt.format(a.officers) : "—"}
         </span>
       </li>
@@ -39,7 +40,7 @@
     <p class="mt-3 text-sm">
       <a
         href={`${localizeHref(`/state/${abbr.toLowerCase()}`)}#agencies`}
-        class="font-medium text-slate-600 underline decoration-slate-300 underline-offset-2 hover:text-slate-900"
+        class="font-medium text-ink-700 underline decoration-paper-200 underline-offset-2 hover:text-ink-900"
       >{m.states_index_view_all_agencies({ count: intFmt.format(total) })}
         <span aria-hidden="true">→</span></a>
     </p>

@@ -6,6 +6,7 @@
 // bundle); the pure shapes live in $lib/homeData.types.
 import { buildTimeline } from "$lib/timeline";
 import { MODEL_SLUG } from "$lib/colors";
+import { readStaticData } from "$lib/server/staticData";
 import type {
   Agency,
   HomeAgency,
@@ -14,20 +15,15 @@ import type {
   TrendSeries,
 } from "$lib/homeData.types";
 
-export const buildHomeData = async (
-  fetch: typeof globalThis.fetch,
-): Promise<PageData> => {
+export const buildHomeData = async (): Promise<PageData> => {
   try {
-    const url = "/data/dist/agency_index.json";
-    const [res, metaRes, terminatedRes, pendingRes] = await Promise.all([
-      fetch(url),
-      fetch("/data/dist/state_meta.json"),
-      fetch("/data/dist/terminated_agencies.json"),
-      fetch("/data/dist/pending_agencies.json"),
+    const [agencies, stateMetaArr, terminatedRaw, pendingRaw] = await Promise.all([
+      readStaticData<Agency[]>("agency_index.json"),
+      readStaticData<StateMeta[]>("state_meta.json").then((v) => v ?? []),
+      readStaticData<Agency[]>("terminated_agencies.json").then((v) => v ?? []),
+      readStaticData<Agency[]>("pending_agencies.json").then((v) => v ?? []),
     ]);
-    if (!res.ok) throw new Error(`${res.status} ${url}`);
-    const agencies: Agency[] = await res.json();
-    const stateMetaArr: StateMeta[] = metaRes.ok ? await metaRes.json() : [];
+    if (!agencies) throw new Error("agency_index.json unavailable");
     const stateMeta: Record<string, StateMeta> = Object.fromEntries(
       stateMetaArr.map((s) => [s.state, s]),
     );
@@ -99,7 +95,6 @@ export const buildHomeData = async (
 
     // Terminated agencies — separate slim payload, map-only. Optional file so
     // older deploys (pre-#118 pipeline) still render (just without fade-outs).
-    const terminatedRaw: Agency[] = terminatedRes.ok ? await terminatedRes.json() : [];
     const terminatedAgencies: HomeAgency[] = terminatedRaw.map((a) => ({
       slug: a.slug,
       name: a.name,
@@ -126,7 +121,6 @@ export const buildHomeData = async (
     const TREND_START = "2024-12";
     // Pending agencies (absent 1–2 snapshots) are map-excluded but their history
     // must still replay, or the monthly counts misdate program starts (NE). #245
-    const pendingRaw: Agency[] = pendingRes.ok ? await pendingRes.json() : [];
     const allForTrend = [...agencies, ...terminatedRaw, ...pendingRaw];
     let lastMonth = TREND_START;
     for (const a of allForTrend)
